@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
+const { verifyToken } = require('../middleware/auth');
 require('dotenv').config();
 
 const pool = mysql.createPool({
@@ -12,10 +13,34 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME || 'school_erp'
 });
 
+router.get('/students', verifyToken, async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT id, email, class, section FROM users WHERE role = "student"');
+        res.status(200).json(rows);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.put('/change-password', verifyToken, async (req, res) => {
+    const { newPassword } = req.body;
+    try {
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 8);
+        await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.userId]);
+        res.status(200).json({ message: 'Password updated successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        const parsedId = isNaN(parseInt(email)) ? -1 : parseInt(email);
+        const [rows] = await pool.query('SELECT * FROM users WHERE email = ? OR id = ?', [email, parsedId]);
         if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
 
         const user = rows[0];
@@ -30,6 +55,7 @@ router.post('/login', async (req, res) => {
             id: user.id,
             email: user.email,
             role: user.role,
+            class: user.class,
             accessToken: token
         });
     } catch (error) {
@@ -38,6 +64,18 @@ router.post('/login', async (req, res) => {
 });
 
 const nodemailer = require('nodemailer');
+router.get('/permissions', verifyToken, async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT setting_value FROM settings WHERE setting_key = "role_permissions"');
+        if (rows.length > 0) {
+            res.status(200).json({ role_permissions: rows[0].setting_value });
+        } else {
+            res.status(200).json({ role_permissions: null });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;

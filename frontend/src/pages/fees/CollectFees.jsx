@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Search, User, CreditCard, Banknote, Smartphone, Printer, CheckCircle, Receipt } from 'lucide-react';
+import { Search, User, CreditCard, Banknote, Smartphone, Printer, CheckCircle, Receipt, X } from 'lucide-react';
 
 const CollectFees = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [paymentMode, setPaymentMode] = useState('Cash');
+    const [showReceipt, setShowReceipt] = useState(false);
     
     // Mock data
     const students = [
@@ -157,12 +158,90 @@ const CollectFees = () => {
                         <button className="p-4 bg-slate-100 text-slate-500 hover:bg-slate-200 rounded-2xl transition-colors shrink-0">
                             <Printer className="w-6 h-6" />
                         </button>
-                        <button className="flex-1 bg-emerald-600 text-white p-4 rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none" disabled={!selectedStudent}>
+                        <button onClick={() => setShowReceipt(true)} className="flex-1 bg-emerald-600 text-white p-4 rounded-2xl font-bold text-lg hover:bg-emerald-700 transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none" disabled={!selectedStudent}>
                             Process Payment
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Receipt Modal Overlay */}
+            {showReceipt && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                        {/* Modal Header */}
+                        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+                            <h3 className="font-bold text-slate-800">Payment Success</h3>
+                            <button onClick={() => setShowReceipt(false)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-1.5 rounded-lg transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        {/* Thermal Receipt Body */}
+                        <div className="p-6 overflow-y-auto bg-[#fafafa] font-mono text-slate-700">
+                            <div className="text-center mb-6 border-b-2 border-dashed border-slate-300 pb-6">
+                                <h2 className="font-bold text-xl uppercase tracking-widest text-slate-900">Thomson School</h2>
+                                <p className="text-xs mt-1 text-slate-500">123 Education Lane, NY</p>
+                                <p className="text-xs text-slate-500">Phone: (555) 123-4567</p>
+                                <div className="mt-4 font-bold text-lg bg-slate-200/50 py-1 rounded">FEE RECEIPT</div>
+                            </div>
+                            
+                            <div className="text-xs space-y-1 mb-6 border-b-2 border-dashed border-slate-300 pb-6">
+                                <p className="flex justify-between"><span>Date:</span> <span>{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span></p>
+                                <p className="flex justify-between"><span>Receipt No:</span> <span>#RCPT-80124</span></p>
+                                <p className="flex justify-between mt-2 pt-2 border-t border-dashed border-slate-300"><span>Name:</span> <span className="font-bold">{selectedStudent?.name}</span></p>
+                                <p className="flex justify-between"><span>Adm No:</span> <span>{selectedStudent?.id}</span></p>
+                                <p className="flex justify-between"><span>Class:</span> <span>{selectedStudent?.class}</span></p>
+                            </div>
+
+                            <div className="text-xs mb-6 border-b-2 border-dashed border-slate-300 pb-6">
+                                <div className="flex justify-between font-bold mb-2 pb-2 border-b border-dashed border-slate-300 text-slate-900">
+                                    <span>Description</span>
+                                    <span>Amount</span>
+                                </div>
+                                {feeCart.map(item => (
+                                    <div key={item.id} className="flex justify-between mb-1">
+                                        <span>{item.type}</span>
+                                        <span>{item.amount}</span>
+                                    </div>
+                                ))}
+                                {(totalFine > 0 || totalDiscount > 0) && (
+                                    <div className="mt-2 pt-2 border-t border-dashed border-slate-300">
+                                        {totalFine > 0 && <div className="flex justify-between"><span>Fine</span><span>{totalFine}</span></div>}
+                                        {totalDiscount > 0 && <div className="flex justify-between"><span>Discount</span><span>-{totalDiscount}</span></div>}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="text-sm border-b-2 border-dashed border-slate-300 pb-6 mb-6">
+                                <div className="flex justify-between font-extrabold text-lg text-slate-900">
+                                    <span>TOTAL</span>
+                                    <span>₹{grandTotal.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between mt-2 text-xs font-bold text-slate-500">
+                                    <span>Payment Mode</span>
+                                    <span className="uppercase">{paymentMode}</span>
+                                </div>
+                            </div>
+
+                            <div className="text-center text-xs">
+                                <p className="font-bold mb-1">* Keep this receipt for your records *</p>
+                                <p className="text-slate-500">Thank you for your payment!</p>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 bg-white border-t border-slate-100 flex gap-3">
+                            <button onClick={() => setShowReceipt(false)} className="flex-1 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors">
+                                Close
+                            </button>
+                            <button onClick={() => window.print()} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-sm flex items-center justify-center gap-2 transition-colors">
+                                <Printer className="w-4 h-4" /> Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

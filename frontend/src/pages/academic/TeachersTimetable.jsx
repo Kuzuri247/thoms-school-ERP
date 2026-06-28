@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Clock, User, Print } from 'lucide-react';
+import { Search, Clock, User, Printer } from 'lucide-react';
 
 const TeachersTimetable = () => {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -31,7 +31,7 @@ const TeachersTimetable = () => {
                 </div>
                 <div className="flex gap-2">
                     <button className="inline-flex items-center gap-2 bg-white text-slate-700 px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-slate-50 border border-slate-200 transition-all shadow-sm">
-                        <Print className="w-4 h-4" /> Print Timetable
+                        <Printer className="w-4 h-4" /> Print Timetable
                     </button>
                 </div>
             </div>

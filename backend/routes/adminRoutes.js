@@ -12,14 +12,18 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME || 'school_erp'
 });
 
-// Create a new user (Super Admin only)
 router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
-    const { email, password, role } = req.body;
+    let { email, password, role, class_name, section } = req.body;
     try {
+        if (!password && role === 'student') {
+            password = '123456';
+        } else if (!password) {
+            return res.status(400).json({ error: 'Password is required' });
+        }
         const hashedPassword = await bcrypt.hash(password, 8);
         const [result] = await pool.query(
-            'INSERT INTO users (email, password, role) VALUES (?, ?, ?)',
-            [email, hashedPassword, role]
+            'INSERT INTO users (email, password, role, class, section) VALUES (?, ?, ?, ?, ?)',
+            [email, hashedPassword, role, class_name || null, section || null]
         );
         res.status(201).json({ message: 'User created successfully', id: result.insertId });
     } catch (error) {
@@ -30,7 +34,7 @@ router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
 // Get all users (Super Admin only)
 router.get('/users', [verifyToken, isSuperAdmin], async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT id, email, role, created_at FROM users');
+        const [rows] = await pool.query('SELECT id, email, role, class as class_name, section, created_at FROM users');
         res.status(200).json(rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -42,6 +46,24 @@ router.delete('/users/:id', [verifyToken, isSuperAdmin], async (req, res) => {
     try {
         await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
         res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update user (Super Admin only)
+router.put('/users/:id', [verifyToken, isSuperAdmin], async (req, res) => {
+    const { password, role, class_name, section } = req.body;
+    try {
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 8);
+            await pool.query('UPDATE users SET password = ?, role = ?, class = ?, section = ? WHERE id = ?', 
+                [hashedPassword, role, class_name || null, section || null, req.params.id]);
+        } else {
+            await pool.query('UPDATE users SET role = ?, class = ?, section = ? WHERE id = ?', 
+                [role, class_name || null, section || null, req.params.id]);
+        }
+        res.status(200).json({ message: 'User updated successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

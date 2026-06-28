@@ -1,15 +1,8 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate, Link, Outlet, useLocation } from 'react-router-dom';
 import { 
-    LogOut, Settings, ShieldAlert, LayoutDashboard, Users, 
-    ChevronDown, ChevronRight, Menu, X, GraduationCap,
-    UserCheck, Globe, UserMinus, Users2, Trash2, Tags, Home, HelpCircle,
-    Network, Building2, UserX, Star, Briefcase, CalendarCheck, FileSpreadsheet, CalendarPlus, Building,
-    Banknote, CreditCard, Search, Receipt, Settings2, Zap, Layers, Tag, Percent, ArrowRightCircle, Bell,
-    BookOpen, Calendar, Clock, Book, Grid, CalendarDays, CheckSquare, PersonStanding,
-    Megaphone, Mail, MessageSquare, List, UploadCloud, Video, FileType, BookOpenCheck, Bus, MapPin, 
-    Truck, Map, FileCode2, Shield, Database, Languages, DollarSign, Puzzle, MonitorPlay
+    ShieldAlert, LayoutDashboard, Users, GraduationCap, Network, Banknote, BookOpen, Clock, CalendarDays, Key, Trash2, Home, HelpCircle, Tags, Users2, UserCheck, Globe, DollarSign, Layers, FileCode2, Receipt, MonitorPlay, Shield, Database, Languages, Puzzle, LogOut, Search, Bell, Settings, ChevronDown, ChevronRight, Menu, X, BookText, Building2, UserX, Star, Briefcase, CalendarCheck, FileSpreadsheet, CalendarPlus, Building, Zap, Tag, Percent, ArrowRightCircle, Book, Grid, CheckSquare, PersonStanding, Megaphone, Mail, MessageSquare, List, UploadCloud, Video, FileType, BookOpenCheck, Bus, MapPin, Truck, Map, UserMinus, Award, Settings2, CreditCard, Calendar
 } from 'lucide-react';
 
 const Layout = () => {
@@ -29,6 +22,56 @@ const Layout = () => {
     const [examMenuOpen, setExamMenuOpen] = useState(false);
     const [transportMenuOpen, setTransportMenuOpen] = useState(false);
     const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+
+    const [permissions, setPermissions] = useState(null);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchPerms = async () => {
+            try {
+                const response = await fetch('http://localhost:5000/api/auth/permissions', {
+                    headers: { 'Authorization': `Bearer ${user.accessToken}` }
+                });
+                const data = await response.json();
+                if (data.role_permissions) {
+                    setPermissions(JSON.parse(data.role_permissions));
+                } else {
+                    setPermissions({});
+                }
+            } catch (e) {
+                console.error('Failed to fetch permissions', e);
+            }
+        };
+        fetchPerms();
+    }, [user]);
+
+    const r = user?.role;
+    
+    // Default fallback if permissions haven't loaded or aren't set
+    const defaultPerms = {
+        admin: ['student_info', 'hr', 'fees', 'academics', 'alumni', 'calendar', 'attendance', 'communicate', 'download', 'exam', 'transport', 'system'],
+        super_admin: ['student_info', 'hr', 'fees', 'academics', 'alumni', 'calendar', 'attendance', 'communicate', 'download', 'exam', 'transport', 'system'],
+        teacher: ['student_info', 'academics', 'attendance', 'communicate', 'download', 'exam', 'calendar'],
+        student: ['calendar', 'download', 'exam'],
+        fee_collector: ['fees'],
+        bus_staff: ['transport'],
+        accountant: ['fees']
+    };
+
+    const rolePerms = permissions ? (permissions[r] || []) : (defaultPerms[r] || []);
+    
+    const canSeeStudentInfo = rolePerms.includes('student_info');
+    const canSeeHR = rolePerms.includes('hr');
+    const canSeeFees = rolePerms.includes('fees');
+    const canSeeAcademics = rolePerms.includes('academics');
+    const canSeeAlumni = rolePerms.includes('alumni');
+    const canSeeCalendar = rolePerms.includes('calendar');
+    const canSeeAttendance = rolePerms.includes('attendance');
+    const canSeeCommunicate = rolePerms.includes('communicate');
+    const canSeeDownload = rolePerms.includes('download');
+    const canSeeExam = rolePerms.includes('exam');
+    const canSeeTransport = rolePerms.includes('transport');
+    const canSeeSystem = rolePerms.includes('system') || r === 'super_admin';
 
     if (!user) {
         navigate('/');
@@ -64,6 +107,7 @@ const Layout = () => {
 
     const feesLinks = [
         { path: '/fees/collect', label: 'Collect Fees', icon: <CreditCard className="w-4 h-4" /> },
+        { path: '/fees/sheet', label: 'Class Fee Sheet', icon: <FileSpreadsheet className="w-4 h-4" /> },
         { path: '/fees/offline-bank', label: 'Offline Bank Payments', icon: <Building className="w-4 h-4" /> },
         { path: '/fees/search-payment', label: 'Search Fees Payment', icon: <Search className="w-4 h-4" /> },
         { path: '/fees/search-due', label: 'Search Due Fees', icon: <Search className="w-4 h-4" /> },
@@ -180,9 +224,70 @@ const Layout = () => {
                             Dashboard
                         </Link>
                     )}
+                    {user.role === 'student' && (
+                        <div className="space-y-1">
+                            <Link 
+                                to="/student-dashboard" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student-dashboard') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <LayoutDashboard className="w-5 h-5" />
+                                My Portal
+                            </Link>
+                            <Link 
+                                to="/student/fees" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/fees') ? 'bg-amber-50 text-amber-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <Banknote className="w-5 h-5 text-amber-500" />
+                                Fee Structure
+                            </Link>
+                            <Link 
+                                to="/student/attendance" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/attendance') ? 'bg-sky-50 text-sky-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <CalendarDays className="w-5 h-5 text-sky-500" />
+                                Attendance
+                            </Link>
+                            <Link 
+                                to="/student/results" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/results') ? 'bg-fuchsia-50 text-fuchsia-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <Award className="w-5 h-5 text-fuchsia-500" />
+                                Results
+                            </Link>
+                            <Link 
+                                to="/student/calendar" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/calendar') ? 'bg-orange-50 text-orange-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <BookOpen className="w-5 h-5 text-orange-500" />
+                                Calendar
+                            </Link>
+                            <Link 
+                                to="/student/homework" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/homework') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <BookText className="w-5 h-5 text-indigo-500" />
+                                Homework
+                            </Link>
+                            <Link 
+                                to="/student/transport" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/transport') ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <Bus className="w-5 h-5 text-teal-500" />
+                                Transport
+                            </Link>
+                            <Link 
+                                to="/student/settings" 
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${isActive('/student/settings') ? 'bg-slate-200 text-slate-800' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                            >
+                                <Key className="w-5 h-5 text-slate-400" />
+                                Security Settings
+                            </Link>
+                        </div>
+                    )}
 
                     {/* Student Information Menu */}
-                    <div className="pt-2">
+                    {canSeeStudentInfo && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setStudentsMenuOpen(!studentsMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -211,9 +316,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Human Resource Menu */}
-                    <div className="pt-2">
+                    {canSeeHR && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setHrMenuOpen(!hrMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -242,9 +349,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Fees Collection Menu */}
-                    <div className="pt-2">
+                    {canSeeFees && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setFeesMenuOpen(!feesMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -273,9 +382,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Academics Menu */}
-                    <div className="pt-2">
+                    {canSeeAcademics && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setAcademicsMenuOpen(!academicsMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -304,9 +415,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Alumni Menu */}
-                    <div className="pt-2">
+                    {canSeeAlumni && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setAlumniMenuOpen(!alumniMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -335,9 +448,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Annual Calendar Menu */}
-                    <div className="pt-2">
+                    {canSeeCalendar && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setCalendarMenuOpen(!calendarMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -366,9 +481,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Attendance Menu */}
-                    <div className="pt-2">
+                    {canSeeAttendance && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setAttendanceMenuOpen(!attendanceMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -397,9 +514,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Communicate Menu */}
-                    <div className="pt-2">
+                    {canSeeCommunicate && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setCommunicateMenuOpen(!communicateMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -428,9 +547,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Download Center Menu */}
-                    <div className="pt-2">
+                    {canSeeDownload && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setDownloadMenuOpen(!downloadMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -459,9 +580,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Examinations Menu */}
-                    <div className="pt-2">
+                    {canSeeExam && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setExamMenuOpen(!examMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -490,9 +613,11 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* Transport Menu */}
-                    <div className="pt-2">
+                    {canSeeTransport && (
+                        <div className="pt-2">
                         <button 
                             onClick={() => setTransportMenuOpen(!transportMenuOpen)}
                             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
@@ -521,9 +646,10 @@ const Layout = () => {
                             </div>
                         )}
                     </div>
+                    )}
 
                     {/* System Setting Menu */}
-                    {user.role === 'super_admin' && (
+                    {canSeeSystem && (
                         <div className="pt-2 pb-4 border-b border-slate-100">
                             <button 
                                 onClick={() => setSystemMenuOpen(!systemMenuOpen)}
@@ -575,19 +701,39 @@ const Layout = () => {
                         <Menu className="w-5 h-5" />
                     </button>
                     
-                    <div className="flex-1"></div>
+                    <div className="flex-1 max-w-xl px-4 hidden md:flex">
+                        <div className="relative w-full group">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                            <input 
+                                type="text" 
+                                placeholder="Global search for students, staff, or settings..." 
+                                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:bg-white outline-none transition-all placeholder:text-slate-400"
+                            />
+                        </div>
+                    </div>
 
                     <div className="flex items-center gap-4">
-                        <div className="hidden md:flex flex-col text-right border-r border-slate-200 pr-4 mr-2">
-                            <span className="text-sm font-semibold text-slate-900">{user.email}</span>
-                            <span className="text-xs text-slate-500 uppercase tracking-wider">{user.role.replace('_', ' ')}</span>
+                        <button className="relative p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors hidden sm:block">
+                            <Bell className="w-5 h-5" />
+                            <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 border-2 border-white rounded-full"></span>
+                        </button>
+                        
+                        <div className="hidden md:flex items-center gap-3 border-l border-slate-200 pl-4 ml-2">
+                            <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
+                                {user.email.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex flex-col text-left mr-2">
+                                <span className="text-sm font-bold text-slate-900">{user.email.split('@')[0]}</span>
+                                <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">{user.role.replace('_', ' ')}</span>
+                            </div>
                         </div>
+                        
                         <button 
                             onClick={() => { logout(); navigate('/'); }} 
-                            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="flex items-center justify-center w-10 h-10 text-slate-400 hover:text-white hover:bg-red-500 rounded-xl transition-all hover:shadow-lg hover:shadow-red-500/20"
+                            title="Logout"
                         >
                             <LogOut className="w-4 h-4" />
-                            <span className="hidden sm:inline">Logout</span>
                         </button>
                     </div>
                 </header>

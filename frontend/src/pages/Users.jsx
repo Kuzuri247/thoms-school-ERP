@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Users as UsersIcon, UserPlus, Trash2, Mail, Lock } from 'lucide-react';
+import { Users as UsersIcon, UserPlus, Trash2, Mail, Lock, Edit2, X, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const Users = () => {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
-    const [newUser, setNewUser] = useState({ email: '', password: '', role: 'admin' });
+    const [newUser, setNewUser] = useState({ email: '', password: '', role: 'admin', class_name: '', section: '' });
     const [loading, setLoading] = useState(false);
+    const [editUser, setEditUser] = useState(null);
+    const [editLoading, setEditLoading] = useState(false);
+    const [notification, setNotification] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
 
     useEffect(() => {
         if (user && user.role === 'super_admin') {
@@ -37,6 +41,10 @@ const Users = () => {
     const handleCreateUser = async (e) => {
         e.preventDefault();
         setLoading(true);
+        let payload = { ...newUser };
+        if ((payload.role === 'student' || payload.role === 'teacher') && !payload.password) {
+            payload.password = payload.role === 'student' ? 'student123' : 'teacher123';
+        }
         try {
             const response = await fetch('http://localhost:5000/api/admin/users', {
                 method: 'POST',
@@ -44,24 +52,25 @@ const Users = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${user.accessToken}`
                 },
-                body: JSON.stringify(newUser)
+                body: JSON.stringify(payload)
             });
             
             if (response.ok) {
                 fetchUsers();
-                setNewUser({ email: '', password: '', role: 'admin' });
+                setNewUser({ email: '', password: '', role: 'admin', class_name: '', section: '' });
+                setNotification({ type: 'success', message: 'User created successfully!' });
             } else {
-                alert('Failed to create user');
+                setNotification({ type: 'error', message: 'Failed to create user. Email might already exist.' });
             }
         } catch (error) {
-            console.error('Failed to create user', error);
+            setNotification({ type: 'error', message: 'Network error while creating user.' });
+            console.error(error);
         } finally {
             setLoading(false);
         }
     };
 
     const handleDeleteUser = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this user?')) return;
         try {
             const response = await fetch(`http://localhost:5000/api/admin/users/${id}`, {
                 method: 'DELETE',
@@ -70,9 +79,44 @@ const Users = () => {
             
             if (response.ok) {
                 fetchUsers();
+                setDeleteConfirm(null);
+                setNotification({ type: 'success', message: 'User deleted successfully!' });
+            } else {
+                setNotification({ type: 'error', message: 'Failed to delete user.' });
             }
         } catch (error) {
-            console.error('Failed to delete user', error);
+            setNotification({ type: 'error', message: 'Network error while deleting user.' });
+        }
+    };
+
+    const handleUpdateUser = async (e) => {
+        e.preventDefault();
+        setEditLoading(true);
+        let updatePayload = { role: editUser.role, password: editUser.password || undefined, class_name: editUser.class_name, section: editUser.section };
+        if ((editUser.role === 'student' || editUser.role === 'teacher') && !editUser.password) {
+            updatePayload.password = editUser.role === 'student' ? 'student123' : 'teacher123';
+        }
+        try {
+            const response = await fetch(`http://localhost:5000/api/admin/users/${editUser.id}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.accessToken}`
+                },
+                body: JSON.stringify(updatePayload)
+            });
+            
+            if (response.ok) {
+                fetchUsers();
+                setEditUser(null);
+                setNotification({ type: 'success', message: 'User updated successfully!' });
+            } else {
+                setNotification({ type: 'error', message: 'Failed to update user.' });
+            }
+        } catch (error) {
+            setNotification({ type: 'error', message: 'Network error while updating user.' });
+        } finally {
+            setEditLoading(false);
         }
     };
 
@@ -93,6 +137,7 @@ const Users = () => {
     if (!user) return null;
 
     return (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             {/* Add User Section */}
@@ -132,9 +177,9 @@ const Users = () => {
                                     type="password" 
                                     value={newUser.password} 
                                     onChange={e => setNewUser({...newUser, password: e.target.value})} 
-                                    required 
+                                    required={newUser.role !== 'student' && newUser.role !== 'teacher'} 
                                     className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
-                                    placeholder="••••••••"
+                                    placeholder={(newUser.role === 'student' || newUser.role === 'teacher') ? `Auto-generated (${newUser.role}123)` : '••••••••'}
                                 />
                             </div>
                         </div>
@@ -154,6 +199,30 @@ const Users = () => {
                                 <option value="super_admin">Super Admin</option>
                             </select>
                         </div>
+                        {newUser.role === 'student' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Class</label>
+                                    <input 
+                                        type="text" 
+                                        value={newUser.class_name} 
+                                        onChange={e => setNewUser({...newUser, class_name: e.target.value})} 
+                                        className="block w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        placeholder="e.g. 10th"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Section</label>
+                                    <input 
+                                        type="text" 
+                                        value={newUser.section} 
+                                        onChange={e => setNewUser({...newUser, section: e.target.value})} 
+                                        className="block w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        placeholder="e.g. A"
+                                    />
+                                </div>
+                            </div>
+                        )}
                         <button 
                             type="submit" 
                             disabled={loading}
@@ -199,7 +268,9 @@ const Users = () => {
                                                 </div>
                                                 <div>
                                                     <div className="text-sm font-medium text-slate-900">{u.email}</div>
-                                                    <div className="text-xs text-slate-500">ID: {u.id}</div>
+                                                    <div className="text-xs text-slate-500">
+                                                        ID: {u.id} {u.role === 'student' && u.class_name ? `• ${u.class_name}-${u.section || ''}` : ''}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -210,13 +281,22 @@ const Users = () => {
                                         </td>
                                         <td className="py-4 px-6 text-right">
                                             {user.id !== u.id && (
-                                                <button 
-                                                    onClick={() => handleDeleteUser(u.id)} 
-                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title="Delete User"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex justify-end gap-2">
+                                                    <button 
+                                                        onClick={() => setEditUser({ id: u.id, email: u.email, role: u.role, password: '' })}
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        title="Edit User"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setDeleteConfirm(u.id)} 
+                                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Delete User"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             )}
                                         </td>
                                     </tr>
@@ -235,6 +315,140 @@ const Users = () => {
             </div>
 
         </div>
+
+            {/* Edit User Modal */}
+            {editUser && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col">
+                        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+                            <h3 className="font-bold text-slate-800">Edit User ({editUser.email})</h3>
+                            <button onClick={() => setEditUser(null)} className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-1.5 rounded-lg transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <form onSubmit={handleUpdateUser} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                                    <select 
+                                        value={editUser.role} 
+                                        onChange={e => setEditUser({...editUser, role: e.target.value})}
+                                        className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-slate-50 focus:bg-white"
+                                    >
+                                        <option value="admin">Admin</option>
+                                        <option value="teacher">Teacher</option>
+                                        <option value="student">Student</option>
+                                        <option value="fee_collector">Fee Collector</option>
+                                        <option value="bus_staff">Bus Staff</option>
+                                        <option value="accountant">Accountant</option>
+                                        <option value="super_admin">Super Admin</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">New Password (Optional)</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Lock className="w-4 h-4 text-slate-400" />
+                                        </div>
+                                        <input 
+                                            type="password" 
+                                            value={editUser.password} 
+                                            onChange={e => setEditUser({...editUser, password: e.target.value})} 
+                                            className="block w-full pl-10 pr-4 py-3 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-slate-50 focus:bg-white"
+                                            placeholder={(editUser.role === 'student' || editUser.role === 'teacher') ? `Leave blank to set to "${editUser.role}123"` : 'Leave blank to keep current'}
+                                        />
+                                    </div>
+                                    {editUser.role === 'student' && (
+                                        <div className="grid grid-cols-2 gap-4 mb-4 mt-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Class</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={editUser.class_name || ''} 
+                                                    onChange={e => setEditUser({...editUser, class_name: e.target.value})} 
+                                                    className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-slate-50 focus:bg-white"
+                                                    placeholder="e.g. 10th"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1.5">Section</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={editUser.section || ''} 
+                                                    onChange={e => setEditUser({...editUser, section: e.target.value})} 
+                                                    className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-slate-50 focus:bg-white"
+                                                    placeholder="e.g. A"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="mb-6">
+                                        <p className="text-xs text-slate-400 mt-1.5">If you set a new password, it will override the existing one.</p>
+                                    </div>
+                                </div>
+                                <div className="pt-2">
+                                    <button 
+                                        type="submit" 
+                                        disabled={editLoading}
+                                        className="w-full py-3.5 px-4 bg-indigo-600 text-white text-sm font-bold rounded-2xl hover:bg-indigo-700 shadow-[0_4px_14px_0_rgba(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 transition-all disabled:opacity-70 flex justify-center items-center"
+                                    >
+                                        {editLoading ? 'Updating...' : 'Save Changes'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Notification Modal */}
+            {notification && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col p-6 items-center text-center">
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 ${notification.type === 'error' ? 'bg-red-100 text-red-500' : 'bg-emerald-100 text-emerald-500'}`}>
+                            {notification.type === 'error' ? <AlertTriangle className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
+                        </div>
+                        <h3 className="font-bold text-xl text-slate-800 mb-2">
+                            {notification.type === 'error' ? 'Oops! Action Failed' : 'Success!'}
+                        </h3>
+                        <p className="text-slate-500 font-medium mb-8">{notification.message}</p>
+                        <button 
+                            onClick={() => setNotification(null)} 
+                            className={`w-full py-3.5 px-4 text-white text-sm font-bold rounded-2xl transition-all shadow-sm ${notification.type === 'error' ? 'bg-red-500 hover:bg-red-600 shadow-[0_4px_14px_0_rgba(239,68,68,0.39)]' : 'bg-emerald-500 hover:bg-emerald-600 shadow-[0_4px_14px_0_rgba(16,185,129,0.39)]'}`}
+                        >
+                            {notification.type === 'error' ? 'Try Again' : 'Awesome'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col p-6 items-center text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-500 flex items-center justify-center mb-4">
+                            <Trash2 className="w-8 h-8" />
+                        </div>
+                        <h3 className="font-bold text-xl text-slate-800 mb-2">Delete User?</h3>
+                        <p className="text-slate-500 font-medium mb-8">This action cannot be undone. Are you absolutely sure you want to proceed?</p>
+                        <div className="flex gap-3 w-full">
+                            <button 
+                                onClick={() => setDeleteConfirm(null)} 
+                                className="flex-1 bg-slate-100 text-slate-600 font-bold py-3.5 rounded-2xl hover:bg-slate-200 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteUser(deleteConfirm)} 
+                                className="flex-1 bg-red-500 text-white font-bold py-3.5 rounded-2xl hover:bg-red-600 shadow-[0_4px_14px_0_rgba(239,68,68,0.39)] hover:-translate-y-0.5 transition-all"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 

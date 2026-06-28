@@ -13,11 +13,19 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        const res = await login(email, password);
-        if (res.success) {
-            navigate('/dashboard');
-        } else {
-            setError(res.error);
+        try {
+            const res = await login(email, password);
+            if (res.success) {
+                if (res.user && res.user.role === 'student') {
+                    navigate('/student-dashboard');
+                } else {
+                    navigate('/dashboard');
+                }
+            } else {
+                setError(res.error || 'Login failed');
+            }
+        } catch (err) {
+            setError(err.message || 'An unexpected error occurred during login');
         }
     };
 
@@ -45,7 +53,7 @@ const Login = () => {
                     <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="email">
-                                Email Address
+                                Email or User ID
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -54,11 +62,11 @@ const Login = () => {
                                 <input
                                     id="email"
                                     name="email"
-                                    type="email"
+                                    type="text"
                                     autoComplete="email"
                                     required
                                     className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow text-sm"
-                                    placeholder="admin@thomsonschool.com"
+                                    placeholder="user@school.com or User ID"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                 />
