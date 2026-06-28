@@ -34,6 +34,15 @@ import BulkDelete from './pages/student/BulkDelete';
 
 import AnnualCalendar from './pages/calendar/AnnualCalendar';
 
+import ClassTimetable from './pages/academic/ClassTimetable';
+import TeachersTimetable from './pages/academic/TeachersTimetable';
+import AssignClassTeacher from './pages/academic/AssignClassTeacher';
+import PromoteStudents from './pages/academic/PromoteStudents';
+
+import CollectFees from './pages/fees/CollectFees';
+import SearchDueFees from './pages/fees/SearchDueFees';
+import SearchPayment from './pages/fees/SearchPayment';
+
 function App() {
   return (
     <Routes>
@@ -79,27 +88,27 @@ function App() {
         } />
 
         {/* Fees Collection Routes */}
-        <Route path="/fees/collect" element={<PagePlaceholder title="Collect Fees" />} />
-        <Route path="/fees/offline-bank" element={<PagePlaceholder title="Offline Bank Payments" />} />
-        <Route path="/fees/search-payment" element={<PagePlaceholder title="Search Fees Payment" />} />
-        <Route path="/fees/search-due" element={<PagePlaceholder title="Search Due Fees" />} />
-        <Route path="/fees/master" element={<PagePlaceholder title="Fees Master" />} />
-        <Route path="/fees/quick" element={<PagePlaceholder title="Quick Fees" />} />
-        <Route path="/fees/group" element={<PagePlaceholder title="Fees Group" />} />
-        <Route path="/fees/type" element={<PagePlaceholder title="Fees Type" />} />
-        <Route path="/fees/discount" element={<PagePlaceholder title="Fees Discount" />} />
-        <Route path="/fees/carry-forward" element={<PagePlaceholder title="Fees Carry Forward" />} />
-        <Route path="/fees/reminder" element={<PagePlaceholder title="Fees Reminder" />} />
+        <Route path="/fees/collect" element={<CollectFees />} />
+        <Route path="/fees/offline-bank" element={<HRGenericSetup title="Offline Bank Payments" description="Reconcile and manage bank transfers or offline payments." columns={["Reference No", "Amount", "Status"]} data={[{name: "REF-1002", amount: "5000", status: "Pending"}]} />} />
+        <Route path="/fees/search-payment" element={<SearchPayment />} />
+        <Route path="/fees/search-due" element={<SearchDueFees />} />
+        <Route path="/fees/master" element={<HRGenericSetup title="Fees Master" description="Master configuration for school fees." columns={["Fee Group", "Fee Type", "Amount"]} data={[{group: "Tuition", type: "Monthly", amount: "2500"}]} />} />
+        <Route path="/fees/quick" element={<CollectFees />} />
+        <Route path="/fees/group" element={<HRGenericSetup title="Fees Group" description="Group multiple fee types together." columns={["Name", "Description"]} data={[{name: "Class 10 Fees", description: "All fees for Class 10"}]} />} />
+        <Route path="/fees/type" element={<HRGenericSetup title="Fees Type" description="Define specific types of fees." columns={["Name", "Code"]} data={[{name: "Transport Fee", code: "TRP"}]} />} />
+        <Route path="/fees/discount" element={<HRGenericSetup title="Fees Discount" description="Manage discount structures for students." columns={["Name", "Discount Code", "Amount"]} data={[{name: "Sibling Discount", code: "SIB10", amount: "10%"}]} />} />
+        <Route path="/fees/carry-forward" element={<HRGenericSetup title="Fees Carry Forward" description="Carry forward pending dues from previous sessions." columns={["Session", "Action"]} data={[{session: "2025-2026", action: "Completed"}]} />} />
+        <Route path="/fees/reminder" element={<HRGenericSetup title="Fees Reminder" description="Configure automatic reminders for fee payments." columns={["Reminder Type", "Days Before/After", "Status"]} data={[{type: "Before Due Date", days: "5 Days", status: "Active"}]} />} />
 
         {/* Academics Routes */}
-        <Route path="/academics/class-timetable" element={<PagePlaceholder title="Class Timetable" />} />
-        <Route path="/academics/teachers-timetable" element={<PagePlaceholder title="Teachers Timetable" />} />
-        <Route path="/academics/assign-teacher" element={<PagePlaceholder title="Assign Class Teacher" />} />
-        <Route path="/academics/promote" element={<PagePlaceholder title="Promote Students" />} />
-        <Route path="/academics/subject-group" element={<PagePlaceholder title="Subject Group" />} />
-        <Route path="/academics/subjects" element={<PagePlaceholder title="Subjects" />} />
-        <Route path="/academics/class" element={<PagePlaceholder title="Class" />} />
-        <Route path="/academics/sections" element={<PagePlaceholder title="Sections" />} />
+        <Route path="/academics/class-timetable" element={<ClassTimetable />} />
+        <Route path="/academics/teachers-timetable" element={<TeachersTimetable />} />
+        <Route path="/academics/assign-teacher" element={<AssignClassTeacher />} />
+        <Route path="/academics/promote" element={<PromoteStudents />} />
+        <Route path="/academics/subject-group" element={<HRGenericSetup title="Subject Group" description="Group related subjects for a specific curriculum." columns={["Name", "Sections", "Subjects"]} data={[{name: "Science Stream", sections: "A, B", subjects: "Physics, Chemistry, Math"}]} />} />
+        <Route path="/academics/subjects" element={<HRGenericSetup title="Subjects" description="Manage all academic subjects." columns={["Subject Name", "Subject Code", "Subject Type"]} data={[{name: "Mathematics", code: "MAT-101", type: "Theory"}]} />} />
+        <Route path="/academics/class" element={<HRGenericSetup title="Classes" description="Manage academic classes/grades." columns={["Class", "Sections"]} data={[{class: "Class 10", sections: "A, B, C"}]} />} />
+        <Route path="/academics/sections" element={<HRGenericSetup title="Sections" description="Manage sections for classes." columns={["Section Name"]} data={[{name: "Section A"}, {name: "Section B"}]} />} />
 
         {/* Alumni Routes */}
         <Route path="/alumni/manage" element={<PagePlaceholder title="Manage Alumni" />} />

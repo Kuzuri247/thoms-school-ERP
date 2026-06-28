@@ -17,6 +17,8 @@ const AnnualCalendar = () => {
         { id: 2, title: 'Parent-Teacher Meeting', date: '22', month: 'June', year: 2026, type: 'Meeting', color: 'bg-amber-100 text-amber-700 border-amber-200' },
     ]);
 
+    const [newEvent, setNewEvent] = useState({ title: '', startDate: '', endDate: '', type: 'School Event' });
+
     useEffect(() => {
         const fetchHolidays = async () => {
             try {
@@ -49,6 +51,17 @@ const AnnualCalendar = () => {
     const handleAddEvent = (e) => {
         e.preventDefault();
         setIsFormOpen(false);
+        setNewEvent({ title: '', startDate: '', endDate: '', type: 'School Event' }); // reset
+    };
+
+    const calculateDuration = () => {
+        if (!newEvent.startDate || !newEvent.endDate) return null;
+        const start = new Date(newEvent.startDate);
+        const end = new Date(newEvent.endDate);
+        const diffTime = end - start;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) return 'Invalid Date Range';
+        return diffDays === 0 ? '1 Day' : `${diffDays + 1} Days`;
     };
 
     const nextMonth = () => setCurrentDate(new Date(currentYear, currentMonthIndex + 1, 1));
@@ -85,34 +98,43 @@ const AnnualCalendar = () => {
                     <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
                             <h2 className="text-xl font-bold text-slate-800">Add New Event</h2>
-                            <button onClick={() => setIsFormOpen(false)} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-xl transition-colors">
+                            <button onClick={() => { setIsFormOpen(false); setNewEvent({ title: '', startDate: '', endDate: '', type: 'School Event' }); }} className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-600 rounded-xl transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <form onSubmit={handleAddEvent} className="p-6 space-y-6">
                             <div>
                                 <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Event Title *</label>
-                                <input type="text" className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all placeholder:text-slate-400" placeholder="e.g. Science Fair" required />
+                                <input type="text" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all placeholder:text-slate-400" placeholder="e.g. Science Fair" required />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Date *</label>
-                                    <input type="date" className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all cursor-pointer" required />
+                                    <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Start Date *</label>
+                                    <input type="date" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all cursor-pointer" required />
                                 </div>
                                 <div>
-                                    <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Event Type *</label>
-                                    <select className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all cursor-pointer">
-                                        <option>School Event</option>
-                                        <option>Meeting</option>
-                                        <option>Exam</option>
-                                    </select>
+                                    <label className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">
+                                        End Date *
+                                        {calculateDuration() && (
+                                            <span className="text-fuchsia-600 font-extrabold normal-case bg-fuchsia-50 px-2 py-0.5 rounded-lg">{calculateDuration()}</span>
+                                        )}
+                                    </label>
+                                    <input type="date" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all cursor-pointer" required />
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-[11px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Event Type *</label>
+                                <select value={newEvent.type} onChange={e => setNewEvent({...newEvent, type: e.target.value})} className="block w-full px-4 py-3 border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 focus:ring-4 focus:ring-fuchsia-500/20 focus:border-fuchsia-500 bg-slate-50 focus:bg-white outline-none transition-all cursor-pointer">
+                                    <option>School Event</option>
+                                    <option>Meeting</option>
+                                    <option>Exam</option>
+                                </select>
+                            </div>
                             <div className="pt-2 flex justify-end gap-3">
-                                <button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all">
+                                <button type="button" onClick={() => { setIsFormOpen(false); setNewEvent({ title: '', startDate: '', endDate: '', type: 'School Event' }); }} className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all">
                                     Cancel
                                 </button>
-                                <button type="submit" className="flex items-center gap-2 px-6 py-2.5 bg-fuchsia-600 text-white rounded-2xl text-sm font-bold hover:bg-fuchsia-700 shadow-[0_4px_14px_0_rgba(192,38,211,0.39)] hover:-translate-y-0.5 transition-all">
+                                <button type="submit" disabled={calculateDuration() === 'Invalid Date Range'} className="flex items-center gap-2 px-6 py-2.5 bg-fuchsia-600 text-white rounded-2xl text-sm font-bold hover:bg-fuchsia-700 shadow-[0_4px_14px_0_rgba(192,38,211,0.39)] hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none">
                                     <Save className="w-4 h-4" /> Save Event
                                 </button>
                             </div>
