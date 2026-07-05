@@ -17,7 +17,7 @@ app.use(cors({
 app.use(cookieParser());
 app.use(morgan('combined'));
 
-const { router: paymentsRouter, webhookRouter } = require('./modules/payments/payments.routes');
+const { router: paymentsRouter, webhookRouter } = require('./modules/payments/payments.route');
 
 app.use('/api/payments/webhook', rawBody, webhookRouter);
 
