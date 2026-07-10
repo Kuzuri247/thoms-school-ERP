@@ -23,8 +23,12 @@ async function migrate() {
       await connection.query(sql);
       console.log(`  OK: ${file}`);
     } catch (err) {
-      console.error(`  FAILED: ${file}`, err.message);
-      throw err;
+      if (err.errno === 1060 || err.errno === 1061 || err.errno === 1050) {
+        console.log(`  SKIPPED (already applied or syntax mismatch handled): ${file}`);
+      } else {
+        console.error(`  FAILED: ${file}`, err.message);
+        throw err;
+      }
     }
   }
 
