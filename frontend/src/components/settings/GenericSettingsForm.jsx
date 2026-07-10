@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { Save } from 'lucide-react';
+import api from '../../api/axios';
 
 const GenericSettingsForm = ({ title, description, icon: Icon, schema }) => {
     const { user } = useContext(AuthContext);
@@ -21,11 +22,9 @@ const GenericSettingsForm = ({ title, description, icon: Icon, schema }) => {
     const fetchSettings = async () => {
         if (!user) return;
         try {
-            const response = await fetch('http://localhost:5000/api/admin/settings', {
-                headers: { 'Authorization': `Bearer ${user.accessToken}` }
-            });
-            const data = await response.json();
-            if (response.ok && Object.keys(data).length > 0) {
+            const response = await api.get('/admin/settings');
+            const data = response.data;
+            if (Object.keys(data).length > 0) {
                 setSettings(prev => ({ ...prev, ...data }));
             }
         } catch (err) {
@@ -46,22 +45,10 @@ const GenericSettingsForm = ({ title, description, icon: Icon, schema }) => {
                 settingsToSave[field.key] = settings[field.key];
             });
 
-            const response = await fetch('http://localhost:5000/api/admin/settings', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.accessToken}`
-                },
-                body: JSON.stringify({ settings: settingsToSave })
-            });
-            
-            if (response.ok) {
-                setMessage('Settings saved successfully!');
-            } else {
-                setError('Failed to save settings.');
-            }
+            await api.post('/admin/settings', { settings: settingsToSave });
+            setMessage('Settings saved successfully!');
         } catch (err) {
-            setError('An error occurred while saving.');
+            setError('Failed to save settings.');
         } finally {
             setLoading(false);
         }

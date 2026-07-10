@@ -2,15 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const { verifyToken, isSuperAdmin } = require('../middleware/auth');
-const mysql = require('mysql2/promise');
-require('dotenv').config();
-
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'school_erp'
-});
+const pool = require('../config/db');
 
 router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
     let { email, password, role, class_name, section } = req.body;

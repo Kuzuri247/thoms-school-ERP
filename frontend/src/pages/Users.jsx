@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Users as UsersIcon, UserPlus, Trash2, Mail, Lock, Edit2, X, AlertTriangle, CheckCircle } from 'lucide-react';
+import api from '../api/axios';
 
 const Users = () => {
     const { user } = useContext(AuthContext);
@@ -26,13 +27,8 @@ const Users = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/admin/users', {
-                headers: { 'Authorization': `Bearer ${user.accessToken}` }
-            });
-            const data = await response.json();
-            if (response.ok) {
-                setUsers(data);
-            }
+            const response = await api.get('/admin/users');
+            setUsers(response.data);
         } catch (error) {
             console.error('Failed to fetch users', error);
         }
@@ -46,24 +42,12 @@ const Users = () => {
             payload.password = payload.role === 'student' ? 'student123' : 'teacher123';
         }
         try {
-            const response = await fetch('http://localhost:5000/api/admin/users', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.accessToken}`
-                },
-                body: JSON.stringify(payload)
-            });
-            
-            if (response.ok) {
-                fetchUsers();
-                setNewUser({ email: '', password: '', role: 'admin', class_name: '', section: '' });
-                setNotification({ type: 'success', message: 'User created successfully!' });
-            } else {
-                setNotification({ type: 'error', message: 'Failed to create user. Email might already exist.' });
-            }
+            await api.post('/admin/users', payload);
+            fetchUsers();
+            setNewUser({ email: '', password: '', role: 'admin', class_name: '', section: '' });
+            setNotification({ type: 'success', message: 'User created successfully!' });
         } catch (error) {
-            setNotification({ type: 'error', message: 'Network error while creating user.' });
+            setNotification({ type: 'error', message: 'Failed to create user. Email might already exist.' });
             console.error(error);
         } finally {
             setLoading(false);
@@ -72,20 +56,12 @@ const Users = () => {
 
     const handleDeleteUser = async (id) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/admin/users/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${user.accessToken}` }
-            });
-            
-            if (response.ok) {
-                fetchUsers();
-                setDeleteConfirm(null);
-                setNotification({ type: 'success', message: 'User deleted successfully!' });
-            } else {
-                setNotification({ type: 'error', message: 'Failed to delete user.' });
-            }
+            await api.delete(`/admin/users/${id}`);
+            fetchUsers();
+            setDeleteConfirm(null);
+            setNotification({ type: 'success', message: 'User deleted successfully!' });
         } catch (error) {
-            setNotification({ type: 'error', message: 'Network error while deleting user.' });
+            setNotification({ type: 'error', message: 'Failed to delete user.' });
         }
     };
 
@@ -97,24 +73,12 @@ const Users = () => {
             updatePayload.password = editUser.role === 'student' ? 'student123' : 'teacher123';
         }
         try {
-            const response = await fetch(`http://localhost:5000/api/admin/users/${editUser.id}`, {
-                method: 'PUT',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.accessToken}`
-                },
-                body: JSON.stringify(updatePayload)
-            });
-            
-            if (response.ok) {
-                fetchUsers();
-                setEditUser(null);
-                setNotification({ type: 'success', message: 'User updated successfully!' });
-            } else {
-                setNotification({ type: 'error', message: 'Failed to update user.' });
-            }
+            await api.put(`/admin/users/${editUser.id}`, updatePayload);
+            fetchUsers();
+            setEditUser(null);
+            setNotification({ type: 'success', message: 'User updated successfully!' });
         } catch (error) {
-            setNotification({ type: 'error', message: 'Network error while updating user.' });
+            setNotification({ type: 'error', message: 'Failed to update user.' });
         } finally {
             setEditLoading(false);
         }

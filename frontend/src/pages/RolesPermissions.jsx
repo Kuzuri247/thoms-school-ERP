@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Shield, CheckSquare, Square, Save, AlertCircle } from 'lucide-react';
+import api from '../api/axios';
 
 const availableModules = [
     { id: 'student_info', label: 'Student Information' },
@@ -55,10 +56,8 @@ const RolesPermissions = () => {
 
     const fetchPermissions = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/admin/settings', {
-                headers: { 'Authorization': `Bearer ${user.accessToken}` }
-            });
-            const data = await response.json();
+            const response = await api.get('/admin/settings');
+            const data = response.data;
             
             let loadedPerms = { ...defaultPermissions };
             if (data.role_permissions) {
@@ -78,25 +77,14 @@ const RolesPermissions = () => {
     const handleSave = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://localhost:5000/api/admin/settings', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.accessToken}`
-                },
-                body: JSON.stringify({
-                    settings: {
-                        role_permissions: JSON.stringify(permissions)
-                    }
-                })
+            await api.post('/admin/settings', {
+                settings: {
+                    role_permissions: JSON.stringify(permissions)
+                }
             });
-            if (response.ok) {
-                setNotification({ type: 'success', message: 'Permissions saved successfully! Reload to apply to your view.' });
-            } else {
-                setNotification({ type: 'error', message: 'Failed to save permissions.' });
-            }
+            setNotification({ type: 'success', message: 'Permissions saved successfully! Reload to apply to your view.' });
         } catch (error) {
-            setNotification({ type: 'error', message: 'Network error.' });
+            setNotification({ type: 'error', message: 'Failed to save permissions.' });
         } finally {
             setLoading(false);
             setTimeout(() => setNotification(null), 3000);

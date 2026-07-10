@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { CheckCircle, XCircle, Search, Save, AlertCircle } from 'lucide-react';
+import api from '../../api/axios';
 
 const StudentAttendance = () => {
     const { user } = useContext(AuthContext);
@@ -18,21 +19,17 @@ const StudentAttendance = () => {
 
     const fetchStudents = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/auth/students', {
-                headers: { 'Authorization': `Bearer ${user.accessToken}` }
+            const response = await api.get('/auth/students');
+            const data = response.data;
+            setStudents(data);
+            setFilteredStudents(data);
+            
+            // Initialize attendance data to 'Present' by default
+            const initialData = {};
+            data.forEach(s => {
+                initialData[s.id] = 'Present';
             });
-            const data = await response.json();
-            if (response.ok) {
-                setStudents(data);
-                setFilteredStudents(data);
-                
-                // Initialize attendance data to 'Present' by default
-                const initialData = {};
-                data.forEach(s => {
-                    initialData[s.id] = 'Present';
-                });
-                setAttendanceData(initialData);
-            }
+            setAttendanceData(initialData);
         } catch (error) {
             console.error('Failed to fetch students', error);
         }

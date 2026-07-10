@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import api from '../api/axios';
 
 const ForgotPassword = () => {
     const [email, setEmail] = useState('');
@@ -13,20 +14,10 @@ const ForgotPassword = () => {
         setError('');
         
         try {
-            const response = await fetch('http://localhost:5000/api/auth/forgot-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
-            const data = await response.json();
-            
-            if (response.ok) {
-                setMessage(data.message);
-            } else {
-                setError(data.error);
-            }
+            const response = await api.post('/auth/forgot-password', { email });
+            setMessage(response.data.message);
         } catch (err) {
-            setError('Something went wrong. Please try again.');
+            setError(err.response?.data?.error || 'Something went wrong. Please try again.');
         }
     };
 

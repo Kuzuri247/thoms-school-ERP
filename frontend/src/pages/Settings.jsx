@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Settings as SettingsIcon, Save, ArrowLeft, Mail } from 'lucide-react';
+import api from '../api/axios';
 
 const Settings = () => {
     const { user } = useContext(AuthContext);
@@ -26,12 +27,9 @@ const Settings = () => {
 
     const fetchSettings = async () => {
         try {
-            const response = await fetch('http://localhost:5000/api/admin/settings', {
-                headers: { 'Authorization': `Bearer ${user.accessToken}` }
-            });
-            const data = await response.json();
-            if (response.ok && Object.keys(data).length > 0) {
-                setSettings(prev => ({ ...prev, ...data }));
+            const response = await api.get('/admin/settings');
+            if (Object.keys(response.data).length > 0) {
+                setSettings(prev => ({ ...prev, ...response.data }));
             }
         } catch (err) {
             console.error('Failed to fetch settings', err);
@@ -45,22 +43,10 @@ const Settings = () => {
         setError('');
         
         try {
-            const response = await fetch('http://localhost:5000/api/admin/settings', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.accessToken}`
-                },
-                body: JSON.stringify({ settings })
-            });
-            
-            if (response.ok) {
-                setMessage('Settings saved successfully!');
-            } else {
-                setError('Failed to save settings.');
-            }
+            await api.post('/admin/settings', { settings });
+            setMessage('Settings saved successfully!');
         } catch (err) {
-            setError('An error occurred while saving.');
+            setError('Failed to save settings.');
         } finally {
             setLoading(false);
         }

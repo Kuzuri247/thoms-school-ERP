@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate, Link, Outlet, useLocation } from 'react-router-dom';
+import api from '../api/axios';
 import { 
     ShieldAlert, LayoutDashboard, Users, GraduationCap, Network, Banknote, BookOpen, Clock, CalendarDays, Key, Trash2, Home, HelpCircle, Tags, Users2, UserCheck, Globe, DollarSign, Layers, FileCode2, Receipt, MonitorPlay, Shield, Database, Languages, Puzzle, LogOut, Search, Bell, Settings, ChevronDown, ChevronRight, Menu, X, BookText, Building2, UserX, Star, Briefcase, CalendarCheck, FileSpreadsheet, CalendarPlus, Building, Zap, Tag, Percent, ArrowRightCircle, Book, Grid, CheckSquare, PersonStanding, Megaphone, Mail, MessageSquare, List, UploadCloud, Video, FileType, BookOpenCheck, Bus, MapPin, Truck, Map, UserMinus, Award, Settings2, CreditCard, Calendar
 } from 'lucide-react';
@@ -29,10 +30,8 @@ const Layout = () => {
         if (!user) return;
         const fetchPerms = async () => {
             try {
-                const response = await fetch('http://localhost:5000/api/auth/permissions', {
-                    headers: { 'Authorization': `Bearer ${user.accessToken}` }
-                });
-                const data = await response.json();
+                const response = await api.get('/auth/permissions');
+                const data = response.data;
                 if (data.role_permissions) {
                     setPermissions(JSON.parse(data.role_permissions));
                 } else {

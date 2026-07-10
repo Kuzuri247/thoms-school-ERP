@@ -1,4 +1,3 @@
-require('express-async-errors');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -17,7 +16,7 @@ app.use(cors({
 app.use(cookieParser());
 app.use(morgan('combined'));
 
-const { router: paymentsRouter, webhookRouter } = require('./modules/payments/payments.routes');
+const { router: paymentsRouter, webhookRouter } = require('./modules/payments/payments.route');
 
 app.use('/api/payments/webhook', rawBody, webhookRouter);
 
@@ -26,7 +25,8 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static('uploads'));
 
-app.use('/api/auth', require('./modules/auth/auth.routes'));
+app.use('/api/auth', require('./modules/auth/auth.route'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/payments', paymentsRouter);
 
 app.get('/', (req, res) => {

@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { Lock, FileSpreadsheet, CheckCircle, AlertCircle, Key, User, CalendarDays, Award, BookOpen, Clock, ArrowRight, Bell, BookText, X, Bus, MapPin, UserCheck } from 'lucide-react';
+import api from '../api/axios';
 
 const months = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
 const monthLabels = ['April', 'May', 'June', 'July', 'August', 'Sept', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'March'];
@@ -72,25 +73,12 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
         }
 
         try {
-            const response = await fetch('http://localhost:5000/api/auth/change-password', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${user.accessToken}`
-                },
-                body: JSON.stringify({ newPassword })
-            });
-
-            const data = await response.json();
-            if (response.ok) {
-                setMessage('Password updated successfully!');
-                setNewPassword('');
-                setConfirmPassword('');
-            } else {
-                setError(data.error || 'Failed to update password');
-            }
+            const response = await api.put('/auth/change-password', { newPassword });
+            setMessage(response.data.message || 'Password updated successfully!');
+            setNewPassword('');
+            setConfirmPassword('');
         } catch (err) {
-            setError('Server connection failed');
+            setError(err.response?.data?.error || 'Failed to update password');
         }
     };
 
