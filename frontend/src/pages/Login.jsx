@@ -1,116 +1,177 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
-import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import useAuthStore from '../store/authStore';
+import { Mail, Lock, AlertCircle, ArrowRight, GraduationCap, Sparkles, Shield, User, CreditCard, FileSpreadsheet } from 'lucide-react';
 
 const Login = () => {
-    const { login } = useContext(AuthContext);
-    const navigate = useNavigate();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+  const { login } = useAuthStore();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        try {
-            const res = await login(email, password);
-            if (res.success) {
-                if (res.user && res.user.role === 'student') {
-                    navigate('/student-dashboard');
-                } else {
-                    navigate('/dashboard');
-                }
-            } else {
-                setError(res.error || 'Login failed');
-            }
-        } catch (err) {
-            setError(err.message || 'An unexpected error occurred during login');
+  const demoAccounts = [
+    { role: 'Admin', email: 'admin@thoms.edu', pass: '123456', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { role: 'Teacher', email: 'teacher.math@thoms.edu', pass: '123456', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { role: 'Student', email: 'student.aarav@thoms.edu', pass: '123456', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { role: 'Fees Desk', email: 'fees.counter@thoms.edu', pass: '123456', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { role: 'Accountant', email: 'accountant@thoms.edu', pass: '123456', icon: FileSpreadsheet, color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  ];
+
+  const handleQuickFill = (acc) => {
+    setEmail(acc.email);
+    setPassword(acc.pass);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await login(email, password);
+      setLoading(false);
+      if (res.success) {
+        const user = res.user;
+        const role = user?.role?.toLowerCase()?.replace(/\s+/g, '_');
+        if (role === 'admin' || role === 'super_admin') {
+          navigate('/admin/dashboard');
+        } else if (role === 'teacher' || role === 'teachers') {
+          navigate('/teacher/dashboard');
+        } else if (role === 'student' || role === 'students') {
+          navigate('/student/dashboard');
+        } else if (role === 'fees_collector') {
+          navigate('/fees/collect');
+        } else if (role === 'accountant') {
+          navigate('/accountant/overview');
+        } else {
+          navigate('/dashboard');
         }
-    };
+      } else {
+        setError(res.error || 'Login failed. Please check your credentials.');
+      }
+    } catch (err) {
+      setLoading(false);
+      setError(err.message || 'An unexpected error occurred during login');
+    }
+  };
 
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 sm:p-6 lg:p-8">
-            <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-                <div className="text-center">
-                    <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                        <Lock className="w-6 h-6" />
-                    </div>
-                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Welcome Back</h2>
-                    <p className="mt-2 text-sm text-slate-500">
-                        Sign in to access your ERP dashboard
-                    </p>
-                </div>
-                
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm font-medium">{error}</span>
-                    </div>
-                )}
-                
-                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="email">
-                                Email or User ID
-                            </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Mail className="h-5 w-5 text-slate-400" />
-                                </div>
-                                <input
-                                    id="email"
-                                    name="email"
-                                    type="text"
-                                    autoComplete="email"
-                                    required
-                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow text-sm"
-                                    placeholder="user@school.com or User ID"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="block text-sm font-medium text-slate-700" htmlFor="password">
-                                    Password
-                                </label>
-                                <Link to="/forgot-password" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
-                                    Forgot password?
-                                </Link>
-                            </div>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Lock className="h-5 w-5 text-slate-400" />
-                                </div>
-                                <input
-                                    id="password"
-                                    name="password"
-                                    type="password"
-                                    autoComplete="current-password"
-                                    required
-                                    className="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow text-sm"
-                                    placeholder="••••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    </div>
+  return (
+    <div className="min-h-screen relative flex items-center justify-center bg-slate-950 p-4 sm:p-6 lg:p-8 overflow-hidden font-sans">
+      {/* Dynamic Ambient Mesh Glow Background */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-600/30 via-violet-600/20 to-pink-500/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-10 left-10 w-72 h-72 bg-blue-600/20 blur-[90px] rounded-full pointer-events-none" />
 
-                    <button
-                        type="submit"
-                        className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-sm"
-                    >
-                        Sign in
-                        <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                </form>
-            </div>
+      <div className="relative max-w-md w-full space-y-6 bg-slate-900/80 backdrop-blur-2xl p-8 rounded-3xl border border-slate-800/80 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+        {/* Brand Header */}
+        <div className="text-center space-y-2">
+          <div className="w-14 h-14 bg-gradient-to-tr from-indigo-500 to-violet-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/30 border border-indigo-400/20">
+            <GraduationCap className="w-8 h-8" />
+          </div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+            Thomson ERP
+          </h1>
+          <p className="text-xs text-slate-400 font-medium">
+            Unified Role-Based School Portal
+          </p>
         </div>
-    );
+
+        {/* Demo Account Quick Selector */}
+        <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-800 space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+            <span>Demo Quick-Select</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {demoAccounts.map((acc) => {
+              const IconComp = acc.icon;
+              return (
+                <button
+                  key={acc.role}
+                  type="button"
+                  onClick={() => handleQuickFill(acc)}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 hover:scale-105 active:scale-95 ${acc.color}`}
+                >
+                  <IconComp className="w-3 h-3" /> {acc.role}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-300 px-4 py-3 rounded-2xl flex items-start gap-3 animate-in fade-in">
+            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <span className="text-xs font-semibold">{error}</span>
+          </div>
+        )}
+
+        {/* Login Form */}
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1" htmlFor="email">
+                Email Address
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Mail className="h-4 h-4 text-slate-500" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-medium text-sm transition-all"
+                  placeholder="user@thoms.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider" htmlFor="password">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className="h-4 h-4 text-slate-500" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-950/70 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-medium text-sm transition-all"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="group relative w-full flex justify-center items-center py-3 px-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-lg shadow-indigo-600/30 active:scale-[0.99] disabled:opacity-50"
+          >
+            {loading ? 'Authenticating...' : 'Sign in to Portal'}
+            <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 export default Login;

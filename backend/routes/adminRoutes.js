@@ -111,6 +111,8 @@ router.post('/attendance', [verifyToken], async (req, res) => {
     }
     try {
         if (!date || !attendanceData) {
+            return res.status(400).json({ error: 'Date and attendance data are required' });
+        }
         for (const [userId, status] of Object.entries(attendanceData)) {
             await pool.query(
                 'INSERT INTO student_attendance (user_id, date, status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE status = ?',

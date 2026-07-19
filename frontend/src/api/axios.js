@@ -6,16 +6,28 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  let token = localStorage.getItem('token');
+  if (!token) {
+    try {
+      const authStorage = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+      token = authStorage.state?.accessToken;
+    } catch {}
+  }
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      window.location.href = '/';
+    if (
+      error.response?.status === 401 &&
+      window.location.pathname !== '/' &&
+      window.location.pathname !== '/login'
+    ) {
+      localStorage.removeItem('token');
     }
     return Promise.reject(error);
   }

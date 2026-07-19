@@ -1,152 +1,266 @@
-import React, { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import React, { useState } from 'react';
 import { useNavigate, Link, Outlet, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Users, Shield, Settings, Bell, Menu } from 'lucide-react';
+import {
+  LogOut,
+  LayoutDashboard,
+  Users,
+  Shield,
+  Settings,
+  BookOpen,
+  CalendarCheck,
+  CreditCard,
+  FileSpreadsheet,
+  Bus,
+  Menu,
+  X,
+  Award,
+  Receipt,
+  GraduationCap,
+  Sparkles
+} from 'lucide-react';
+import useAuthStore from '../store/authStore';
 
 const Layout = () => {
-    const { user, logout } = useContext(AuthContext);
-    const navigate = useNavigate();
-    const location = useLocation();
+  const { user, logout, hasRole } = useAuthStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    if (!user) {
-        navigate('/');
-        return null;
+  if (!user) {
+    return null;
+  }
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  const isActive = (path) => location.pathname.startsWith(path);
+
+  const navLinkClass = (path) => `
+    flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200
+    ${
+      isActive(path)
+        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20 translate-x-0.5'
+        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
     }
+  `;
 
-    const isActive = (path) => location.pathname === path;
+  const getRoleBadgeColor = (role = '') => {
+    const norm = role.toLowerCase().replace(/\s+/g, '_');
+    switch (norm) {
+      case 'super_admin':
+      case 'admin':
+        return 'bg-purple-50 text-purple-700 border-purple-200/80';
+      case 'teacher':
+      case 'teachers':
+        return 'bg-amber-50 text-amber-700 border-amber-200/80';
+      case 'student':
+      case 'students':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+      case 'fees_collector':
+        return 'bg-blue-50 text-blue-700 border-blue-200/80';
+      case 'accountant':
+        return 'bg-teal-50 text-teal-700 border-teal-200/80';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
 
-    const navLinkClass = (path) => `
-        inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-300
-        ${isActive(path) 
-            ? 'bg-indigo-50 text-indigo-700 shadow-sm shadow-indigo-100/50' 
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-        }
-    `;
+  const roleHomePath = () => {
+    if (hasRole(['admin'])) return '/admin/dashboard';
+    if (hasRole(['teacher'])) return '/teacher/dashboard';
+    if (hasRole(['student'])) return '/student/dashboard';
+    if (hasRole(['fees_collector'])) return '/fees/collect';
+    if (hasRole(['accountant'])) return '/accountant/overview';
+    return '/dashboard';
+  };
 
-    const getRoleBadgeColor = (role) => {
-        const colors = {
-            super_admin: 'bg-red-50 text-red-700 border-red-100',
-            admin: 'bg-indigo-50 text-indigo-700 border-indigo-100',
-            teacher: 'bg-amber-50 text-amber-700 border-amber-100',
-            student: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-        };
-        return colors[role] || 'bg-slate-50 text-slate-700 border-slate-100';
-    };
+  return (
+    <div className="min-h-screen bg-slate-50/80 flex flex-col font-sans">
+      {/* Dynamic Glassmorphic Top Bar */}
+      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 transition"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
 
-    return (
-        <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-            {/* Top Navbar */}
-            <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/80">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                    
-                    {/* Brand / Logo */}
-                    <div className="flex items-center gap-8">
-                        <Link to={user.role === 'student' ? '/student-dashboard' : user.role === 'teacher' ? '/teacher' : '/dashboard'} className="flex items-center gap-3 group">
-                            <div className="w-11 h-11 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center text-white shadow-[0_4px_14px_0_rgba(79,70,229,0.3)] group-hover:scale-105 transition-transform duration-300">
-                                <GraduationCap className="w-6 h-6" />
-                            </div>
-                            <span className="text-xl font-black bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 bg-clip-text text-transparent tracking-tight">
-                                Thomson ERP
-                            </span>
-                        </Link>
+            <Link to={roleHomePath()} className="flex items-center gap-3 group">
+              <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200">
+                <GraduationCap className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-base font-extrabold text-slate-900 tracking-tight block leading-none group-hover:text-indigo-600 transition-colors">
+                  Thomson ERP
+                </span>
+                <span className="text-[10px] text-slate-500 font-semibold tracking-wide">
+                  School Management System
+                </span>
+              </div>
+            </Link>
+          </div>
 
-                        {/* Navigation Links */}
-                        <nav className="hidden md:flex items-center gap-1">
-                            {/* Admin Links */}
-                            {(user.role === 'super_admin' || user.role === 'admin') && (
-                                <>
-                                    <Link to="/dashboard" className={navLinkClass('/dashboard')}>
-                                        <LayoutDashboard className="w-4 h-4" /> Dashboard
-                                    </Link>
-                                    <Link to="/settings/users" className={navLinkClass('/settings/users')}>
-                                        <Users className="w-4 h-4" /> Users
-                                    </Link>
-                                    <Link to="/settings/roles" className={navLinkClass('/settings/roles')}>
-                                        <Shield className="w-4 h-4" /> Permissions
-                                    </Link>
-                                    <Link to="/settings" className={navLinkClass('/settings')}>
-                                        <Settings className="w-4 h-4" /> Settings
-                                    </Link>
-                                </>
-                            )}
-                            
-                            {/* Teacher Links */}
-                            {user.role === 'teacher' && (
-                                <>
-                                    <Link to="/teacher" className={navLinkClass('/teacher')}>
-                                        <LayoutDashboard className="w-4 h-4" /> Dashboard
-                                    </Link>
-                                    <Link to="/attendance/student" className={navLinkClass('/attendance/student')}>
-                                        <Users className="w-4 h-4" /> Student Attendance
-                                    </Link>
-                                </>
-                            )}
-
-                            {/* Student Links */}
-                            {user.role === 'student' && (
-                                <>
-                                    <Link to="/student-dashboard" className={navLinkClass('/student-dashboard')}>
-                                        <LayoutDashboard className="w-4 h-4" /> Dashboard
-                                    </Link>
-                                </>
-                            )}
-                        </nav>
-                    </div>
-
-                    {/* Right Profile / Controls */}
-                    <div className="flex items-center gap-5">
-                        <div className="hidden sm:flex items-center gap-3 pr-4 border-r border-slate-200">
-                            <div className="w-9 h-9 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-                                {user.email.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex flex-col text-left">
-                                <span className="text-sm font-bold text-slate-800 leading-tight">
-                                    {user.email.split('@')[0]}
-                                </span>
-                                <span className={`inline-block border text-[9px] px-1.5 py-0.5 rounded-lg font-bold uppercase tracking-wider mt-0.5 ${getRoleBadgeColor(user.role)}`}>
-                                    {user.role.replace('_', ' ')}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Logout Button */}
-                        <button 
-                            onClick={() => { logout(); navigate('/'); }}
-                            className="w-11 h-11 text-slate-400 hover:text-white hover:bg-red-500 rounded-2xl border border-slate-200 hover:border-transparent flex items-center justify-center transition-all duration-300 hover:shadow-lg hover:shadow-red-500/20"
-                            title="Logout"
-                        >
-                            <LogOut className="w-5 h-5" />
-                        </button>
-                    </div>
-
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-slate-200/80">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-50 to-violet-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-sm shadow-xs">
+                {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-extrabold text-slate-900 leading-tight">
+                  {user.full_name || user.email?.split('@')[0]}
+                </span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span
+                    className={`inline-block border text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${getRoleBadgeColor(
+                      user.role
+                    )}`}
+                  >
+                    {user.role ? user.role.replace('_', ' ') : 'User'}
+                  </span>
                 </div>
-            </header>
+              </div>
+            </div>
 
-            {/* Main Content Area */}
-            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
-                <Outlet />
-            </main>
+            <button
+              onClick={handleLogout}
+              className="w-9 h-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl border border-transparent hover:border-red-100 flex items-center justify-center transition-all duration-200"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-    );
-};
+      </header>
 
-// Helper Component to import inside Layout.jsx
-const GraduationCap = (props) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
-    <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
-  </svg>
-);
+      {/* Main Body */}
+      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex gap-6">
+        {/* Mobile menu backdrop */}
+        {mobileMenuOpen && (
+          <div
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-40 md:hidden"
+          />
+        )}
+
+        {/* Navigation Sidebar */}
+        <aside
+          className={`
+          fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 p-4 transform transition-transform duration-300 ease-out md:static md:translate-x-0 md:border-r-0 md:bg-transparent md:p-0 md:w-60 flex-shrink-0
+          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+        >
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs flex flex-col gap-1">
+            <div className="px-3 py-2 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center justify-between">
+              <span>Main Portal</span>
+              <Sparkles className="w-3 h-3 text-indigo-500" />
+            </div>
+
+            {/* Admin Links */}
+            {hasRole(['admin']) && (
+              <>
+                <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>
+                  <LayoutDashboard className="w-4 h-4" /> Admin Dashboard
+                </Link>
+                <Link to="/admin/users" className={navLinkClass('/admin/users')}>
+                  <Users className="w-4 h-4" /> User Management
+                </Link>
+                <Link to="/admin/staff" className={navLinkClass('/admin/staff')}>
+                  <Shield className="w-4 h-4" /> Staff Assignments
+                </Link>
+                <Link to="/admin/settings" className={navLinkClass('/admin/settings')}>
+                  <Settings className="w-4 h-4" /> System Settings
+                </Link>
+              </>
+            )}
+
+            {/* Teacher Links */}
+            {hasRole(['teacher', 'admin']) && (
+              <>
+                <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                  Teacher Suite
+                </div>
+                <Link to="/teacher/dashboard" className={navLinkClass('/teacher/dashboard')}>
+                  <LayoutDashboard className="w-4 h-4" /> Dashboard
+                </Link>
+                <Link to="/teacher/attendance" className={navLinkClass('/teacher/attendance')}>
+                  <CalendarCheck className="w-4 h-4" /> Attendance Register
+                </Link>
+                <Link to="/teacher/academics" className={navLinkClass('/teacher/academics')}>
+                  <Award className="w-4 h-4" /> Marks & Grading
+                </Link>
+                <Link to="/teacher/timetable" className={navLinkClass('/teacher/timetable')}>
+                  <BookOpen className="w-4 h-4" /> Class Schedule
+                </Link>
+              </>
+            )}
+
+            {/* Student Links */}
+            {hasRole(['student', 'admin']) && (
+              <>
+                <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                  Student Portal
+                </div>
+                <Link to="/student/dashboard" className={navLinkClass('/student/dashboard')}>
+                  <LayoutDashboard className="w-4 h-4" /> Personal Dashboard
+                </Link>
+                <Link to="/student/timetable" className={navLinkClass('/student/timetable')}>
+                  <BookOpen className="w-4 h-4" /> My Schedule
+                </Link>
+                <Link to="/student/academics" className={navLinkClass('/student/academics')}>
+                  <Award className="w-4 h-4" /> My Report Card
+                </Link>
+                <Link to="/student/transport" className={navLinkClass('/student/transport')}>
+                  <Bus className="w-4 h-4" /> Transport Tracking
+                </Link>
+              </>
+            )}
+
+            {/* Fees Collector Links */}
+            {hasRole(['fees_collector', 'admin']) && (
+              <>
+                <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                  Fee Intake Desk
+                </div>
+                <Link to="/fees/collect" className={navLinkClass('/fees/collect')}>
+                  <CreditCard className="w-4 h-4" /> Daily Collections
+                </Link>
+                <Link to="/fees/receipts" className={navLinkClass('/fees/receipts')}>
+                  <Receipt className="w-4 h-4" /> Official Receipt Logs
+                </Link>
+              </>
+            )}
+
+            {/* Accountant Links */}
+            {hasRole(['accountant', 'admin']) && (
+              <>
+                <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
+                  Accounting Ledger
+                </div>
+                <Link to="/accountant/overview" className={navLinkClass('/accountant/overview')}>
+                  <FileSpreadsheet className="w-4 h-4" /> General Ledger
+                </Link>
+                <Link to="/accountant/reports" className={navLinkClass('/accountant/reports')}>
+                  <FileSpreadsheet className="w-4 h-4" /> Financial Reports
+                </Link>
+              </>
+            )}
+          </div>
+        </aside>
+
+        {/* Dynamic Route Content */}
+        <main className="flex-1 min-w-0">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs min-h-[550px] animate-in fade-in duration-200">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
 
 export default Layout;
