@@ -4,7 +4,7 @@ import useAuthStore from '../store/authStore';
 import { Mail, Lock, AlertCircle, ArrowRight, GraduationCap, Sparkles, Shield, User, CreditCard, FileSpreadsheet } from 'lucide-react';
 
 const Login = () => {
-  const { login } = useAuthStore();
+  const { login, setAuth } = useAuthStore();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,6 +22,31 @@ const Login = () => {
   const handleQuickFill = (acc) => {
     setEmail(acc.email);
     setPassword(acc.pass);
+    
+    // Demo bypass: directly set the auth store so testing is easy without needing DB setup
+    const roleNorm = acc.role.toLowerCase().replace(/\s+/g, '_');
+    const demoUser = {
+      id: 'demo-' + roleNorm,
+      full_name: 'Demo ' + acc.role,
+      email: acc.email,
+      role: roleNorm === 'admin' ? 'super_admin' : roleNorm === 'fees_desk' ? 'fees_collector' : roleNorm
+    };
+    
+    setAuth(demoUser, 'demo-token');
+    
+    if (demoUser.role === 'super_admin' || demoUser.role === 'admin') {
+      navigate('/admin/dashboard');
+    } else if (demoUser.role === 'teacher') {
+      navigate('/teacher/dashboard');
+    } else if (demoUser.role === 'student') {
+      navigate('/student/dashboard');
+    } else if (demoUser.role === 'fees_collector') {
+      navigate('/fees/collect');
+    } else if (demoUser.role === 'accountant') {
+      navigate('/accountant/overview');
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   const handleSubmit = async (e) => {
