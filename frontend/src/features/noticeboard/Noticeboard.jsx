@@ -3,9 +3,12 @@ import useAuthStore from '../../store/authStore';
 import { ROLES } from '../../types/erp';
 import { PlusCircle, Archive, Megaphone } from 'lucide-react';
 
+import { useGetNotices } from '../notices/useNotices';
+
 const Noticeboard = () => {
   const user = useAuthStore((state) => state.user);
-  const [notices] = useState([]);
+  const { data: noticesData } = useGetNotices();
+  const notices = noticesData?.data || [];
 
   const roleStr = user?.role ? String(user.role).toUpperCase().replace(/\s+/g, '_') : '';
   const canManageNotices = [ROLES.SUPERADMIN, ROLES.ADMIN].includes(roleStr);
@@ -35,7 +38,7 @@ const Noticeboard = () => {
           <div key={notice.id} className="group p-5 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-indigo-100 hover:shadow-md transition-all duration-300">
             <div className="flex justify-between items-start mb-3">
               <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded-md">
-                {notice.date}
+                {new Date(notice.publish_date).toLocaleDateString()} - {notice.target_audience}
               </span>
               {canManageNotices && (
                 <button 
@@ -49,11 +52,12 @@ const Noticeboard = () => {
             <h3 className="text-lg font-bold text-slate-800 mb-2 leading-tight group-hover:text-indigo-600 transition-colors">
               {notice.title}
             </h3>
-            <p className="text-sm text-slate-600 line-clamp-3 mb-4">
+            <p className="text-sm text-slate-600 line-clamp-3 mb-4 whitespace-pre-wrap">
               {notice.content}
             </p>
-            <div className="text-xs font-semibold text-slate-400">
-              By {notice.author}
+            <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+              <span>Priority: {notice.priority}</span>
+              <span>Expires: {notice.expiry_date ? new Date(notice.expiry_date).toLocaleDateString() : 'Never'}</span>
             </div>
           </div>
         ))}

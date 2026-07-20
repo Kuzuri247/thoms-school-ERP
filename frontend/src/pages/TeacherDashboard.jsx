@@ -1,15 +1,24 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { BookOpen, Users, CheckCircle, FileSpreadsheet, Award, CalendarDays, BookText, Settings } from 'lucide-react';
-
-const dummyClasses = [];
-
-const dummyStudents10A = [];
+import { useGetTeacherClasses, useGetClassStudents } from '../features/academics/useAcademics';
 
 const TeacherDashboard = () => {
     const { user } = useContext(AuthContext);
-    const [selectedClass, setSelectedClass] = useState(dummyClasses[0] || {});
+    const [selectedClass, setSelectedClass] = useState({});
     const [activeTab, setActiveTab] = useState('marks'); // marks, homework, attendance
+
+    const { data: classesData } = useGetTeacherClasses();
+    const classes = classesData?.data || [];
+
+    const { data: studentsData } = useGetClassStudents(selectedClass?.id);
+    const students = studentsData?.data || [];
+
+    useEffect(() => {
+        if (classes.length > 0 && !selectedClass.id) {
+            setSelectedClass(classes[0]);
+        }
+    }, [classes]);
 
     return (
         <div className="space-y-6 pb-12">
@@ -31,7 +40,7 @@ const TeacherDashboard = () => {
                 {/* Sidebar / Class Selector */}
                 <div className="lg:col-span-1 space-y-4">
                     <h3 className="font-bold text-slate-800 text-lg">My Classes</h3>
-                    {dummyClasses.map(cls => (
+                    {classes.map(cls => (
                         <div 
                             key={cls.id} 
                             onClick={() => setSelectedClass(cls)}
@@ -87,7 +96,7 @@ const TeacherDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {dummyStudents10A.map(student => (
+                                            {students.map(student => (
                                                 <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="py-3 px-4 text-sm font-bold text-slate-700">{student.roll}</td>
                                                     <td className="py-3 px-4 text-sm font-bold text-slate-800">{student.name}</td>
@@ -141,7 +150,7 @@ const TeacherDashboard = () => {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
-                                                {dummyStudents10A.map(student => (
+                                                {students.map(student => (
                                                     <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
                                                         <td className="py-4 px-4 text-sm font-bold text-slate-700">{student.roll}</td>
                                                         <td className="py-4 px-4 text-sm font-bold text-slate-800">{student.name}</td>

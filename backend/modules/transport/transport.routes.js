@@ -103,4 +103,15 @@ router.get('/my-route-students', verifyToken, authorize(ROLES.BUSSTAFF), async (
   res.json({ success: true, data: rows });
 });
 
+router.get('/student/:studentId', verifyToken, async (req, res) => {
+  const [rows] = await pool.query(`
+    SELECT st.*, tr.name as route_name, tr.bus_no, tr.driver_name, ts.stop_name, ts.pickup_time, ts.drop_time
+    FROM student_transport st
+    JOIN transport_routes tr ON st.route_id = tr.id
+    JOIN transport_stops ts ON st.stop_id = ts.id
+    WHERE st.student_id = ?
+  `, [req.params.studentId]);
+  res.json({ success: true, data: rows[0] || null });
+});
+
 module.exports = router;

@@ -10,10 +10,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 // Feature Views
 import AttendanceView from './features/attendance/AttendanceView';
-import CollectFeesView from './features/fees/CollectFeesView';
+import FinanceDashboard from './features/fees/FinanceDashboard';
 import AcademicsView from './features/academics/AcademicsView';
 import TransportView from './features/transport/TransportView';
-import ReportsView from './features/reports/ReportsView';
 import AdminUserManagementView from './features/admin/AdminUserManagementView';
 import AdminSettingsView from './features/admin/AdminSettingsView';
 import UserProfileView from './features/users/UserProfileView';
@@ -57,11 +56,11 @@ function App() {
           {/* Admin Feature Routes */}
           <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
             <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
-            <Route path="/admin/users" element={<AdminUserManagementView />} />
-            <Route path="/admin/staff" element={<AdminUserManagementView />} />
+            <Route path="/admin/users" element={<AdminUserManagementView initialTab="all" />} />
+            <Route path="/admin/staff" element={<AdminUserManagementView initialTab="staff" />} />
             <Route path="/admin/settings" element={<AdminSettingsView />} />
             <Route path="/settings" element={<AdminSettingsView />} />
-            <Route path="/settings/users" element={<AdminUserManagementView />} />
+            <Route path="/settings/users" element={<AdminUserManagementView initialTab="all" />} />
           </Route>
 
           {/* Teacher Feature Routes */}
@@ -83,16 +82,13 @@ function App() {
             <Route path="/student-dashboard" element={<StudentDashboard activeTab="home" />} />
           </Route>
 
-          {/* Fees Collector Feature Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['fees_collector', 'admin']} />}>
-            <Route path="/fees/collect" element={<CollectFeesView activeTab="collect" />} />
-            <Route path="/fees/receipts" element={<CollectFeesView activeTab="receipts" />} />
-          </Route>
-
-          {/* Accountant Feature Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['accountant', 'admin']} />}>
-            <Route path="/accountant/overview" element={<ReportsView activeTab="ledger" />} />
-            <Route path="/accountant/reports" element={<ReportsView activeTab="reports" />} />
+          {/* Finance Feature Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['fees_collector', 'accountant', 'admin']} />}>
+            <Route path="/finance/dashboard" element={<FinanceDashboard />} />
+            <Route path="/fees/collect" element={<Navigate to="/finance/dashboard" replace />} />
+            <Route path="/fees/receipts" element={<Navigate to="/finance/dashboard" replace />} />
+            <Route path="/accountant/overview" element={<Navigate to="/finance/dashboard" replace />} />
+            <Route path="/accountant/reports" element={<Navigate to="/finance/dashboard" replace />} />
           </Route>
         </Route>
       </Route>

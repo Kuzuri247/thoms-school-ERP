@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useGetAttendanceByDate, useSaveAttendance } from './useAttendance';
+import { useGetUsers } from '../admin/useAdmin';
 import { CalendarCheck, Save, CheckCircle, XCircle, Clock, Search, CheckCheck, UserX } from 'lucide-react';
 
 const AttendanceView = () => {
@@ -12,9 +13,16 @@ const AttendanceView = () => {
 
   const { data: fetchedAttendance = [] } = useGetAttendanceByDate(selectedDate);
   const saveAttendanceMutation = useSaveAttendance();
+  const { data: usersData } = useGetUsers();
 
-  // TODO: Fetch students from API
-  const mockStudents = [];
+  const mockStudents = (usersData || [])
+    .filter(u => u.role === 'student')
+    .map(u => ({
+      id: u.id,
+      rollNo: `STU-${u.id}`,
+      name: u.full_name || u.email,
+      class: `${u.class_name || 'N/A'} - ${u.section || 'N/A'}`
+    }));
 
   const handleStatusChange = (studentId, status) => {
     setAttendanceState((prev) => ({

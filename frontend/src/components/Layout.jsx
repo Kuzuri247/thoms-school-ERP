@@ -187,15 +187,19 @@ const Layout = () => {
                 <Link to="/teacher/dashboard" className={navLinkClass('/teacher/dashboard')}>
                   <LayoutDashboard className="w-4 h-4" /> Dashboard
                 </Link>
-                <Link to="/teacher/attendance" className={navLinkClass('/teacher/attendance')}>
-                  <CalendarCheck className="w-4 h-4" /> Attendance Register
-                </Link>
-                <Link to="/teacher/academics" className={navLinkClass('/teacher/academics')}>
-                  <Award className="w-4 h-4" /> Marks & Grading
-                </Link>
-                <Link to="/teacher/timetable" className={navLinkClass('/teacher/timetable')}>
-                  <BookOpen className="w-4 h-4" /> Class Schedule
-                </Link>
+                {hasRole(['teacher']) && (
+                  <>
+                    <Link to="/teacher/attendance" className={navLinkClass('/teacher/attendance')}>
+                      <CalendarCheck className="w-4 h-4" /> Attendance Register
+                    </Link>
+                    <Link to="/teacher/academics" className={navLinkClass('/teacher/academics')}>
+                      <Award className="w-4 h-4" /> Marks & Grading
+                    </Link>
+                    <Link to="/teacher/timetable" className={navLinkClass('/teacher/timetable')}>
+                      <BookOpen className="w-4 h-4" /> Class Schedule
+                    </Link>
+                  </>
+                )}
               </>
             )}
 
@@ -208,44 +212,30 @@ const Layout = () => {
                 <Link to="/student/dashboard" className={navLinkClass('/student/dashboard')}>
                   <LayoutDashboard className="w-4 h-4" /> Personal Dashboard
                 </Link>
-                <Link to="/student/timetable" className={navLinkClass('/student/timetable')}>
-                  <BookOpen className="w-4 h-4" /> My Schedule
-                </Link>
-                <Link to="/student/academics" className={navLinkClass('/student/academics')}>
-                  <Award className="w-4 h-4" /> My Report Card
-                </Link>
-                <Link to="/student/transport" className={navLinkClass('/student/transport')}>
-                  <Bus className="w-4 h-4" /> Transport Tracking
-                </Link>
+                {hasRole(['student']) && (
+                  <>
+                    <Link to="/student/timetable" className={navLinkClass('/student/timetable')}>
+                      <BookOpen className="w-4 h-4" /> My Schedule
+                    </Link>
+                    <Link to="/student/academics" className={navLinkClass('/student/academics')}>
+                      <Award className="w-4 h-4" /> My Report Card
+                    </Link>
+                    <Link to="/student/transport" className={navLinkClass('/student/transport')}>
+                      <Bus className="w-4 h-4" /> Transport Tracking
+                    </Link>
+                  </>
+                )}
               </>
             )}
 
-            {/* Fees Collector Links */}
-            {hasRole(['fees_collector', 'admin']) && (
+            {/* Finance & Accounts Links */}
+            {hasRole(['fees_collector', 'accountant', 'admin']) && (
               <>
                 <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                  Fee Intake Desk
+                  Finance & Accounts
                 </div>
-                <Link to="/fees/collect" className={navLinkClass('/fees/collect')}>
-                  <CreditCard className="w-4 h-4" /> Daily Collections
-                </Link>
-                <Link to="/fees/receipts" className={navLinkClass('/fees/receipts')}>
-                  <Receipt className="w-4 h-4" /> Official Receipt Logs
-                </Link>
-              </>
-            )}
-
-            {/* Accountant Links */}
-            {hasRole(['accountant', 'admin']) && (
-              <>
-                <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                  Accounting Ledger
-                </div>
-                <Link to="/accountant/overview" className={navLinkClass('/accountant/overview')}>
-                  <FileSpreadsheet className="w-4 h-4" /> General Ledger
-                </Link>
-                <Link to="/accountant/reports" className={navLinkClass('/accountant/reports')}>
-                  <FileSpreadsheet className="w-4 h-4" /> Financial Reports
+                <Link to="/finance/dashboard" className={navLinkClass('/finance/dashboard')}>
+                  <CreditCard className="w-4 h-4" /> Finance Dashboard
                 </Link>
               </>
             )}

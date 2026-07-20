@@ -29,6 +29,12 @@ app.use('/api/auth', require('./modules/auth/auth.route'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/payments', paymentsRouter);
+app.use('/api/marks', require('./modules/academics/marks.route'));
+app.use('/api/timetable', require('./modules/academics/timetable.route'));
+app.use('/api/teacher', require('./modules/academics/teacher.route'));
+app.use('/api/transport', require('./modules/transport/transport.routes'));
+app.use('/api/reports', require('./modules/reports/reports.route'));
+app.use('/api/notices', require('./modules/notices/notices.route'));
 
 app.get('/', (req, res) => {
   res.json({ success: true, message: 'Thomson School ERP API' });

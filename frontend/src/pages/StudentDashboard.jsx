@@ -6,11 +6,10 @@ import api from '../api/axios';
 const months = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
 const monthLabels = ['April', 'May', 'June', 'July', 'August', 'Sept', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'March'];
 
-const dummyFeeStructure = {};
-
-const dummyPaymentStatus = {};
-
-const dummyNotices = [];
+import { useGetNotices } from '../features/notices/useNotices';
+import { useFeeHistory } from '../features/fees/useFees';
+import { useGetMarks, useGetTimetable } from '../features/academics/useAcademics';
+import { useGetStudentTransport } from '../features/transport/useTransport';
 
 const StudentDashboard = ({ activeTab = 'home' }) => {
     const { user } = useContext(AuthContext);
@@ -24,8 +23,23 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
     const [resultExam, setResultExam] = useState('Half-Yearly Examination');
     const [calendarMonth, setCalendarMonth] = useState('All');
 
+    const { data: noticesData } = useGetNotices();
+    const notices = noticesData?.data || [];
+    
+    const studentId = user?.student_id;
+    const classId = user?.class_id;
+
+    const { data: feesData } = useFeeHistory(studentId);
+    const { data: marksData } = useGetMarks(studentId);
+    const { data: timetableData } = useGetTimetable(classId);
+    const { data: transportData } = useGetStudentTransport(studentId);
+
+    const pendingFeesAmount = feesData?.data?.filter(f => f.status !== 'PAID').reduce((sum, f) => sum + Number(f.total_amount), 0) || 0;
+    const busStatus = transportData?.data ? 'Active' : 'Inactive';
+    const hasTransport = !!transportData?.data;
+
     useEffect(() => {
-        setFeeData([]);
+        // If feeData needed local state for some reason, we can set it here.
     }, [user]);
 
     const handlePasswordChange = async (e) => {
@@ -89,18 +103,18 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                         <Bell className="w-5 h-5 text-rose-500" />
                         Notice Board
                     </h2>
-                    <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest">{dummyNotices.length} New</span>
+                    <span className="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest">{notices.length} New</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {dummyNotices.map(notice => (
+                    {notices.map(notice => (
                         <div key={notice.id} className="p-5 bg-white rounded-3xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-lg transition-shadow relative overflow-hidden group">
-                            <div className={`absolute top-0 left-0 w-1 h-full ${notice.priority === 'Urgent' ? 'bg-rose-500' : notice.priority === 'High' ? 'bg-orange-500' : 'bg-indigo-500'}`}></div>
+                            <div className={`absolute top-0 left-0 w-1 h-full ${notice.priority === 'High' ? 'bg-rose-500' : 'bg-indigo-500'}`}></div>
                             <div className="flex justify-between items-start mb-3">
-                                <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded shadow-sm ${notice.type === 'Holiday' ? 'bg-orange-50 text-orange-600' : notice.type === 'Academic' ? 'bg-fuchsia-50 text-fuchsia-600' : 'bg-sky-50 text-sky-600'}`}>{notice.type}</span>
-                                <span className="text-xs font-bold text-slate-400">{notice.date}</span>
+                                <span className={`px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded shadow-sm bg-sky-50 text-sky-600`}>{notice.target_audience}</span>
+                                <span className="text-xs font-bold text-slate-400">{new Date(notice.publish_date).toLocaleDateString()}</span>
                             </div>
                             <h3 className="font-bold text-slate-800 text-sm mb-2 group-hover:text-indigo-600 transition-colors">{notice.title}</h3>
-                            <p className="text-xs text-slate-500 font-medium leading-relaxed">{notice.desc}</p>
+                            <p className="text-xs text-slate-500 font-medium leading-relaxed">{notice.content}</p>
                         </div>
                     ))}
                 </div>
@@ -128,14 +142,14 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                             <div className="p-2 bg-rose-50 text-rose-600 rounded-lg"><FileSpreadsheet className="w-5 h-5" /></div>
                             <h3 className="text-sm font-bold text-slate-500">Pending Fees</h3>
                         </div>
-                        <p className="text-2xl font-black text-slate-800">₹2,500</p>
+                        <p className="text-2xl font-black text-slate-800">₹{pendingFeesAmount}</p>
                     </div>
                     <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-center">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 bg-teal-50 text-teal-600 rounded-lg"><Bus className="w-5 h-5" /></div>
                             <h3 className="text-sm font-bold text-slate-500">Bus Status</h3>
                         </div>
-                        <p className="text-2xl font-black text-slate-800">Active</p>
+                        <p className="text-2xl font-black text-slate-800">{busStatus}</p>
                     </div>
                 </div>
             )}
@@ -228,15 +242,15 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {feeData.map(row => (
-                                        <tr key={row.type} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="py-3 px-4 text-xs font-bold text-slate-800 sticky left-0 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">{row.type}</td>
+                                    {(feesData?.data || []).map(row => (
+                                        <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <td className="py-3 px-4 text-xs font-bold text-slate-800 sticky left-0 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">{row.category_name || `Fee ${row.id}`}</td>
                                             {months.map((month, mIdx) => (
-                                                <td key={month} className={`py-3 px-3 text-xs font-bold text-center ${row[month] > 0 ? getMonthColor(mIdx) : 'text-slate-300 bg-slate-50/30'}`}>
-                                                    {row[month] > 0 ? `₹${row[month]}` : '-'}
+                                                <td key={month} className={`py-3 px-3 text-xs font-bold text-center ${row.amount > 0 ? getMonthColor(mIdx) : 'text-slate-300 bg-slate-50/30'}`}>
+                                                    {mIdx === 0 ? `₹${row.total_amount}` : '-'}
                                                 </td>
                                             ))}
-                                            <td className="py-3 px-4 text-xs font-black text-white text-right bg-slate-800 border-l border-slate-700">₹{calculateTotal(row)}</td>
+                                            <td className="py-3 px-4 text-xs font-black text-white text-right bg-slate-800 border-l border-slate-700">₹{row.total_amount}</td>
                                         </tr>
                                     ))}
                                     {/* Grand Total Row */}
@@ -426,22 +440,24 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {[].map((sub, i) => {
-                                            const total = sub.theory + sub.practical;
-                                            const maxTotal = sub.theoryMax + sub.pracMax;
+                                        {(marksData?.data || []).map((sub, i) => {
+                                            const total = sub.marks_obtained;
+                                            const maxTotal = sub.max_marks || 100;
                                             return (
                                                 <tr key={i} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="py-3 px-4 text-xs font-bold text-slate-700">{sub.subject}</td>
-                                                    <td className="py-3 px-4 text-xs font-medium text-slate-600 text-center">{sub.theory}/{sub.theoryMax}</td>
-                                                    <td className="py-3 px-4 text-xs font-medium text-slate-600 text-center">{sub.practical}/{sub.pracMax}</td>
+                                                    <td className="py-3 px-4 text-xs font-bold text-slate-700">{sub.subject_name}</td>
+                                                    <td className="py-3 px-4 text-xs font-medium text-slate-600 text-center">{total}/{maxTotal}</td>
+                                                    <td className="py-3 px-4 text-xs font-medium text-slate-600 text-center">-</td>
                                                     <td className="py-3 px-4 text-xs font-black text-slate-800 text-center">{total}/{maxTotal}</td>
-                                                    <td className="py-3 px-4 text-xs font-black text-fuchsia-600 text-right">{sub.grade}</td>
+                                                    <td className="py-3 px-4 text-xs font-black text-fuchsia-600 text-right">{sub.grade || 'A'}</td>
                                                 </tr>
                                             );
                                         })}
                                         <tr className="bg-slate-50 border-t-2 border-slate-200">
                                             <td colSpan="3" className="py-4 px-4 text-xs font-black text-slate-800 uppercase tracking-widest text-right">Overall Percentage</td>
-                                            <td colSpan="2" className="py-4 px-4 text-sm font-black text-fuchsia-600 text-right">89.5%</td>
+                                            <td colSpan="2" className="py-4 px-4 text-sm font-black text-fuchsia-600 text-right">
+                                                {marksData?.data?.length ? (marksData.data.reduce((sum, s) => sum + Number(s.marks_obtained), 0) / (marksData.data.length * 100) * 100).toFixed(1) + '%' : 'N/A'}
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -563,34 +579,40 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Bus Route Details */}
+                    {hasTransport ? (
                     <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col justify-center">
                         <div className="flex items-center gap-3 mb-4">
                             <MapPin className="w-5 h-5 text-teal-500" />
-                            <h3 className="font-bold text-slate-800 text-sm">Route #4: City Center Express</h3>
+                            <h3 className="font-bold text-slate-800 text-sm">Route #{transportData?.data?.route_id}: {transportData?.data?.route_name}</h3>
                         </div>
                         <div className="space-y-3">
                             <div className="flex justify-between items-center text-xs">
                                 <span className="font-medium text-slate-500">Pickup Point:</span>
-                                <span className="font-bold text-slate-800">Main Square (Sector 4)</span>
+                                <span className="font-bold text-slate-800">{transportData?.data?.stop_name}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="font-medium text-slate-500">Pickup Time (Morning):</span>
-                                <span className="font-bold text-teal-600">07:15 AM</span>
+                                <span className="font-bold text-teal-600">{transportData?.data?.pickup_time}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="font-medium text-slate-500">Drop Time (Afternoon):</span>
-                                <span className="font-bold text-orange-600">03:45 PM</span>
+                                <span className="font-bold text-orange-600">{transportData?.data?.drop_time}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-200">
                                 <span className="font-medium text-slate-500">Driver Name:</span>
-                                <span className="font-bold text-slate-800">Ramesh Kumar</span>
+                                <span className="font-bold text-slate-800">{transportData?.data?.driver_name || 'N/A'}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
-                                <span className="font-medium text-slate-500">Driver Contact:</span>
-                                <span className="font-bold text-slate-800">+91 98765 43210</span>
+                                <span className="font-medium text-slate-500">Bus No:</span>
+                                <span className="font-bold text-slate-800">{transportData?.data?.bus_no || 'N/A'}</span>
                             </div>
                         </div>
                     </div>
+                    ) : (
+                    <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center">
+                        <p className="text-slate-500 font-bold">You are not opted-in for school transport.</p>
+                    </div>
+                    )}
 
                     {/* Bus Attendance / Live Tracking */}
                     <div className="lg:col-span-2 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">

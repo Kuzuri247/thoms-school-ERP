@@ -26,7 +26,7 @@ router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
 // Get all users (Super Admin only)
 router.get('/users', [verifyToken, isSuperAdmin], async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT id, email, role, class as class_name, section, created_at FROM users');
+        const [rows] = await pool.query('SELECT id, email, full_name, role, class as class_name, section, created_at FROM users');
         res.status(200).json(rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -96,7 +96,12 @@ router.get('/attendance', [verifyToken], async (req, res) => {
     const { date } = req.query;
     try {
         if (!date) return res.status(400).json({ error: 'Date query parameter is required' });
-        const [rows] = await pool.query('SELECT user_id, status FROM student_attendance WHERE date = ?', [date]);
+        const [rows] = await pool.query(`
+            SELECT a.student_id, a.status, s.user_id 
+            FROM attendance a
+            JOIN students s ON a.student_id = s.id
+            WHERE a.date = ?
+        `, [date]);
         res.status(200).json(rows);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -114,10 +119,14 @@ router.post('/attendance', [verifyToken], async (req, res) => {
             return res.status(400).json({ error: 'Date and attendance data are required' });
         }
         for (const [userId, status] of Object.entries(attendanceData)) {
-            await pool.query(
-                'INSERT INTO student_attendance (user_id, date, status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE status = ?',
-                [userId, date, status, status]
-            );
+            // Find student id by user_id
+            const [[student]] = await pool.query('SELECT id, section_id FROM students WHERE user_id = ?', [userId]);
+            if (student) {
+                await pool.query(
+                    'INSERT INTO attendance (student_id, section_id, date, status, marked_by) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = ?',
+                    [student.id, student.section_id, date, status, req.user.id, status]
+                );
+            }
         }
         res.status(200).json({ message: 'Attendance saved successfully' });
     } catch (error) {

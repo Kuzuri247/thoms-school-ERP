@@ -34,7 +34,22 @@ exports.me = async (req, res) => {
     'SELECT id, email, full_name, role, status, last_login FROM users WHERE id = ?',
     [req.user.id]
   );
-  res.json({ success: true, data: rows[0] || null });
+  const user = rows[0] || null;
+  if (user) {
+    if (user.role === 'student') {
+      const [stuRows] = await pool.query('SELECT id as student_id, section_id FROM students WHERE user_id = ?', [user.id]);
+      if (stuRows.length > 0) {
+        user.student_id = stuRows[0].student_id;
+        user.section_id = stuRows[0].section_id;
+        const [secRows] = await pool.query('SELECT class_id FROM sections WHERE id = ?', [user.section_id]);
+        user.class_id = secRows[0]?.class_id;
+      }
+    } else if (user.role === 'teacher') {
+      const [tchRows] = await pool.query('SELECT id as staff_id FROM staff_profiles WHERE user_id = ?', [user.id]);
+      if (tchRows.length > 0) user.staff_id = tchRows[0].staff_id;
+    }
+  }
+  res.json({ success: true, data: user });
 };
 
 exports.students = async (req, res) => {

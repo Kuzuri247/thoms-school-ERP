@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGetUsers, useCreateUser } from './useAdmin';
 import { Users, UserPlus, Shield, Search, CheckCircle, Trash2, Mail, Lock, Sparkles, ChevronRight } from 'lucide-react';
 
-const AdminUserManagementView = () => {
-  const [activeTab, setActiveTab] = useState('all');
+const AdminUserManagementView = ({ initialTab = 'all' }) => {
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [email, setEmail] = useState('');

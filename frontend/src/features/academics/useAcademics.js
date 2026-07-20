@@ -37,3 +37,25 @@ export const useGetTimetable = (classId) => {
     enabled: !!classId,
   });
 };
+
+export const useGetTeacherClasses = () => {
+  return useQuery({
+    queryKey: ['teacherClasses'],
+    queryFn: async () => {
+      const { data } = await api.get('/teacher/classes');
+      return data;
+    },
+  });
+};
+
+export const useGetClassStudents = (classId) => {
+  return useQuery({
+    queryKey: ['classStudents', classId],
+    queryFn: async () => {
+      if (!classId) return [];
+      const { data } = await api.get(`/teacher/classes/${classId}/students`);
+      return data;
+    },
+    enabled: !!classId,
+  });
+};
