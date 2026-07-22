@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import SchoolLandingPage from './pages/SchoolLandingPage';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
@@ -9,25 +10,22 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Feature Views
-import AttendanceView from './features/attendance/AttendanceView';
 import FinanceDashboard from './features/fees/FinanceDashboard';
-import AcademicsView from './features/academics/AcademicsView';
-import TransportView from './features/transport/TransportView';
 import AdminUserManagementView from './features/admin/AdminUserManagementView';
-import AdminSettingsView from './features/admin/AdminSettingsView';
+import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
 import UserProfileView from './features/users/UserProfileView';
 
 function App() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<SchoolLandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route
         path="/unauthorized"
         element={
-          <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4">
+          <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4 font-sans">
             <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm max-w-md w-full text-center space-y-4">
               <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto font-bold text-xl">
                 !
@@ -40,7 +38,7 @@ function App() {
                 href="/"
                 className="inline-block px-4 py-2 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 transition"
               >
-                Back to Login
+                Back to School Landing
               </a>
             </div>
           </div>
@@ -50,45 +48,41 @@ function App() {
       {/* Dynamic RBAC Shell */}
       <Route element={<ProtectedRoute allowedRoles={['*']} />}>
         <Route element={<Layout />}>
-          <Route path="/dashboard" element={<SuperAdminDashboard />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
 
-          {/* Admin Feature Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+          {/* Super Admin Exclusive Route */}
+          <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
+            <Route path="/dashboard" element={<SuperAdminDashboard />} />
+          </Route>
+
+          {/* Admin & Super Admin Management Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
             <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
             <Route path="/admin/users" element={<AdminUserManagementView initialTab="all" />} />
-            <Route path="/admin/staff" element={<AdminUserManagementView initialTab="staff" />} />
-            <Route path="/admin/settings" element={<AdminSettingsView />} />
-            <Route path="/settings" element={<AdminSettingsView />} />
-            <Route path="/settings/users" element={<AdminUserManagementView initialTab="all" />} />
+            <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
           </Route>
 
-          {/* Teacher Feature Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['teacher', 'admin']} />}>
-            <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-            <Route path="/teacher/attendance" element={<AttendanceView />} />
-            <Route path="/teacher/academics" element={<AcademicsView />} />
-            <Route path="/teacher/timetable" element={<AcademicsView />} />
-            <Route path="/teacher" element={<TeacherDashboard />} />
-            <Route path="/attendance/student" element={<AttendanceView />} />
+          {/* Teacher Suite Routes (Strictly Teacher, Admin, Super Admin) */}
+          <Route element={<ProtectedRoute allowedRoles={['teacher', 'admin', 'super_admin']} />}>
+            <Route path="/teacher/dashboard" element={<TeacherDashboard activeTab="overview" />} />
+            <Route path="/teacher/attendance" element={<TeacherDashboard activeTab="attendance" />} />
+            <Route path="/teacher/academics" element={<TeacherDashboard activeTab="exams" />} />
+            <Route path="/teacher/timetable" element={<TeacherDashboard activeTab="timetable" />} />
+            <Route path="/teacher/homework" element={<TeacherDashboard activeTab="homework" />} />
           </Route>
 
-          {/* Student Feature Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['student', 'admin']} />}>
+          {/* Student Portal Routes (Strictly Student, Admin, Super Admin) */}
+          <Route element={<ProtectedRoute allowedRoles={['student', 'admin', 'super_admin']} />}>
             <Route path="/student/dashboard" element={<StudentDashboard activeTab="home" />} />
-            <Route path="/student/timetable" element={<AcademicsView />} />
-            <Route path="/student/academics" element={<StudentDashboard activeTab="report" />} />
-            <Route path="/student/transport" element={<TransportView />} />
-            <Route path="/student-dashboard" element={<StudentDashboard activeTab="home" />} />
+            <Route path="/student/work" element={<StudentDashboard activeTab="work" />} />
+            <Route path="/student/timetable" element={<StudentDashboard activeTab="timetable" />} />
+            <Route path="/student/fees" element={<StudentDashboard activeTab="fees" />} />
           </Route>
 
-          {/* Finance Feature Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['fees_collector', 'accountant', 'admin']} />}>
+          {/* Finance & Fees Terminal Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['cashier', 'admin', 'super_admin']} />}>
             <Route path="/finance/dashboard" element={<FinanceDashboard />} />
             <Route path="/fees/collect" element={<Navigate to="/finance/dashboard" replace />} />
-            <Route path="/fees/receipts" element={<Navigate to="/finance/dashboard" replace />} />
-            <Route path="/accountant/overview" element={<Navigate to="/finance/dashboard" replace />} />
-            <Route path="/accountant/reports" element={<Navigate to="/finance/dashboard" replace />} />
           </Route>
         </Route>
       </Route>

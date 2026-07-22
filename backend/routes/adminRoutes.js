@@ -134,5 +134,77 @@ router.post('/attendance', [verifyToken], async (req, res) => {
     }
 });
 
+// Get System Statistics (Super Admin & Admin)
+router.get('/stats', [verifyToken], async (req, res) => {
+    if (!['admin', 'super_admin'].includes(req.user?.role)) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+    try {
+        const [[{ total_students }]] = await pool.query("SELECT COUNT(*) AS total_students FROM users WHERE role = 'student'");
+        const [[{ total_teachers }]] = await pool.query("SELECT COUNT(*) AS total_teachers FROM users WHERE role = 'teacher'");
+        const [[{ total_admins }]] = await pool.query("SELECT COUNT(*) AS total_admins FROM users WHERE role IN ('admin', 'super_admin')");
+        const [[{ total_staff }]] = await pool.query("SELECT COUNT(*) AS total_staff FROM users WHERE role IN ('cashier', 'busstaff')");
+
+        let total_revenue = null;
+        if (req.user.role === 'super_admin') {
+            const [[payRes]] = await pool.query("SELECT SUM(amount_paise)/100 AS total FROM razorpay_payments WHERE status = 'captured'");
+            total_revenue = parseFloat(payRes?.total || 0);
+            if (total_revenue === 0) {
+                const [[frRes]] = await pool.query("SELECT SUM(paid_amount) AS total FROM fee_records");
+                total_revenue = parseFloat(frRes?.total || 0);
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                total_students: total_students || 0,
+                total_teachers: total_teachers || 0,
+                total_admins: total_admins || 0,
+                total_staff: total_staff || 0,
+                total_revenue: total_revenue
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get all classes and sections
+router.get('/classes', [verifyToken], async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT c.id AS class_id, c.name AS class_name, c.numeric_value,
+                   sec.id AS section_id, sec.name AS section_name, sec.capacity
+            FROM classes c
+            LEFT JOIN sections sec ON sec.class_id = c.id
+            ORDER BY c.numeric_value, sec.name
+        `);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get students for a specific class or section
+router.get('/classes/:classId/students', [verifyToken], async (req, res) => {
+    try {
+        const { classId } = req.params;
+        const [rows] = await pool.query(`
+            SELECT s.id AS student_id, s.user_id, s.admission_no, s.roll_no, s.first_name, s.last_name,
+                   s.status, u.email, u.phone, sec.name AS section_name, c.name AS class_name
+            FROM students s
+            JOIN users u ON s.user_id = u.id
+            LEFT JOIN sections sec ON s.section_id = sec.id
+            LEFT JOIN classes c ON sec.class_id = c.id
+            WHERE c.id = ? OR sec.id = ?
+            ORDER BY s.roll_no, s.first_name
+        `, [classId, classId]);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
 

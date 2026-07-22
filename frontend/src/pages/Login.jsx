@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { Mail, Lock, AlertCircle, ArrowRight, GraduationCap, Sparkles, Shield, User, CreditCard, FileSpreadsheet } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ArrowRight, GraduationCap, Sparkles, Shield, User, CreditCard, Crown } from 'lucide-react';
 
 const Login = () => {
   const { login, setAuth } = useAuthStore();
@@ -12,41 +12,43 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   const demoAccounts = [
-    { role: 'Admin', email: 'admin@thoms.edu', pass: '123456', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
-    { role: 'Teacher', email: 'teacher.math@thoms.edu', pass: '123456', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
-    { role: 'Student', email: 'student.aarav@thoms.edu', pass: '123456', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    { role: 'Fees Desk', email: 'fees.counter@thoms.edu', pass: '123456', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
-    { role: 'Accountant', email: 'accountant@thoms.edu', pass: '123456', icon: FileSpreadsheet, color: 'bg-teal-50 text-teal-700 border-teal-200' },
+    { role: 'Super Admin', email: 'superadmin2@erp.com', pass: 'password123', targetRole: 'super_admin', icon: Crown, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    { role: 'Admin', email: 'admin1@erp.com', pass: 'password123', targetRole: 'admin', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { role: 'Teacher', email: 'teacher1@erp.com', pass: 'password123', targetRole: 'teacher', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { role: 'Student', email: 'student1@erp.com', pass: 'password123', targetRole: 'student', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { role: 'Cashier', email: 'cashier@erp.com', pass: 'password123', targetRole: 'cashier', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
   ];
+
+  const redirectUserByRole = (userRole) => {
+    const role = userRole?.toLowerCase()?.replace(/\s+/g, '_');
+    if (role === 'super_admin') {
+      navigate('/dashboard');
+    } else if (role === 'admin') {
+      navigate('/admin/dashboard');
+    } else if (role === 'cashier' || role === 'fees_collector' || role === 'accountant') {
+      navigate('/finance/dashboard');
+    } else if (role === 'teacher') {
+      navigate('/teacher/dashboard');
+    } else if (role === 'student') {
+      navigate('/student/dashboard');
+    } else {
+      navigate('/dashboard');
+    }
+  };
 
   const handleQuickFill = (acc) => {
     setEmail(acc.email);
     setPassword(acc.pass);
-    
-    // Demo bypass: directly set the auth store so testing is easy without needing DB setup
-    const roleNorm = acc.role.toLowerCase().replace(/\s+/g, '_');
+
     const demoUser = {
-      id: 'demo-' + roleNorm,
+      id: 'demo-' + acc.targetRole,
       full_name: 'Demo ' + acc.role,
       email: acc.email,
-      role: roleNorm === 'admin' ? 'super_admin' : roleNorm === 'fees_desk' ? 'fees_collector' : roleNorm
+      role: acc.targetRole,
     };
-    
+
     setAuth(demoUser, 'demo-token');
-    
-    if (demoUser.role === 'super_admin' || demoUser.role === 'admin') {
-      navigate('/admin/dashboard');
-    } else if (demoUser.role === 'teacher') {
-      navigate('/teacher/dashboard');
-    } else if (demoUser.role === 'student') {
-      navigate('/student/dashboard');
-    } else if (demoUser.role === 'fees_collector') {
-      navigate('/fees/collect');
-    } else if (demoUser.role === 'accountant') {
-      navigate('/accountant/overview');
-    } else {
-      navigate('/dashboard');
-    }
+    redirectUserByRole(acc.targetRole);
   };
 
   const handleSubmit = async (e) => {
@@ -57,21 +59,7 @@ const Login = () => {
       const res = await login(email, password);
       setLoading(false);
       if (res.success) {
-        const user = res.user;
-        const role = user?.role?.toLowerCase()?.replace(/\s+/g, '_');
-        if (role === 'admin' || role === 'super_admin') {
-          navigate('/admin/dashboard');
-        } else if (role === 'teacher' || role === 'teachers') {
-          navigate('/teacher/dashboard');
-        } else if (role === 'student' || role === 'students') {
-          navigate('/student/dashboard');
-        } else if (role === 'fees_collector') {
-          navigate('/fees/collect');
-        } else if (role === 'accountant') {
-          navigate('/accountant/overview');
-        } else {
-          navigate('/dashboard');
-        }
+        redirectUserByRole(res.user?.role);
       } else {
         setError(res.error || 'Login failed. Please check your credentials.');
       }

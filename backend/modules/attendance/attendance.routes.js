@@ -11,16 +11,23 @@ const pool = require('../../config/db');
 router.post('/mark', verifyToken, authorize(ROLES.TEACHER), attachTeacherContext, async (req, res) => {
   const { section_id, date, records } = req.body;
 
-  if (req.teacherContext.classTeacherOf !== Number(section_id)) {
-    return res.status(403).json({ success: false, message: 'You can only mark attendance for your own class' });
+  if (!req.teacherContext?.classTeacherOf || req.teacherContext.classTeacherOf !== Number(section_id)) {
+    return res.status(403).json({ success: false, message: 'Teachers can ONLY mark attendance for their assigned class' });
   }
 
   await svc.markBulk(section_id, date, records, req.user.id);
   res.json({ success: true, message: 'Attendance saved' });
 });
 
+// Attendance calendar view with present percentages
+router.get('/calendar/:sectionId', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
+  const { month, year } = req.query;
+  const rows = await svc.getSectionCalendar(req.params.sectionId, month, year);
+  res.json({ success: true, data: rows });
+});
+
 // Teacher/Admin views attendance sheet for a section+date
-router.get('/section/:sectionId/date/:date', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.PRINCIPAL, ROLES.VP), async (req, res) => {
+router.get('/section/:sectionId/date/:date', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   const rows = await svc.getForSectionDate(req.params.sectionId, req.params.date);
   res.json({ success: true, data: rows });
 });
@@ -35,8 +42,8 @@ router.get('/student/:studentId/summary/:month/:year', verifyToken, async (req, 
   res.json({ success: true, data });
 });
 
-// Principal/VP/Admin view section-wide monthly summary
-router.get('/section/:sectionId/summary/:month/:year', verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.PRINCIPAL, ROLES.VP), async (req, res) => {
+// Admin view section-wide monthly summary
+router.get('/section/:sectionId/summary/:month/:year', verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   const rows = await svc.getSectionSummary(req.params.sectionId, req.params.month, req.params.year);
   res.json({ success: true, data: rows });
 });

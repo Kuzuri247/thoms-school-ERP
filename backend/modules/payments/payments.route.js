@@ -58,6 +58,24 @@ router.get('/receipt/:receiptNo', verifyToken, async (req, res) => {
   res.download(rec.pdf_path);
 });
 
+// Aggregate total fee collection sum - SUPER_ADMIN ONLY!
+router.get('/stats/total-collection', verifyToken, authorize(ROLES.SUPER_ADMIN), async (req, res) => {
+  try {
+    const pool = require('../../config/db');
+    const [[result]] = await pool.query(
+      `SELECT SUM(amount_paise)/100 AS total_collection FROM razorpay_payments WHERE status = 'captured'`
+    );
+    let total = parseFloat(result?.total_collection || 0);
+    if (total === 0) {
+      const [[frResult]] = await pool.query(`SELECT SUM(paid_amount) AS total_collection FROM fee_records`);
+      total = parseFloat(frResult?.total_collection || 0);
+    }
+    res.json({ success: true, total_collection: total });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 webhookRouter.post('/', async (req, res) => {
   const signature = req.headers['x-razorpay-signature'];
   if (!signature) return res.status(400).json({ success: false, message: 'Missing signature' });

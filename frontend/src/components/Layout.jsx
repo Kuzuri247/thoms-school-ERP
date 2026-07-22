@@ -4,19 +4,17 @@ import {
   LogOut,
   LayoutDashboard,
   Users,
-  Shield,
-  Settings,
-  BookOpen,
-  CalendarCheck,
   CreditCard,
-  FileSpreadsheet,
-  Bus,
   Menu,
   X,
   Award,
-  Receipt,
+  BookOpen,
+  CalendarCheck,
+  BookText,
+  Clock,
   GraduationCap,
-  Sparkles
+  Sparkles,
+  Building2
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
@@ -35,7 +33,7 @@ const Layout = () => {
     navigate('/');
   };
 
-  const isActive = (path) => location.pathname.startsWith(path);
+  const isActive = (path) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
 
   const navLinkClass = (path) => `
     flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200
@@ -53,34 +51,41 @@ const Layout = () => {
       case 'admin':
         return 'bg-purple-50 text-purple-700 border-purple-200/80';
       case 'teacher':
-      case 'teachers':
         return 'bg-amber-50 text-amber-700 border-amber-200/80';
       case 'student':
-      case 'students':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+      case 'cashier':
       case 'fees_collector':
-        return 'bg-blue-50 text-blue-700 border-blue-200/80';
       case 'accountant':
-        return 'bg-teal-50 text-teal-700 border-teal-200/80';
+        return 'bg-blue-50 text-blue-700 border-blue-200/80';
+      case 'busstaff':
+        return 'bg-sky-50 text-sky-700 border-sky-200/80';
       default:
         return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
   const roleHomePath = () => {
-    if (hasRole(['admin'])) return '/admin/dashboard';
-    if (hasRole(['teacher'])) return '/teacher/dashboard';
-    if (hasRole(['student'])) return '/student/dashboard';
-    if (hasRole(['fees_collector'])) return '/fees/collect';
-    if (hasRole(['accountant'])) return '/accountant/overview';
+    const role = user.role?.toLowerCase()?.replace(/\s+/g, '_');
+    if (role === 'super_admin') return '/dashboard';
+    if (role === 'admin') return '/admin/dashboard';
+    if (role === 'teacher') return '/teacher/dashboard';
+    if (role === 'student') return '/student/dashboard';
+    if (role === 'cashier' || role === 'fees_collector' || role === 'accountant') return '/finance/dashboard';
     return '/dashboard';
   };
+
+  const isSuperAdmin = user.role === 'super_admin';
+  const isAdmin = user.role === 'admin';
+  const isTeacher = user.role === 'teacher';
+  const isStudent = user.role === 'student';
+  const isCashier = user.role === 'cashier' || user.role === 'fees_collector';
 
   return (
     <div className="min-h-screen bg-slate-50/80 flex flex-col font-sans">
       {/* Dynamic Glassmorphic Top Bar */}
       <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-        <div className=" mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -105,12 +110,16 @@ const Layout = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-slate-200/80">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-50 to-violet-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-sm shadow-xs">
+            <Link
+              to={`/profile/${user.id}`}
+              className="hidden sm:flex items-center gap-3 pl-4 border-l border-slate-200/80 hover:opacity-85 transition cursor-pointer group"
+              title="View My Profile"
+            >
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-50 to-violet-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-extrabold text-sm shadow-xs group-hover:scale-105 transition-transform">
                 {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
               </div>
               <div className="flex flex-col text-left">
-                <span className="text-xs font-extrabold text-slate-900 leading-tight">
+                <span className="text-xs font-extrabold text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors">
                   {user.full_name || user.email?.split('@')[0]}
                 </span>
                 <div className="flex items-center gap-1 mt-0.5">
@@ -124,7 +133,7 @@ const Layout = () => {
                   </span>
                 </div>
               </div>
-            </div>
+            </Link>
 
             <button
               onClick={handleLogout}
@@ -160,51 +169,55 @@ const Layout = () => {
               <Sparkles className="w-3 h-3 text-indigo-500" />
             </div>
 
-            {/* Admin Links */}
-            {hasRole(['admin']) && (
+            {/* Admin & Super Admin Exclusive Links */}
+            {(isSuperAdmin || isAdmin) && (
               <>
+                {isSuperAdmin && (
+                  <Link to="/dashboard" className={navLinkClass('/dashboard')}>
+                    <LayoutDashboard className="w-4 h-4" /> Super Admin Portal
+                  </Link>
+                )}
                 <Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>
-                  <LayoutDashboard className="w-4 h-4" /> Admin Dashboard
+                  <LayoutDashboard className="w-4 h-4" /> Admin Operations
                 </Link>
                 <Link to="/admin/users" className={navLinkClass('/admin/users')}>
-                  <Users className="w-4 h-4" /> User Management
+                  <Users className="w-4 h-4" /> User Directory
                 </Link>
-                <Link to="/admin/staff" className={navLinkClass('/admin/staff')}>
-                  <Shield className="w-4 h-4" /> Staff Assignments
+                <Link to="/admin/classes" className={navLinkClass('/admin/classes')}>
+                  <Building2 className="w-4 h-4" /> Class Directory
                 </Link>
-                <Link to="/admin/settings" className={navLinkClass('/admin/settings')}>
-                  <Settings className="w-4 h-4" /> System Settings
+                <Link to="/finance/dashboard" className={navLinkClass('/finance/dashboard')}>
+                  <CreditCard className="w-4 h-4" /> Fees Desk Overview
                 </Link>
               </>
             )}
 
-            {/* Teacher Links */}
-            {hasRole(['teacher', 'admin']) && (
+            {/* Teacher Exclusive Suite (Visible ONLY to Teachers) */}
+            {isTeacher && (
               <>
                 <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
                   Teacher Suite
                 </div>
                 <Link to="/teacher/dashboard" className={navLinkClass('/teacher/dashboard')}>
-                  <LayoutDashboard className="w-4 h-4" /> Dashboard
+                  <LayoutDashboard className="w-4 h-4" /> Class Workstation
                 </Link>
-                {hasRole(['teacher']) && (
-                  <>
-                    <Link to="/teacher/attendance" className={navLinkClass('/teacher/attendance')}>
-                      <CalendarCheck className="w-4 h-4" /> Attendance Register
-                    </Link>
-                    <Link to="/teacher/academics" className={navLinkClass('/teacher/academics')}>
-                      <Award className="w-4 h-4" /> Marks & Grading
-                    </Link>
-                    <Link to="/teacher/timetable" className={navLinkClass('/teacher/timetable')}>
-                      <BookOpen className="w-4 h-4" /> Class Schedule
-                    </Link>
-                  </>
-                )}
+                <Link to="/teacher/attendance" className={navLinkClass('/teacher/attendance')}>
+                  <CalendarCheck className="w-4 h-4" /> Attendance Register
+                </Link>
+                <Link to="/teacher/academics" className={navLinkClass('/teacher/academics')}>
+                  <Award className="w-4 h-4" /> Marks & Grading
+                </Link>
+                <Link to="/teacher/timetable" className={navLinkClass('/teacher/timetable')}>
+                  <Clock className="w-4 h-4" /> Class Schedule
+                </Link>
+                <Link to="/teacher/homework" className={navLinkClass('/teacher/homework')}>
+                  <BookText className="w-4 h-4" /> Homework
+                </Link>
               </>
             )}
 
-            {/* Student Links */}
-            {hasRole(['student', 'admin']) && (
+            {/* Student Exclusive Portal (Visible ONLY to Students) */}
+            {isStudent && (
               <>
                 <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
                   Student Portal
@@ -212,30 +225,26 @@ const Layout = () => {
                 <Link to="/student/dashboard" className={navLinkClass('/student/dashboard')}>
                   <LayoutDashboard className="w-4 h-4" /> Personal Dashboard
                 </Link>
-                {hasRole(['student']) && (
-                  <>
-                    <Link to="/student/timetable" className={navLinkClass('/student/timetable')}>
-                      <BookOpen className="w-4 h-4" /> My Schedule
-                    </Link>
-                    <Link to="/student/academics" className={navLinkClass('/student/academics')}>
-                      <Award className="w-4 h-4" /> My Report Card
-                    </Link>
-                    <Link to="/student/transport" className={navLinkClass('/student/transport')}>
-                      <Bus className="w-4 h-4" /> Transport Tracking
-                    </Link>
-                  </>
-                )}
+                <Link to="/student/work" className={navLinkClass('/student/work')}>
+                  <BookText className="w-4 h-4" /> My Work
+                </Link>
+                <Link to="/student/timetable" className={navLinkClass('/student/timetable')}>
+                  <Clock className="w-4 h-4" /> My Timetable
+                </Link>
+                <Link to="/student/fees" className={navLinkClass('/student/fees')}>
+                  <CreditCard className="w-4 h-4" /> Fee Account
+                </Link>
               </>
             )}
 
-            {/* Finance & Accounts Links */}
-            {hasRole(['fees_collector', 'accountant', 'admin']) && (
+            {/* Cashier Exclusive Links (Visible ONLY to Cashiers) */}
+            {isCashier && (
               <>
                 <div className="mt-3 px-3 py-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                  Finance & Accounts
+                  Finance & Fees Desk
                 </div>
                 <Link to="/finance/dashboard" className={navLinkClass('/finance/dashboard')}>
-                  <CreditCard className="w-4 h-4" /> Finance Dashboard
+                  <CreditCard className="w-4 h-4" /> Fees Terminal
                 </Link>
               </>
             )}

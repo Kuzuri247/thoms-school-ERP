@@ -2,9 +2,6 @@
 const ROLES = {
   SUPER_ADMIN: 'super_admin',
   ADMIN: 'admin',
-  PRINCIPAL: 'principal',
-  VP: 'vp',
-  RECEPTIONIST: 'receptionist',
   CASHIER: 'cashier',
   TEACHER: 'teacher',
   BUSSTAFF: 'busstaff',

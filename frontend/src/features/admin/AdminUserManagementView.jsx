@@ -240,8 +240,8 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
                   <option value="admin">Admin</option>
                   <option value="teacher">Teacher</option>
                   <option value="student">Student</option>
-                  <option value="fees_collector">Fees Collector</option>
-                  <option value="accountant">Accountant</option>
+                  <option value="cashier">Cashier</option>
+                  <option value="busstaff">Bus Staff</option>
                 </select>
               </div>
 

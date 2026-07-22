@@ -64,4 +64,27 @@ const getSectionSummary = async (sectionId, month, year) => {
   return rows;
 };
 
-module.exports = { markBulk, getForSectionDate, getStudentSummary, getSectionSummary };
+const getSectionCalendar = async (sectionId, month, year) => {
+  let query = `
+    SELECT 
+      DATE_FORMAT(date, '%Y-%m-%d') AS date,
+      COUNT(*) AS total_records,
+      SUM(status = 'present') AS present_count,
+      SUM(status = 'absent') AS absent_count,
+      SUM(status = 'late') AS late_count,
+      ROUND((SUM(status = 'present') / COUNT(*)) * 100, 1) AS present_percentage
+    FROM attendance
+    WHERE section_id = ?
+  `;
+  const params = [sectionId];
+  if (month && year) {
+    query += ` AND MONTH(date) = ? AND YEAR(date) = ?`;
+    params.push(month, year);
+  }
+  query += ` GROUP BY date ORDER BY date DESC`;
+
+  const [rows] = await pool.query(query, params);
+  return rows;
+};
+
+module.exports = { markBulk, getForSectionDate, getStudentSummary, getSectionSummary, getSectionCalendar };
