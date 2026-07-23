@@ -19,6 +19,23 @@ router.post('/mark', verifyToken, authorize(ROLES.TEACHER), attachTeacherContext
   res.json({ success: true, message: 'Attendance saved' });
 });
 
+// Student views own monthly attendance summary (Parameterless Self-Ownership)
+router.get('/student/my-summary', verifyToken, authorize(ROLES.STUDENT), async (req, res) => {
+  try {
+    const [[student]] = await pool.query('SELECT id FROM students WHERE user_id = ?', [req.user.id]);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student profile not found' });
+    }
+    const now = new Date();
+    const month = req.query.month || (now.getMonth() + 1);
+    const year = req.query.year || now.getFullYear();
+    const data = await svc.getStudentSummary(student.id, month, year);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Attendance calendar view with present percentages
 router.get('/calendar/:sectionId', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   const { month, year } = req.query;
@@ -32,8 +49,8 @@ router.get('/section/:sectionId/date/:date', verifyToken, authorize(ROLES.TEACHE
   res.json({ success: true, data: rows });
 });
 
-// Student views own monthly attendance summary
-router.get('/student/:studentId/summary/:month/:year', verifyToken, async (req, res) => {
+// Student views own monthly attendance summary (Self Student, Admin, Super Admin)
+router.get('/student/:studentId/summary/:month/:year', verifyToken, authorize(ROLES.STUDENT, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   if (req.user.role === ROLES.STUDENT) {
     const [[owns]] = await pool.query('SELECT id FROM students WHERE id = ? AND user_id = ?', [req.params.studentId, req.user.id]);
     if (!owns) return res.status(403).json({ success: false, message: 'Cannot view other student attendance' });

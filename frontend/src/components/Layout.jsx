@@ -14,7 +14,8 @@ import {
   Clock,
   GraduationCap,
   Sparkles,
-  Building2
+  Building2,
+  Megaphone
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import {
@@ -166,6 +167,9 @@ const Layout = () => {
                 </Link>
                 <Link to="/admin/classes" className={navLinkClass('/admin/classes')}>
                   <Building2 className="w-4 h-4" /> Class Directory
+                </Link>
+                <Link to="/admin/notices" className={navLinkClass('/admin/notices')}>
+                  <Megaphone className="w-4 h-4" /> Notice Board
                 </Link>
                 <Link to="/finance/dashboard" className={navLinkClass('/finance/dashboard')}>
                   <CreditCard className="w-4 h-4" /> Fees Desk Overview

@@ -19,7 +19,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
   const [successMsg, setSuccessMsg] = useState('');
 
   const navigate = useNavigate();
-  const { data: users = [] } = useGetUsers();
+  const { data: usersResponse, isLoading } = useGetUsers();
   const createUserMutation = useCreateUser();
 
   const handleCreate = async (e) => {
@@ -46,7 +46,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
     }
   };
 
-  const displayUsers = users || [];
+  const displayUsers = Array.isArray(usersResponse) ? usersResponse : (usersResponse?.data || []);
 
   const filteredUsers = displayUsers.filter((u) => {
     const matchesSearch = 

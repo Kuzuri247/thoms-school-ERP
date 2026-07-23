@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../api/axios';
+import Noticeboard from '../features/noticeboard/Noticeboard';
 import {
   Users,
   GraduationCap,
@@ -204,46 +205,7 @@ const SuperAdminDashboard = () => {
           </div>
 
           {/* Notice Board Section */}
-          <div className="bg-white p-8 rounded-3xl shadow-[0_2px_20px_rgba(0,0,0,0.02)] border border-slate-100 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Megaphone className="w-5 h-5 text-indigo-600" /> Active Global Notices
-                </h2>
-                <p className="text-slate-500 text-xs mt-1">Official announcements published to the portal notice board.</p>
-              </div>
-              <button
-                onClick={() => setShowNoticeModal(true)}
-                className="px-4 py-2 bg-indigo-50 text-indigo-600 font-bold text-xs rounded-xl hover:bg-indigo-100 transition"
-              >
-                + New Notice
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {notices.length === 0 ? (
-                <p className="text-sm font-medium text-slate-400 py-4 text-center">No active global notices found.</p>
-              ) : (
-                notices.slice(0, 5).map((notice) => (
-                  <div key={notice.id} className="p-4 rounded-2xl bg-slate-50/70 border border-slate-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg uppercase tracking-wider">
-                        {notice.notice_type || 'General'}
-                      </span>
-                      <span className="text-[11px] font-semibold text-slate-400">
-                        {notice.publish_date ? new Date(notice.publish_date).toLocaleDateString() : 'Today'}
-                      </span>
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900">{notice.title}</h4>
-                    <p className="text-xs text-slate-600 font-medium leading-relaxed">{notice.content}</p>
-                    {notice.published_by_name && (
-                      <p className="text-[10px] font-semibold text-slate-400">Published by: {notice.published_by_name}</p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <Noticeboard />
         </div>
 
         {/* Right Column: Platform Audit & Quick Summary */}

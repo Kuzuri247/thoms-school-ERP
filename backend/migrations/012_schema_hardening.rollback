@@ -1,0 +1,35 @@
+-- Rollback Script for Migration 012: Comprehensive Schema Hardening
+
+ALTER TABLE `notices` DROP INDEX IF EXISTS `idx_notices_published`;
+ALTER TABLE `fee_records` DROP INDEX IF EXISTS `idx_fee_records_session`;
+ALTER TABLE `homework` DROP INDEX IF EXISTS `idx_homework_session_section`;
+ALTER TABLE `exams` DROP INDEX IF EXISTS `idx_exams_session_class`;
+ALTER TABLE `timetables` DROP INDEX IF EXISTS `idx_timetable_section`;
+ALTER TABLE `timetables` DROP INDEX IF EXISTS `idx_timetable_teacher`;
+ALTER TABLE `teacher_assignments` DROP INDEX IF EXISTS `idx_ta_teacher_session`;
+ALTER TABLE `teacher_assignments` DROP INDEX IF EXISTS `idx_ta_section_id`;
+ALTER TABLE `academic_sessions` DROP INDEX IF EXISTS `idx_sessions_is_current`;
+ALTER TABLE `staff_profiles` DROP INDEX IF EXISTS `idx_staff_user_id`;
+ALTER TABLE `users` DROP INDEX IF EXISTS `idx_users_role`;
+
+ALTER TABLE `refunds` DROP FOREIGN KEY IF EXISTS `fk_refunds_payment`;
+ALTER TABLE `receipts` DROP FOREIGN KEY IF EXISTS `fk_receipts_payment`;
+ALTER TABLE `razorpay_payments` DROP FOREIGN KEY IF EXISTS `fk_rp_payments_order`;
+
+ALTER TABLE `refunds` DROP FOREIGN KEY IF EXISTS `fk_refunds_initiated_by`;
+ALTER TABLE `student_transport` DROP FOREIGN KEY IF EXISTS `fk_student_transport_session`;
+ALTER TABLE `homework_submissions` DROP FOREIGN KEY IF EXISTS `fk_homework_submissions_marked_by`;
+ALTER TABLE `receipts` DROP FOREIGN KEY IF EXISTS `fk_receipts_student`;
+ALTER TABLE `marks` DROP FOREIGN KEY IF EXISTS `fk_marks_entered_by`;
+ALTER TABLE `timetables` DROP FOREIGN KEY IF EXISTS `fk_timetables_teacher`;
+ALTER TABLE `homework` DROP FOREIGN KEY IF EXISTS `fk_homework_assigned_by`;
+ALTER TABLE `attendance` DROP FOREIGN KEY IF EXISTS `fk_attendance_marked_by`;
+
+DROP TABLE IF EXISTS `notifications`;
+ALTER TABLE `notices` DROP FOREIGN KEY IF EXISTS `fk_notices_target_section`;
+ALTER TABLE `notices` DROP COLUMN IF EXISTS `target_section_id`;
+
+ALTER TABLE `exam_weightage` DROP FOREIGN KEY IF EXISTS `fk_exam_weightage_class`;
+ALTER TABLE `exam_weightage` DROP INDEX IF EXISTS `uk_session_class_half`;
+ALTER TABLE `exam_weightage` DROP COLUMN IF EXISTS `class_id`;
+ALTER TABLE `exam_weightage` ADD UNIQUE KEY `uk_session_half` (`session_id`, `half_year`);

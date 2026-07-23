@@ -14,6 +14,7 @@ import FinanceDashboard from './features/fees/FinanceDashboard';
 import AdminUserManagementView from './features/admin/AdminUserManagementView';
 import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
 import UserProfileView from './features/users/UserProfileView';
+import Noticeboard from './features/noticeboard/Noticeboard';
 
 function App() {
   return (
@@ -60,6 +61,7 @@ function App() {
             <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
             <Route path="/admin/users" element={<AdminUserManagementView initialTab="all" />} />
             <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
+            <Route path="/admin/notices" element={<Noticeboard />} />
           </Route>
 
           {/* Teacher Suite Routes (Strictly Teacher, Admin, Super Admin) */}
