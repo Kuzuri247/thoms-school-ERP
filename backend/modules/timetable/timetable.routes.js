@@ -32,14 +32,44 @@ router.delete('/:id', verifyToken, authorize(...canManage), async (req, res) => 
   res.json({ success: true, message: 'Slot removed' });
 });
 
-// Full timetable for a section (any authenticated role can view)
-router.get('/section/:sectionId', verifyToken, async (req, res) => {
+// Student fetches own timetable directly (Parameterless Self-Ownership)
+router.get('/student/my-timetable', verifyToken, authorize(ROLES.STUDENT), async (req, res) => {
+  try {
+    const [[student]] = await pool.query('SELECT section_id FROM students WHERE user_id = ?', [req.user.id]);
+    if (!student?.section_id) {
+      return res.status(404).json({ success: false, message: 'Student section not assigned' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT t.*, sub.name AS subject_name, u.full_name AS teacher_name
+       FROM timetables t
+       LEFT JOIN subjects sub ON t.subject_id = sub.id
+       LEFT JOIN users u ON t.teacher_user_id = u.id
+       WHERE t.section_id = ? AND t.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1)
+       ORDER BY t.day_of_week, t.period_no`,
+      [student.section_id]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Full timetable for a section (Student own section, Teacher, Admin, Super Admin)
+router.get('/section/:sectionId', verifyToken, authorize(ROLES.STUDENT, ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
+  if (req.user.role === ROLES.STUDENT) {
+    const [[student]] = await pool.query('SELECT section_id FROM students WHERE user_id = ?', [req.user.id]);
+    if (!student || String(student.section_id) !== String(req.params.sectionId)) {
+      return res.status(403).json({ success: false, message: 'Cannot view timetable for other sections' });
+    }
+  }
+
   const [rows] = await pool.query(
     `SELECT t.*, sub.name AS subject_name, u.full_name AS teacher_name
      FROM timetables t
      LEFT JOIN subjects sub ON t.subject_id = sub.id
      LEFT JOIN users u ON t.teacher_user_id = u.id
-     WHERE t.section_id = ? AND t.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1)
+     WHERE t.section_id = ? AND t.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1)
      ORDER BY t.day_of_week, t.period_no`,
     [req.params.sectionId]
   );
@@ -54,7 +84,7 @@ router.get('/my-schedule', verifyToken, authorize(ROLES.TEACHER), async (req, re
      JOIN sections sec ON t.section_id = sec.id
      JOIN classes cl ON sec.class_id = cl.id
      LEFT JOIN subjects sub ON t.subject_id = sub.id
-     WHERE t.teacher_user_id = ? AND t.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1)
+     WHERE t.teacher_user_id = ? AND t.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1)
      ORDER BY t.day_of_week, t.period_no`,
     [req.user.id]
   );

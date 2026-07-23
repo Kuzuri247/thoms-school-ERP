@@ -190,4 +190,146 @@ const initiateRefund = async (paymentId, reason, initiatedBy) => {
   return refund;
 };
 
-module.exports = { createOrder, verifyPayment, handleWebhook, initiateRefund };
+const collectCashPayment = async ({ studentId, feeRecordId, amount, paymentMode = 'Cash', feeType = 'Tuition Fee' }, collectedByUserId) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    let [[student]] = await conn.query(
+      'SELECT s.id, s.user_id, CONCAT(s.first_name, " ", s.last_name) AS full_name FROM students s WHERE s.id = ? OR s.admission_no = ? OR s.roll_no = ? LIMIT 1',
+      [studentId, studentId, studentId]
+    );
+
+    let resolvedFeeRecord = null;
+
+    if (feeRecordId) {
+      const [[fr]] = await conn.query('SELECT * FROM fee_records WHERE id = ?', [feeRecordId]);
+      resolvedFeeRecord = fr;
+    } else if (student) {
+      const [[fr]] = await conn.query(
+        'SELECT * FROM fee_records WHERE student_id = ? AND status IN ("PENDING", "PARTIAL", "OVERDUE") ORDER BY due_date ASC LIMIT 1',
+        [student.id]
+      );
+      resolvedFeeRecord = fr;
+    }
+
+    if (!resolvedFeeRecord && student) {
+      const [[activeSession]] = await conn.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+      const sessionId = activeSession?.id || 1;
+      const [newFrRes] = await conn.query(
+        `INSERT INTO fee_records (student_id, session_id, total_amount, paid_amount, status, notes)
+         VALUES (?, ?, ?, 0, 'PENDING', ?)`,
+        [student.id, sessionId, amount, feeType]
+      );
+      const [[createdFr]] = await conn.query('SELECT * FROM fee_records WHERE id = ?', [newFrRes.insertId]);
+      resolvedFeeRecord = createdFr;
+    }
+
+    if (!resolvedFeeRecord) {
+      throw Object.assign(new Error('Fee record or student not found'), { status: 404 });
+    }
+
+    const payAmount = parseFloat(amount);
+    if (isNaN(payAmount) || payAmount <= 0) {
+      throw Object.assign(new Error('Invalid payment amount'), { status: 400 });
+    }
+
+    const newPaidAmount = parseFloat(resolvedFeeRecord.paid_amount) + payAmount;
+    const totalAmount = parseFloat(resolvedFeeRecord.total_amount);
+    const discountAmount = parseFloat(resolvedFeeRecord.discount_amount || 0);
+
+    const newStatus = (newPaidAmount + discountAmount) >= totalAmount ? 'PAID' : 'PARTIAL';
+
+    await conn.query(
+      `UPDATE fee_records SET paid_amount = ?, status = ?, updated_at = NOW() WHERE id = ?`,
+      [newPaidAmount, newStatus, resolvedFeeRecord.id]
+    );
+
+    const orderId = `cash_ord_${Date.now()}`;
+    const paymentId = `cash_pay_${Date.now()}`;
+    const amountPaise = Math.round(payAmount * 100);
+
+    await conn.query(
+      `INSERT INTO razorpay_orders (razorpay_order_id, fee_record_id, student_id, amount_paise, currency, receipt, status, created_by)
+       VALUES (?, ?, ?, ?, 'INR', ?, 'paid', ?)`,
+      [orderId, resolvedFeeRecord.id, resolvedFeeRecord.student_id, amountPaise, `cash_${Date.now()}`, collectedByUserId]
+    );
+
+    await conn.query(
+      `INSERT INTO razorpay_payments (razorpay_payment_id, razorpay_order_id, amount_paise, currency, method, status, captured_at)
+       VALUES (?, ?, ?, 'INR', ?, 'captured', NOW())`,
+      [paymentId, orderId, amountPaise, paymentMode]
+    );
+
+    const receiptNo = `REC-${Math.floor(100000 + Math.random() * 900000)}`;
+    await conn.query(
+      `INSERT INTO receipts (receipt_no, razorpay_payment_id, fee_record_id, student_id)
+       VALUES (?, ?, ?, ?)`,
+      [receiptNo, paymentId, resolvedFeeRecord.id, resolvedFeeRecord.student_id]
+    );
+
+    await conn.commit();
+
+    return {
+      receiptNo,
+      studentId: resolvedFeeRecord.student_id,
+      amount: payAmount,
+      paymentMode,
+      feeRecordId: resolvedFeeRecord.id,
+      status: newStatus,
+    };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
+const getPendingDues = async () => {
+  const [rows] = await pool.query(`
+    SELECT fr.*, 
+           CONCAT(s.first_name, ' ', s.last_name) AS student_name,
+           s.admission_no, s.roll_no,
+           c.name AS class_name, sec.name AS section_name,
+           fc.name AS category_name
+    FROM fee_records fr
+    JOIN students s ON fr.student_id = s.id
+    LEFT JOIN sections sec ON s.section_id = sec.id
+    LEFT JOIN classes c ON sec.class_id = c.id
+    LEFT JOIN fee_categories fc ON fr.category_id = fc.id
+    WHERE fr.status IN ('PENDING', 'PARTIAL', 'OVERDUE')
+    ORDER BY fr.due_date ASC
+    LIMIT 50
+  `);
+  return rows;
+};
+
+const getStudentFeeRecords = async (userId, targetStudentId = null) => {
+  let query = `
+    SELECT fr.*, 
+           CONCAT(s.first_name, ' ', s.last_name) AS student_name,
+           s.admission_no, s.roll_no,
+           fc.name AS category_name,
+           (fr.total_amount - fr.paid_amount - fr.discount_amount) AS due_amount
+    FROM fee_records fr
+    JOIN students s ON fr.student_id = s.id
+    LEFT JOIN fee_categories fc ON fr.category_id = fc.id
+  `;
+  const params = [];
+
+  if (targetStudentId) {
+    query += ` WHERE s.id = ? OR s.user_id = ? OR s.admission_no = ?`;
+    params.push(targetStudentId, targetStudentId, targetStudentId);
+  } else {
+    query += ` WHERE s.user_id = ?`;
+    params.push(userId);
+  }
+
+  query += ` ORDER BY fr.created_at DESC`;
+
+  const [rows] = await pool.query(query, params);
+  return rows;
+};
+
+module.exports = { createOrder, verifyPayment, handleWebhook, initiateRefund, collectCashPayment, getPendingDues, getStudentFeeRecords };

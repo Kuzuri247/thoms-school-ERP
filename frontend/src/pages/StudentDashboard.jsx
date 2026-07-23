@@ -49,18 +49,16 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
       const [workRes, noticesRes, feeRes] = await Promise.all([
         api.get('/homework/student/my-work').catch(() => ({ data: { data: [] } })),
         api.get('/notices/student-work').catch(() => ({ data: { data: [] } })),
-        api.get(`/payments/history/${user?.id || 1}`).catch(() => ({ data: { data: [] } })),
+        api.get('/payments/records/my-fees').catch(() => ({ data: { data: [] } })),
       ]);
 
       setWorkItems(workRes.data?.data || []);
       setWorkNotices(noticesRes.data?.data || []);
       setFees(feeRes.data?.data || []);
 
-      // If user has a class, fetch class timetable
-      if (user?.class_id || user?.section_id) {
-        const ttRes = await api.get(`/timetable/class/${user.class_id || user.section_id}`).catch(() => ({ data: { data: [] } }));
-        setTimetable(ttRes.data?.data || []);
-      }
+      // Fetch parameterless student timetable
+      const ttRes = await api.get('/timetable/student/my-timetable').catch(() => ({ data: { data: [] } }));
+      setTimetable(ttRes.data?.data || []);
     } catch (err) {
       console.error('Failed to load student dashboard data:', err);
     } fontFinally: {

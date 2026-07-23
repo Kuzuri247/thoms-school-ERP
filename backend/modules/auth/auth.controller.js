@@ -55,7 +55,7 @@ exports.me = async (req, res) => {
 exports.students = async (req, res) => {
   const pool = require('../../config/db');
   const [rows] = await pool.query('SELECT id, email, full_name, class, section, phone, gender, status FROM users WHERE role = "student"');
-  res.json(rows);
+  res.json({ success: true, data: rows });
 };
 
 exports.changePassword = async (req, res) => {
@@ -63,21 +63,20 @@ exports.changePassword = async (req, res) => {
   const bcrypt = require('bcrypt');
   const pool = require('../../config/db');
   if (!newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
   }
   const hashedPassword = await bcrypt.hash(newPassword, 8);
   await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
-  res.json({ message: 'Password updated successfully' });
+  res.json({ success: true, message: 'Password updated successfully' });
 };
 
 exports.permissions = async (req, res) => {
   const pool = require('../../config/db');
   const [rows] = await pool.query('SELECT setting_value FROM settings WHERE setting_key = "role_permissions"');
-  if (rows.length > 0) {
-    res.json({ role_permissions: rows[0].setting_value });
-  } else {
-    res.json({ role_permissions: null });
-  }
+  res.json({
+    success: true,
+    data: { role_permissions: rows.length > 0 ? rows[0].setting_value : null }
+  });
 };
 
 exports.forgotPassword = async (req, res) => {
@@ -87,14 +86,14 @@ exports.forgotPassword = async (req, res) => {
   const nodemailer = require('nodemailer');
   
   const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-  if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+  if (rows.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
   
   const [settingRows] = await pool.query('SELECT setting_key, setting_value FROM settings WHERE setting_key IN ("smtp_host", "smtp_port", "smtp_user", "smtp_pass")');
   const settings = {};
   settingRows.forEach(row => settings[row.setting_key] = row.setting_value);
 
   if (!settings.smtp_host || !settings.smtp_user || !settings.smtp_pass) {
-    return res.status(500).json({ error: 'SMTP settings are not configured properly. Contact Super Admin.' });
+    return res.status(500).json({ success: false, message: 'SMTP settings are not configured properly. Contact Super Admin.' });
   }
 
   const transporter = nodemailer.createTransport({
@@ -118,5 +117,5 @@ exports.forgotPassword = async (req, res) => {
     html: `<p>You requested a password reset.</p><p><a href="${resetLink}">Click here to reset your password</a></p>`
   });
 
-  res.json({ message: 'Password reset instructions sent to your email.' });
+  res.json({ success: true, message: 'Password reset instructions sent to your email.' });
 };

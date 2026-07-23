@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
+const { authorize } = require('../middleware/rbac');
 const { ROLES } = require('../config/constants');
 
-router.get('/:id/profile', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
+router.get('/:id/profile', verifyToken, async (req, res) => {
     try {
         const userId = req.params.id;
         const isSelf = Number(req.user?.id) === Number(userId);

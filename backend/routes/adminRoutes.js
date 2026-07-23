@@ -6,7 +6,8 @@ const { authorize } = require('../middleware/rbac');
 const { ROLES } = require('../config/constants');
 const pool = require('../config/db');
 
-router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
+// Create user (Admin and Super Admin)
+router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     let { email, password, role, class_name, section, full_name, phone, gender, status } = req.body;
     try {
         if (!password && role === 'student') {
@@ -19,34 +20,34 @@ router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
             'INSERT INTO users (email, password, role, class, section, full_name, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [email, hashedPassword, role, class_name || null, section || null, full_name || null, phone || null, gender || 'Male', status || 'Active']
         );
-        res.status(201).json({ message: 'User created successfully', id: result.insertId });
+        res.status(201).json({ success: true, message: 'User created successfully', id: result.insertId });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// Get all users (Super Admin only)
-router.get('/users', [verifyToken, isSuperAdmin], async (req, res) => {
+// Get all users (Admin and Super Admin)
+router.get('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT id, email, full_name, role, class as class_name, section, created_at FROM users');
-        res.status(200).json(rows);
+        const [rows] = await pool.query('SELECT id, email, full_name, role, class as class_name, section, created_at FROM users ORDER BY created_at DESC');
+        res.status(200).json({ success: true, data: rows });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// Delete user
-router.delete('/users/:id', [verifyToken, isSuperAdmin], async (req, res) => {
+// Delete user (Admin and Super Admin)
+router.delete('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
         await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
-        res.status(200).json({ message: 'User deleted successfully' });
+        res.status(200).json({ success: true, message: 'User deleted successfully' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// Update user (Super Admin only)
-router.put('/users/:id', [verifyToken, isSuperAdmin], async (req, res) => {
+// Update user (Admin and Super Admin)
+router.put('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     const { password, role, class_name, section, email, full_name, phone, gender, status } = req.body;
     try {
         if (password) {
@@ -57,9 +58,9 @@ router.put('/users/:id', [verifyToken, isSuperAdmin], async (req, res) => {
             await pool.query('UPDATE users SET role = ?, class = ?, section = ?, email = ?, full_name = ?, phone = ?, gender = ?, status = ? WHERE id = ?', 
                 [role, class_name || null, section || null, email, full_name || null, phone || null, gender || 'Male', status || 'Active', req.params.id]);
         }
-        res.status(200).json({ message: 'User updated successfully' });
+        res.status(200).json({ success: true, message: 'User updated successfully' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -71,9 +72,9 @@ router.get('/settings', [verifyToken, isSuperAdmin], async (req, res) => {
         rows.forEach(row => {
             settings[row.setting_key] = row.setting_value;
         });
-        res.status(200).json(settings);
+        res.status(200).json({ success: true, data: settings });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
@@ -87,9 +88,9 @@ router.post('/settings', [verifyToken, isSuperAdmin], async (req, res) => {
                 [key, value, value]
             );
         }
-        res.status(200).json({ message: 'Settings updated successfully' });
+        res.status(200).json({ success: true, message: 'Settings updated successfully' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
@@ -97,31 +98,27 @@ router.post('/settings', [verifyToken, isSuperAdmin], async (req, res) => {
 router.get('/attendance', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     const { date } = req.query;
     try {
-        if (!date) return res.status(400).json({ error: 'Date query parameter is required' });
+        if (!date) return res.status(400).json({ success: false, message: 'Date query parameter is required' });
         const [rows] = await pool.query(`
             SELECT a.student_id, a.status, s.user_id 
             FROM attendance a
             JOIN students s ON a.student_id = s.id
             WHERE a.date = ?
         `, [date]);
-        res.status(200).json(rows);
+        res.status(200).json({ success: true, data: rows });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
 // Save student attendance in bulk
-router.post('/attendance', [verifyToken], async (req, res) => {
+router.post('/attendance', [verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     const { date, attendanceData } = req.body;
-    if (!['teacher', 'admin', 'super_admin'].includes(req.user?.role)) {
-        return res.status(403).json({ error: 'Access denied' });
-    }
     try {
         if (!date || !attendanceData) {
-            return res.status(400).json({ error: 'Date and attendance data are required' });
+            return res.status(400).json({ success: false, message: 'Date and attendance data are required' });
         }
         for (const [userId, status] of Object.entries(attendanceData)) {
-            // Find student id by user_id
             const [[student]] = await pool.query('SELECT id, section_id FROM students WHERE user_id = ?', [userId]);
             if (student) {
                 await pool.query(
@@ -130,17 +127,14 @@ router.post('/attendance', [verifyToken], async (req, res) => {
                 );
             }
         }
-        res.status(200).json({ message: 'Attendance saved successfully' });
+        res.status(200).json({ success: true, message: 'Attendance saved successfully' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
 // Get System Statistics (Super Admin & Admin)
-router.get('/stats', [verifyToken], async (req, res) => {
-    if (!['admin', 'super_admin'].includes(req.user?.role)) {
-        return res.status(403).json({ error: 'Access denied' });
-    }
+router.get('/stats', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
         const [[{ total_students }]] = await pool.query("SELECT COUNT(*) AS total_students FROM users WHERE role = 'student'");
         const [[{ total_teachers }]] = await pool.query("SELECT COUNT(*) AS total_teachers FROM users WHERE role = 'teacher'");
@@ -209,4 +203,3 @@ router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, RO
 });
 
 module.exports = router;
-
