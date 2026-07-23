@@ -23,7 +23,7 @@ router.get('/routes/:routeId/stops', verifyToken, async (req, res) => {
 router.post(
   '/opt-in',
   verifyToken,
-  authorize(ROLES.STUDENT, ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPER_ADMIN),
+  authorize(ROLES.STUDENT, ROLES.ADMIN, ROLES.SUPER_ADMIN),
   async (req, res) => {
     const { route_id, stop_id, session_id, student_id } = req.body;
     let targetStudentId = student_id;
@@ -57,7 +57,7 @@ router.post(
 router.post(
   '/opt-out',
   verifyToken,
-  authorize(ROLES.STUDENT, ROLES.RECEPTIONIST, ROLES.ADMIN, ROLES.SUPER_ADMIN),
+  authorize(ROLES.STUDENT, ROLES.ADMIN, ROLES.SUPER_ADMIN),
   async (req, res) => {
     let targetStudentId = req.body.student_id;
 
@@ -104,6 +104,10 @@ router.get('/my-route-students', verifyToken, authorize(ROLES.BUSSTAFF), async (
 });
 
 router.get('/student/:studentId', verifyToken, async (req, res) => {
+  if (req.user.role === ROLES.STUDENT) {
+    const [[owns]] = await pool.query('SELECT id FROM students WHERE id = ? AND user_id = ?', [req.params.studentId, req.user.id]);
+    if (!owns) return res.status(403).json({ success: false, message: 'Cannot view other student transport info' });
+  }
   const [rows] = await pool.query(`
     SELECT st.*, tr.name as route_name, tr.bus_no, tr.driver_name, ts.stop_name, ts.pickup_time, ts.drop_time
     FROM student_transport st

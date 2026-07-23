@@ -17,14 +17,24 @@ import {
   Building2
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
+import {
+  isSuperAdmin as checkIsSuperAdmin,
+  isAdmin as checkIsAdmin,
+  isTeacher as checkIsTeacher,
+  isStudent as checkIsStudent,
+  isCashier as checkIsCashier,
+  getRoleHomePath,
+  getRoleBadgeStyle,
+  normalizeRole
+} from '../utils/roleUtils';
 
 const Layout = () => {
-  const { user, logout, hasRole } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  if (!user) {
+  if (!user || !normalizeRole(user.role)) {
     return null;
   }
 
@@ -44,42 +54,13 @@ const Layout = () => {
     }
   `;
 
-  const getRoleBadgeColor = (role = '') => {
-    const norm = role.toLowerCase().replace(/\s+/g, '_');
-    switch (norm) {
-      case 'super_admin':
-      case 'admin':
-        return 'bg-purple-50 text-purple-700 border-purple-200/80';
-      case 'teacher':
-        return 'bg-amber-50 text-amber-700 border-amber-200/80';
-      case 'student':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
-      case 'cashier':
-      case 'fees_collector':
-      case 'accountant':
-        return 'bg-blue-50 text-blue-700 border-blue-200/80';
-      case 'busstaff':
-        return 'bg-sky-50 text-sky-700 border-sky-200/80';
-      default:
-        return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
+  const roleHomePath = () => getRoleHomePath(user);
 
-  const roleHomePath = () => {
-    const role = user.role?.toLowerCase()?.replace(/\s+/g, '_');
-    if (role === 'super_admin') return '/dashboard';
-    if (role === 'admin') return '/admin/dashboard';
-    if (role === 'teacher') return '/teacher/dashboard';
-    if (role === 'student') return '/student/dashboard';
-    if (role === 'cashier' || role === 'fees_collector' || role === 'accountant') return '/finance/dashboard';
-    return '/dashboard';
-  };
-
-  const isSuperAdmin = user.role === 'super_admin';
-  const isAdmin = user.role === 'admin';
-  const isTeacher = user.role === 'teacher';
-  const isStudent = user.role === 'student';
-  const isCashier = user.role === 'cashier' || user.role === 'fees_collector';
+  const isSuperAdmin = checkIsSuperAdmin(user);
+  const isAdmin = checkIsAdmin(user) && !isSuperAdmin; // Exclusively admin for section rendering if needed, or checkIsAdmin
+  const isTeacher = checkIsTeacher(user);
+  const isStudent = checkIsStudent(user);
+  const isCashier = checkIsCashier(user);
 
   return (
     <div className="min-h-screen bg-slate-50/80 flex flex-col font-sans">
@@ -125,7 +106,7 @@ const Layout = () => {
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span
-                    className={`inline-block border text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${getRoleBadgeColor(
+                    className={`inline-block border text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${getRoleBadgeStyle(
                       user.role
                     )}`}
                   >

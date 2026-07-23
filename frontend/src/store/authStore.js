@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '../api/axios';
+import { hasRole } from '../utils/roleUtils';
 
 const useAuthStore = create(
   persist(
@@ -45,24 +46,7 @@ const useAuthStore = create(
       },
 
       hasRole: (allowedRoles) => {
-        const user = get().user;
-        if (!user || !user.role) return false;
-        if (allowedRoles.includes('*')) return true;
-
-        const normalizedUserRole = user.role.toLowerCase().replace(/\s+/g, '_');
-        return allowedRoles.some((role) => {
-          const norm = role.toLowerCase().replace(/\s+/g, '_');
-          if (norm === 'admin' && (normalizedUserRole === 'admin' || normalizedUserRole === 'super_admin')) {
-            return true;
-          }
-          if (norm === 'teacher' && (normalizedUserRole === 'teacher' || normalizedUserRole === 'teachers')) {
-            return true;
-          }
-          if (norm === 'student' && (normalizedUserRole === 'student' || normalizedUserRole === 'students')) {
-            return true;
-          }
-          return norm === normalizedUserRole;
-        });
+        return hasRole(get().user, allowedRoles);
       },
     }),
     {

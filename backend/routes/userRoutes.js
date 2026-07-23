@@ -2,10 +2,17 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
+const { ROLES } = require('../config/constants');
 
-router.get('/:id/profile', verifyToken, async (req, res) => {
+router.get('/:id/profile', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
     try {
         const userId = req.params.id;
+        const isSelf = Number(req.user?.id) === Number(userId);
+        const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user?.role);
+
+        if (!isSelf && !isAdmin) {
+            return res.status(403).json({ success: false, message: 'Access denied: Cannot view other user profiles' });
+        }
         
         // 1. Fetch base user info
         const [users] = await pool.query(
@@ -21,7 +28,7 @@ router.get('/:id/profile', verifyToken, async (req, res) => {
         let profileData = { ...user };
 
         // 2. Fetch extended profile based on role
-        if (user.role === 'student') {
+        if (user.role === ROLES.STUDENT) {
             const [students] = await pool.query(
                 'SELECT admission_no, roll_no, first_name, last_name, gender, blood_group, city, state, admission_date FROM students WHERE user_id = ?',
                 [userId]

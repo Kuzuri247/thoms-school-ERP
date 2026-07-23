@@ -4,6 +4,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
 const { verifyToken } = require('../middleware/auth');
+const { authorize } = require('../middleware/rbac');
+const { ROLES } = require('../config/constants');
 require('dotenv').config();
 
 const pool = mysql.createPool({
@@ -13,7 +15,7 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME || 'school_erp'
 });
 
-router.get('/students', verifyToken, async (req, res) => {
+router.get('/students', verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT id, email, class, section FROM users WHERE role = "student"');
         res.status(200).json(rows);
@@ -29,7 +31,7 @@ router.put('/change-password', verifyToken, async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
         const hashedPassword = await bcrypt.hash(newPassword, 8);
-        await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.userId]);
+        await pool.query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
         res.status(200).json({ message: 'Password updated successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });

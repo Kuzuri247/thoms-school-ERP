@@ -23,9 +23,8 @@ const roles = [
     { id: 'admin', label: 'Admin' },
     { id: 'teacher', label: 'Teacher' },
     { id: 'student', label: 'Student' },
-    { id: 'fee_collector', label: 'Fee Collector' },
-    { id: 'bus_staff', label: 'Bus Staff' },
-    { id: 'accountant', label: 'Accountant' }
+    { id: 'cashier', label: 'Cashier' },
+    { id: 'busstaff', label: 'Bus Staff' }
 ];
 
 const RolesPermissions = () => {
@@ -41,9 +40,8 @@ const RolesPermissions = () => {
         admin: availableModules.map(m => m.id),
         teacher: ['student_info', 'academics', 'attendance', 'communicate', 'download', 'exam', 'calendar'],
         student: ['calendar', 'download', 'exam'],
-        fee_collector: ['fees'],
-        bus_staff: ['transport'],
-        accountant: ['fees']
+        cashier: ['fees'],
+        busstaff: ['transport']
     };
 
     useEffect(() => {

@@ -3,6 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Users as UsersIcon, UserPlus, Trash2, Mail, Lock, Edit2, X, AlertTriangle, CheckCircle } from 'lucide-react';
 import api from '../api/axios';
+import { getRoleBadgeStyle } from '../utils/roleUtils';
 
 const Users = () => {
     const { user } = useContext(AuthContext);
@@ -85,17 +86,7 @@ const Users = () => {
     };
 
     const getRoleBadge = (role) => {
-        const styles = {
-            super_admin: 'bg-red-50 text-red-700 border-red-200',
-            admin: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-            teacher: 'bg-amber-50 text-amber-700 border-amber-200',
-            student: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-            fee_collector: 'bg-teal-50 text-teal-700 border-teal-200',
-            bus_staff: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-            accountant: 'bg-cyan-50 text-cyan-700 border-cyan-200'
-        };
-        const defaultStyle = 'bg-slate-50 text-slate-700 border-slate-200';
-        return `px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[role] || defaultStyle}`;
+        return `px-2.5 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeStyle(role)}`;
     };
 
     if (!user) return null;
@@ -157,9 +148,8 @@ const Users = () => {
                                 <option value="admin">Admin</option>
                                 <option value="teacher">Teacher</option>
                                 <option value="student">Student</option>
-                                <option value="fee_collector">Fee Collector</option>
-                                <option value="bus_staff">Bus Staff</option>
-                                <option value="accountant">Accountant</option>
+                                <option value="cashier">Cashier</option>
+                                <option value="busstaff">Bus Staff</option>
                                 <option value="super_admin">Super Admin</option>
                             </select>
                         </div>
@@ -302,9 +292,8 @@ const Users = () => {
                                         <option value="admin">Admin</option>
                                         <option value="teacher">Teacher</option>
                                         <option value="student">Student</option>
-                                        <option value="fee_collector">Fee Collector</option>
-                                        <option value="bus_staff">Bus Staff</option>
-                                        <option value="accountant">Accountant</option>
+                                        <option value="cashier">Cashier</option>
+                                        <option value="busstaff">Bus Staff</option>
                                         <option value="super_admin">Super Admin</option>
                                     </select>
                                 </div>

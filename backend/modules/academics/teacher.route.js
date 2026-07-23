@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../../config/db');
 const { verifyToken } = require('../../middleware/auth');
+const { authorize } = require('../../middleware/rbac');
 const { attachTeacherContext } = require('../../middleware/teacherContext');
+const { ROLES } = require('../../config/constants');
 
-router.get('/classes', verifyToken, attachTeacherContext, async (req, res) => {
+router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherContext, async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT sec.id AS section_id, c.id AS class_id, c.name AS class_name, sec.name AS section_name,
@@ -32,7 +34,7 @@ router.get('/classes', verifyToken, attachTeacherContext, async (req, res) => {
   }
 });
 
-router.get('/classes/:classId/students', verifyToken, async (req, res) => {
+router.get('/classes/:classId/students', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   try {
     const { classId } = req.params;
     const [rows] = await pool.query(`
@@ -50,7 +52,7 @@ router.get('/classes/:classId/students', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/my-timetable', verifyToken, async (req, res) => {
+router.get('/my-timetable', verifyToken, authorize(ROLES.TEACHER), async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT t.id, t.day_of_week, t.period_no, t.start_time, t.end_time,

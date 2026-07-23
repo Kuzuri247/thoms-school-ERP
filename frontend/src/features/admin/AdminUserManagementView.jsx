@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGetUsers, useCreateUser } from './useAdmin';
+import { getRoleBadgeStyle as getBadgeStyle } from '../../utils/roleUtils';
 import { Users, UserPlus, Shield, Search, CheckCircle, Trash2, Mail, Lock, Sparkles, ChevronRight } from 'lucide-react';
 
 const AdminUserManagementView = ({ initialTab = 'all' }) => {
@@ -63,13 +64,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
   });
 
   const getRoleBadgeStyle = (userRole = '') => {
-    const norm = userRole.toLowerCase();
-    if (norm.includes('admin')) return 'bg-purple-50 text-purple-700 border-purple-200/80';
-    if (norm.includes('teacher')) return 'bg-amber-50 text-amber-700 border-amber-200/80';
-    if (norm.includes('student')) return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
-    if (norm.includes('fees')) return 'bg-blue-50 text-blue-700 border-blue-200/80';
-    if (norm.includes('accountant')) return 'bg-teal-50 text-teal-700 border-teal-200/80';
-    return 'bg-slate-100 text-slate-700 border-slate-200';
+    return getBadgeStyle(userRole);
   };
 
   const tabs = [

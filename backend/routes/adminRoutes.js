@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const { verifyToken, isSuperAdmin } = require('../middleware/auth');
+const { authorize } = require('../middleware/rbac');
+const { ROLES } = require('../config/constants');
 const pool = require('../config/db');
 
 router.post('/users', [verifyToken, isSuperAdmin], async (req, res) => {
@@ -91,8 +93,8 @@ router.post('/settings', [verifyToken, isSuperAdmin], async (req, res) => {
     }
 });
 
-// Get student attendance for a date
-router.get('/attendance', [verifyToken], async (req, res) => {
+// Get student attendance for a date (Admin / Super Admin)
+router.get('/attendance', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     const { date } = req.query;
     try {
         if (!date) return res.status(400).json({ error: 'Date query parameter is required' });
@@ -170,8 +172,8 @@ router.get('/stats', [verifyToken], async (req, res) => {
     }
 });
 
-// Get all classes and sections
-router.get('/classes', [verifyToken], async (req, res) => {
+// Get all classes and sections (Admin / Super Admin)
+router.get('/classes', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
         const [rows] = await pool.query(`
             SELECT c.id AS class_id, c.name AS class_name, c.numeric_value,
@@ -186,8 +188,8 @@ router.get('/classes', [verifyToken], async (req, res) => {
     }
 });
 
-// Get students for a specific class or section
-router.get('/classes/:classId/students', [verifyToken], async (req, res) => {
+// Get students for a specific class or section (Admin / Super Admin)
+router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
         const { classId } = req.params;
         const [rows] = await pool.query(`

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import { getRoleHomePath } from '../utils/roleUtils';
 import { Mail, Lock, AlertCircle, ArrowRight, GraduationCap, Sparkles, Shield, User, CreditCard, Crown } from 'lucide-react';
 
 const Login = () => {
@@ -20,20 +21,8 @@ const Login = () => {
   ];
 
   const redirectUserByRole = (userRole) => {
-    const role = userRole?.toLowerCase()?.replace(/\s+/g, '_');
-    if (role === 'super_admin') {
-      navigate('/dashboard');
-    } else if (role === 'admin') {
-      navigate('/admin/dashboard');
-    } else if (role === 'cashier' || role === 'fees_collector' || role === 'accountant') {
-      navigate('/finance/dashboard');
-    } else if (role === 'teacher') {
-      navigate('/teacher/dashboard');
-    } else if (role === 'student') {
-      navigate('/student/dashboard');
-    } else {
-      navigate('/dashboard');
-    }
+    const targetPath = getRoleHomePath({ role: userRole });
+    navigate(targetPath);
   };
 
   const handleQuickFill = (acc) => {
