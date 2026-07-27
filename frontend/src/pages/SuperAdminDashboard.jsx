@@ -20,7 +20,8 @@ import {
   FileText,
   X,
   Send,
-  Megaphone
+  Megaphone,
+  Calendar
 } from 'lucide-react';
 
 const StatCard = ({ title, value, icon: Icon, colorClass, trend }) => (
@@ -113,12 +114,24 @@ const SuperAdminDashboard = () => {
           </div>
           <p className="text-indigo-200 font-medium text-sm mt-1">Here is live platform status and statistics for Thomson School.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={() => navigate('/academic/calendar')}
+            className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-2xl font-bold text-xs hover:bg-white/20 transition-colors flex items-center gap-2 cursor-pointer"
+          >
+            <Calendar className="w-4 h-4" /> Academic Calendar
+          </button>
+          <button
+            onClick={() => navigate('/admin/classes')}
+            className="bg-white text-indigo-900 px-4 py-2.5 rounded-2xl font-bold text-xs hover:bg-indigo-50 transition-colors shadow-lg flex items-center gap-2 cursor-pointer"
+          >
+            <GraduationCap className="w-4 h-4" /> Standards & Student Directory
+          </button>
           <button
             onClick={() => navigate('/admin/users')}
-            className="bg-white text-indigo-900 px-5 py-3 rounded-2xl font-bold text-sm hover:bg-indigo-50 transition-colors shadow-lg flex items-center gap-2"
+            className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-2xl font-bold text-xs hover:bg-white/20 transition-colors flex items-center gap-2 cursor-pointer"
           >
-            <UserPlus className="w-4 h-4" /> User Directory
+            <UserPlus className="w-4 h-4" /> Staff & User Directory
           </button>
         </div>
       </div>
@@ -165,8 +178,8 @@ const SuperAdminDashboard = () => {
                   />
                   <QuickAccessCard
                     onClick={() => navigate('/admin/classes')}
-                    title="Class Directory" desc="Standards & Enrolled Roster"
-                    icon={GraduationCap} colorClass="bg-purple-50 text-purple-700 hover:bg-purple-100"
+                    title="Standards & Student Directory" desc="Classes, Sections & Student Roster"
+                    icon={GraduationCap} colorClass="bg-purple-50 text-purple-700 hover:bg-purple-100 shadow-xs"
                   />
                   <QuickAccessCard
                     onClick={() => navigate('/finance/dashboard')}

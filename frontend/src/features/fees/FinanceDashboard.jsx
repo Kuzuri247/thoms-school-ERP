@@ -19,7 +19,10 @@ import {
   ArrowUpRight,
   ShieldCheck,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Bus,
+  Search,
+  MapPin
 } from 'lucide-react';
 
 const FinanceDashboard = () => {
@@ -37,6 +40,49 @@ const FinanceDashboard = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+
+  // Bus Transport Fee Desk State
+  const [busSearchQuery, setBusSearchQuery] = useState('');
+  const [selectedRouteFilter, setSelectedRouteFilter] = useState('All');
+
+  const mockBusAllocations = [
+    {
+      id: 'BUS-ALLOC-101',
+      studentId: '1001',
+      studentName: 'Aarav Sharma',
+      class: 'Class 10-A',
+      busNo: 'BUS-01 (PB-10-AB-1234)',
+      routeName: 'Route #1: Civil Lines - Model Town',
+      pickupStop: 'Clock Tower',
+      monthlyFare: 1400,
+      status: 'Paid',
+      dueDate: '2026-02-05'
+    },
+    {
+      id: 'BUS-ALLOC-102',
+      studentId: '1002',
+      studentName: 'Ananya Verma',
+      class: 'Class 10-A',
+      busNo: 'BUS-02 (PB-10-CD-5678)',
+      routeName: 'Route #2: Urban Estate - Cantt',
+      pickupStop: 'Urban Estate Phase 1 Gate',
+      monthlyFare: 1600,
+      status: 'Pending Due',
+      dueDate: '2026-02-10'
+    },
+    {
+      id: 'BUS-ALLOC-103',
+      studentId: '9001',
+      studentName: 'Rohan Gupta',
+      class: 'Class 9-B',
+      busNo: 'BUS-01 (PB-10-AB-1234)',
+      routeName: 'Route #1: Civil Lines - Model Town',
+      pickupStop: 'Model Town Main Market',
+      monthlyFare: 1200,
+      status: 'Pending Due',
+      dueDate: '2026-02-10'
+    }
+  ];
 
   // Queries
   const { data: pendingDuesData, isLoading: duesLoading } = useGetPendingDues();
@@ -81,6 +127,16 @@ const FinanceDashboard = () => {
 
   const pendingDues = pendingDuesData?.data || [];
 
+  const filteredBusAllocations = mockBusAllocations.filter(alloc => {
+    const matchesSearch =
+      alloc.studentName.toLowerCase().includes(busSearchQuery.toLowerCase()) ||
+      alloc.studentId.includes(busSearchQuery) ||
+      alloc.pickupStop.toLowerCase().includes(busSearchQuery.toLowerCase());
+
+    const matchesRoute = selectedRouteFilter === 'All' || alloc.routeName === selectedRouteFilter;
+    return matchesSearch && matchesRoute;
+  });
+
   return (
     <div className="space-y-6">
       {/* View Header */}
@@ -109,12 +165,13 @@ const FinanceDashboard = () => {
         {[
           { id: 'collection', label: 'Payment Intake', icon: DollarSign },
           { id: 'dues', label: 'Pending Dues Queue', icon: Receipt },
+          { id: 'bus_fees', label: 'Buses & Transport Fee Desk', icon: Bus },
           ...(isSuperAdmin ? [{ id: 'reports', label: 'Global KPI Aggregate', icon: PieChart }] : []),
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === tab.id
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
@@ -326,6 +383,128 @@ const FinanceDashboard = () => {
                     </td>
                   </tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* --- Buses & Transport Fee Desk Tab --- */}
+      {activeTab === 'bus_fees' && (
+        <div className="space-y-6 animate-in fade-in duration-300">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-5 bg-gradient-to-br from-indigo-50 to-white rounded-3xl border border-indigo-100 shadow-xs">
+              <span className="text-[10px] font-extrabold uppercase text-indigo-500 tracking-wider block">Total Fleet Capacity</span>
+              <span className="text-2xl font-black text-slate-900">45 Seats / Bus</span>
+              <span className="text-xs text-slate-500 font-bold block mt-1">3 Active Bus Routes</span>
+            </div>
+            <div className="p-5 bg-gradient-to-br from-emerald-50 to-white rounded-3xl border border-emerald-100 shadow-xs">
+              <span className="text-[10px] font-extrabold uppercase text-emerald-600 tracking-wider block">Collected Bus Fares</span>
+              <span className="text-2xl font-black text-emerald-700">₹ 1,42,000</span>
+              <span className="text-xs text-emerald-600 font-bold block mt-1">Current Academic Month</span>
+            </div>
+            <div className="p-5 bg-gradient-to-br from-amber-50 to-white rounded-3xl border border-amber-100 shadow-xs">
+              <span className="text-[10px] font-extrabold uppercase text-amber-600 tracking-wider block">Pending Bus Dues</span>
+              <span className="text-2xl font-black text-amber-700">₹ 42,000</span>
+              <span className="text-xs text-amber-600 font-bold block mt-1">2 Student Dues Outstanding</span>
+            </div>
+          </div>
+
+          {/* Search & Route Filters */}
+          <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row gap-4 justify-between items-center">
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <div className="relative min-w-[240px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search Student, Bus Stop, Admission..."
+                  value={busSearchQuery}
+                  onChange={(e) => setBusSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-500">Route:</span>
+                <select
+                  value={selectedRouteFilter}
+                  onChange={(e) => setSelectedRouteFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none"
+                >
+                  <option value="All">All Bus Routes</option>
+                  <option value="Route #1: Civil Lines - Model Town">Route #1: Civil Lines - Model Town</option>
+                  <option value="Route #2: Urban Estate - Cantt">Route #2: Urban Estate - Cantt</option>
+                </select>
+              </div>
+            </div>
+
+            <span className="text-xs font-black text-slate-500">
+              Showing {filteredBusAllocations.length} Transport Students
+            </span>
+          </div>
+
+          {/* Bus Transport Allocation Table */}
+          <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4">Student Name</th>
+                  <th className="py-3 px-4">Class / Sec</th>
+                  <th className="py-3 px-4">Assigned Bus</th>
+                  <th className="py-3 px-4">Route & Pickup Stop</th>
+                  <th className="py-3 px-4">Monthly Fare</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Collect Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
+                {filteredBusAllocations.map((alloc) => (
+                  <tr key={alloc.id} className="hover:bg-slate-50/80">
+                    <td className="py-3 px-4 font-bold text-slate-900">
+                      {alloc.studentName}
+                      <span className="block text-[10px] text-slate-400 font-mono">ID: {alloc.studentId}</span>
+                    </td>
+                    <td className="py-3 px-4">{alloc.class}</td>
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black border border-indigo-100">
+                        {alloc.busNo}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="font-bold text-slate-900 block">{alloc.pickupStop}</span>
+                      <span className="text-[10px] text-slate-500">{alloc.routeName}</span>
+                    </td>
+                    <td className="py-3 px-4 font-black text-indigo-700">₹ {alloc.monthlyFare.toLocaleString()} / mo</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                        alloc.status === 'Paid' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+                      }`}>
+                        {alloc.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {alloc.status === 'Paid' ? (
+                        <span className="text-xs text-emerald-600 font-bold flex items-center justify-end gap-1">
+                          <CheckCircle className="w-3.5 h-3.5" /> Cleared
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setStudentId(alloc.studentId);
+                            setStudentName(alloc.studentName);
+                            setFeeType('Transport Fee');
+                            setAmount(String(alloc.monthlyFare));
+                            setActiveTab('collection');
+                          }}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-end gap-1.5 ml-auto cursor-pointer"
+                        >
+                          <DollarSign className="w-3.5 h-3.5" /> Collect Transport Fee
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
