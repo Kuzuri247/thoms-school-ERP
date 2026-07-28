@@ -98,8 +98,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
     if (!matchesSearch) return false;
 
     if (activeTab === 'teachers') return u.role === 'teacher';
-    if (activeTab === 'students') return u.role === 'student';
-    if (activeTab === 'staff') return !['teacher', 'student', 'admin', 'super_admin'].includes(u.role);
+    if (activeTab === 'staff') return !['teacher', 'admin', 'super_admin'].includes(u.role);
     if (activeTab === 'admins') return ['admin', 'super_admin'].includes(u.role);
     return true; // 'all'
   });
@@ -111,7 +110,6 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
   const tabs = [
     { id: 'all', label: 'All Users' },
     { id: 'teachers', label: 'Teachers' },
-    { id: 'students', label: 'Students' },
     { id: 'staff', label: 'Other Staff' },
     { id: 'admins', label: 'Admins' },
   ];
@@ -298,9 +296,6 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
                     <option value="teacher">Teacher</option>
                     <option value="admin">Admin</option>
                     <option value="cashier">Cashier / Fee Desk</option>
-                    <option value="busstaff">Bus Staff / Driver</option>
-                    <option value="staff">Non-Teaching Staff (Librarian / Lab / Guard)</option>
-                    <option value="student">Student</option>
                   </select>
                 </div>
 

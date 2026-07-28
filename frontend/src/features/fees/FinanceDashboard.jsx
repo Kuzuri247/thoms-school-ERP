@@ -166,7 +166,6 @@ const FinanceDashboard = () => {
           { id: 'collection', label: 'Payment Intake', icon: DollarSign },
           { id: 'dues', label: 'Pending Dues Queue', icon: Receipt },
           { id: 'bus_fees', label: 'Buses & Transport Fee Desk', icon: Bus },
-          ...(isSuperAdmin ? [{ id: 'reports', label: 'Global KPI Aggregate', icon: PieChart }] : []),
         ].map((tab) => (
           <button
             key={tab.id}
@@ -507,39 +506,6 @@ const FinanceDashboard = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* --- Global KPI Reports Tab (Super Admin ONLY) --- */}
-      {activeTab === 'reports' && isSuperAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 animate-in fade-in duration-300">
-          <div className="bg-gradient-to-br from-emerald-500/10 via-slate-50 to-slate-50 p-5 rounded-2xl border border-emerald-200/60 space-y-2">
-            <div className="flex justify-between items-center text-slate-500">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Total Collection</span>
-              <div className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg">
-                <DollarSign className="w-4 h-4" />
-              </div>
-            </div>
-            <h3 className="text-2xl font-black text-slate-900 tracking-tight">
-              ₹{(totalCollectionData?.total_collection || 0).toLocaleString()}
-            </h3>
-            <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> Total School Fee Inflow
-            </span>
-          </div>
-
-          <div className="bg-gradient-to-br from-indigo-500/10 via-slate-50 to-slate-50 p-5 rounded-2xl border border-indigo-200/60 space-y-2">
-            <div className="flex justify-between items-center text-slate-500">
-              <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Total Students</span>
-              <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
-                <PieChart className="w-4 h-4" />
-              </div>
-            </div>
-            <h3 className="text-2xl font-black text-slate-900 tracking-tight">{overviewData?.data?.totalStudents || 0}</h3>
-            <span className="text-xs text-indigo-600 font-bold flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Active Enrollment
-            </span>
           </div>
         </div>
       )}

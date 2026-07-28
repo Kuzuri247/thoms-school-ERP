@@ -369,7 +369,6 @@ const Noticeboard = () => {
                     <option value="student">Student</option>
                     <option value="teacher">Teacher</option>
                     <option value="cashier">Cashier</option>
-                    <option value="busstaff">Bus Staff</option>
                   </select>
                 </div>
 
