@@ -18,7 +18,6 @@ const Login = () => {
     { role: 'Teacher', email: 'teacher1@erp.com', pass: 'password123', targetRole: 'teacher', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
     { role: 'Student', email: 'student1@erp.com', pass: 'password123', targetRole: 'student', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { role: 'Cashier', email: 'cashier1@erp.com', pass: 'password123', targetRole: 'cashier', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
-    { role: 'Bus Staff', email: 'busstaff1@erp.com', pass: 'password123', targetRole: 'busstaff', icon: Bus, color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
   ];
 
   const redirectUserByRole = (userRole) => {

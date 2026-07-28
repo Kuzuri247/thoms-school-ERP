@@ -16,15 +16,11 @@ import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
 import UserProfileView from './features/users/UserProfileView';
 import Noticeboard from './features/noticeboard/Noticeboard';
 import AcademicCalendarView from './features/academics/AcademicCalendarView';
-import HomeworkManagementView from './features/academics/HomeworkManagementView';
 import ExamResultsView from './features/academics/ExamResultsView';
 import CommunicationCenterView from './features/communication/CommunicationCenterView';
 import SystemSettingsView from './features/admin/SystemSettingsView';
 import TransportManagementView from './features/transport/TransportManagementView';
-import StudentInformationView from './features/students/StudentInformationView';
 import FinancialReportsView from './features/reports/FinancialReportsView';
-import DownloadCenterView from './features/downloads/DownloadCenterView';
-import CertificateDeskView from './features/certificates/CertificateDeskView';
 
 function App() {
   return (
@@ -59,15 +55,10 @@ function App() {
       {/* Dynamic RBAC Shell */}
       <Route element={<ProtectedRoute allowedRoles={['*']} />}>
         <Route element={<Layout />}>
+          <Route path="/profile" element={<UserProfileView />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
           <Route path="/academic/calendar" element={<AcademicCalendarView />} />
-          <Route path="/academic/homework" element={<HomeworkManagementView />} />
           <Route path="/academic/examinations" element={<ExamResultsView />} />
-          <Route path="/communication/center" element={<CommunicationCenterView />} />
-          <Route path="/transport/management" element={<TransportManagementView />} />
-          <Route path="/students/directory" element={<StudentInformationView />} />
-          <Route path="/academic/downloads" element={<DownloadCenterView />} />
-          <Route path="/academic/certificates" element={<CertificateDeskView />} />
 
           {/* Super Admin Exclusive Route */}
           <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
@@ -81,6 +72,8 @@ function App() {
             <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
             <Route path="/admin/notices" element={<Noticeboard />} />
             <Route path="/admin/settings" element={<SystemSettingsView />} />
+            <Route path="/communication/center" element={<CommunicationCenterView />} />
+            <Route path="/transport/management" element={<TransportManagementView />} />
           </Route>
 
           {/* Teacher Suite Routes (Strictly Teacher, Admin, Super Admin) */}
@@ -89,7 +82,6 @@ function App() {
             <Route path="/teacher/attendance" element={<TeacherDashboard activeTab="attendance" />} />
             <Route path="/teacher/academics" element={<TeacherDashboard activeTab="exams" />} />
             <Route path="/teacher/timetable" element={<TeacherDashboard activeTab="timetable" />} />
-            <Route path="/teacher/homework" element={<TeacherDashboard activeTab="homework" />} />
           </Route>
 
           {/* Student Portal Routes (Strictly Student, Admin, Super Admin) */}

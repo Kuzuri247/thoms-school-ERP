@@ -4,7 +4,6 @@ const ROLES = {
   ADMIN: 'admin',
   CASHIER: 'cashier',
   TEACHER: 'teacher',
-  BUSSTAFF: 'busstaff',
   STUDENT: 'student',
 };
 

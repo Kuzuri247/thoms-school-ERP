@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -17,98 +18,89 @@ import {
   AlertCircle
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
+import { isAdmin as checkIsAdmin, isSuperAdmin as checkIsSuperAdmin } from '../../utils/roleUtils';
 
-// Initial Mock Academic Events & Notices
-const INITIAL_EVENTS = [
-  {
-    id: 1,
-    title: 'Parent-Teacher Meeting (PTM)',
-    date: '2026-02-10',
-    category: 'notice',
-    categoryLabel: 'Important Notice',
-    target: 'All Classes',
-    time: '09:00 AM - 01:00 PM',
-    description: 'Mandatory PTM for term evaluation and academic progress review. Parents are requested to attend.',
-    badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
-    dotColor: 'bg-amber-500'
-  },
-  {
-    id: 2,
-    title: 'Mid-Term Board Examination Starts',
-    date: '2026-02-15',
-    category: 'exam',
-    categoryLabel: 'Exam & Test',
-    target: 'Class 9th to 12th',
-    time: '08:30 AM - 11:30 AM',
-    description: 'Commencement of CBSE pattern mid-term written examinations. Admit cards required.',
-    badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
-    dotColor: 'bg-rose-500'
-  },
-  {
-    id: 3,
-    title: 'National Science Exhibition Day',
-    date: '2026-02-28',
-    category: 'event',
-    categoryLabel: 'School Event',
-    target: 'All Students & Staff',
-    time: '10:00 AM - 04:00 PM',
-    description: 'Annual inter-school science fair and robotics project showcase in Main Auditorium.',
-    badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-    dotColor: 'bg-indigo-500'
-  },
-  {
-    id: 4,
-    title: 'Maha Shivratri Holiday',
-    date: '2026-03-08',
-    category: 'holiday',
-    categoryLabel: 'School Holiday',
-    target: 'School Closed',
-    time: 'All Day',
-    description: 'School remains closed on account of Maha Shivratri festival.',
-    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    dotColor: 'bg-emerald-500'
-  },
-  {
-    id: 5,
-    title: 'Annual Sports & Athletics Meet',
-    date: '2026-03-15',
-    category: 'event',
-    categoryLabel: 'School Event',
-    target: 'All Students',
-    time: '08:00 AM - 02:00 PM',
-    description: 'Track and field competition, march past, and trophy ceremony at Thomson Stadium.',
-    badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-    dotColor: 'bg-indigo-500'
-  },
-  {
-    id: 6,
-    title: 'Holi Festival Holiday',
-    date: '2026-03-25',
-    category: 'holiday',
-    categoryLabel: 'School Holiday',
-    target: 'School Closed',
-    time: 'All Day',
-    description: 'Official holiday for Holi celebrations.',
-    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    dotColor: 'bg-emerald-500'
-  }
-];
+const toLocalDateStr = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const todayStr = toLocalDateStr();
 
 const AcademicCalendarView = () => {
   const { user } = useAuthStore();
-  const isAuthorized = user?.role === 'super_admin' || user?.role === 'admin';
+  const location = useLocation();
+  const isAuthorized = checkIsAdmin(user) || checkIsSuperAdmin(user);
 
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1)); // February 2026 default
-  const [selectedDateStr, setSelectedDateStr] = useState('2026-02-10');
-  const [events, setEvents] = useState(INITIAL_EVENTS);
+  const [currentDate, setCurrentDate] = useState(new Date()); 
+  const [selectedDateStr, setSelectedDateStr] = useState(todayStr);
+  const [events, setEvents] = useState([]);
   const [filterCategory, setFilterCategory] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [formSuccess, setFormSuccess] = useState('');
+  const [formError, setFormError] = useState('');
+  const [fetchError, setFetchError] = useState('');
+
+  useEffect(() => {
+    if (location.state?.selectedDate) {
+      const dateVal = location.state.selectedDate;
+      setSelectedDateStr(dateVal);
+      if (typeof dateVal === 'string' && dateVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [y, m, d] = dateVal.split('-').map(Number);
+        setCurrentDate(new Date(y, m - 1, d));
+      } else {
+        const parsed = new Date(dateVal);
+        if (!isNaN(parsed.getTime())) {
+          setCurrentDate(parsed);
+        }
+      }
+    }
+  }, [location.state]);
+
+  React.useEffect(() => {
+    import('../../api/axios').then(({ default: api }) => {
+      api.get('/notices')
+        .then((res) => {
+          if (res.data?.data && Array.isArray(res.data.data)) {
+            const fetched = res.data.data.map((n, idx) => {
+              const category = n.notice_type === 'exam' ? 'exam' : (n.notice_type === 'holiday' ? 'holiday' : 'notice');
+              const badgeColor = category === 'exam' 
+                ? 'bg-rose-100 text-rose-800 border-rose-300' 
+                : (category === 'holiday' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-800 border-amber-300');
+              const dotColor = category === 'exam' ? 'bg-rose-500' : (category === 'holiday' ? 'bg-emerald-500' : 'bg-amber-500');
+              return {
+                id: n.id || `api-${idx}`,
+                title: n.title,
+                date: n.publish_date ? n.publish_date.split('T')[0] : todayStr,
+                category,
+                categoryLabel: category === 'exam' ? 'Exam & Test' : (category === 'holiday' ? 'School Holiday' : 'Notice Board'),
+                target: n.target_role ? `Role: ${n.target_role}` : 'All Classes',
+                time: 'All Day',
+                description: n.content || n.title,
+                badgeColor,
+                dotColor
+              };
+            });
+            setEvents(prev => {
+              const existingIds = new Set(prev.map(e => String(e.id)));
+              const uniqueFetched = fetched.filter(f => !existingIds.has(String(f.id)));
+              return [...uniqueFetched, ...prev];
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch calendar notices:', err);
+          setFetchError('Unable to load calendar notices from server.');
+        });
+    });
+  }, []);
 
   // New Event Form State
   const [newEvent, setNewEvent] = useState({
     title: '',
-    date: '2026-02-18',
+    date: todayStr,
     category: 'notice',
     target: 'All Classes',
     time: '09:00 AM - 12:00 PM',
@@ -135,9 +127,15 @@ const AcademicCalendarView = () => {
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
-  const handleAddEvent = (e) => {
+  const handleAddEvent = async (e) => {
     e.preventDefault();
+    setFormError('');
     if (!newEvent.title.trim() || !newEvent.date) return;
+
+    if (newEvent.date < todayStr) {
+      setFormError('Events can only be scheduled for today or future dates.');
+      return;
+    }
 
     let badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
     let dotColor = 'bg-amber-500';
@@ -167,17 +165,39 @@ const AcademicCalendarView = () => {
 
     setEvents(prev => [created, ...prev]);
     setSelectedDateStr(newEvent.date);
-    setShowAddModal(false);
-    setFormSuccess(`Event "${newEvent.title}" added to Academic Calendar!`);
-    setNewEvent({
-      title: '',
-      date: '2026-02-18',
-      category: 'notice',
-      target: 'All Classes',
-      time: '09:00 AM - 12:00 PM',
-      description: ''
-    });
-    setTimeout(() => setFormSuccess(''), 3000);
+
+    // Push notice to Notice Board API
+    try {
+      const { default: api } = await import('../../api/axios');
+      const res = await api.post('/notices', {
+        title: `[Calendar Event] ${newEvent.title}`,
+        content: `${newEvent.description || newEvent.title} (Scheduled: ${newEvent.date} ${newEvent.time})`,
+        notice_type: newEvent.category === 'exam' ? 'exam' : 'general',
+        type: 'global',
+        publish_date: newEvent.date,
+        is_published: 1
+      });
+
+      if (res.data?.success) {
+        setShowAddModal(false);
+        setFormSuccess(`Event "${newEvent.title}" posted to Academic Calendar & pushed to Notice Board!`);
+        setNewEvent({
+          title: '',
+          date: todayStr,
+          category: 'notice',
+          target: 'All Classes',
+          time: '09:00 AM - 12:00 PM',
+          description: ''
+        });
+        setTimeout(() => setFormSuccess(''), 4000);
+      } else {
+        setEvents(prev => prev.filter(ev => ev.id !== created.id));
+        setFormError(res.data?.message || 'Failed to post event to server.');
+      }
+    } catch (err) {
+      setEvents(prev => prev.filter(ev => ev.id !== created.id));
+      setFormError(err.response?.data?.message || 'Failed to post event. Please try again.');
+    }
   };
 
   // Helper to format date string YYYY-MM-DD
@@ -251,8 +271,12 @@ const AcademicCalendarView = () => {
           </div>
 
           <button
-            onClick={() => setCurrentDate(new Date(2026, 1, 1))}
-            className="px-3 py-2 bg-white text-slate-700 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 transition cursor-pointer"
+            onClick={() => {
+              const now = new Date();
+              setCurrentDate(now);
+              setSelectedDateStr(now.toISOString().split('T')[0]);
+            }}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
           >
             Today
           </button>
@@ -308,6 +332,7 @@ const AcademicCalendarView = () => {
               const dateStr = formatDateString(year, month, dayNum);
               const dayEvents = filteredEvents.filter(ev => ev.date === dateStr);
               const isSelected = selectedDateStr === dateStr;
+              const isToday = dateStr === todayStr;
 
               return (
                 <div
@@ -315,15 +340,23 @@ const AcademicCalendarView = () => {
                   onClick={() => setSelectedDateStr(dateStr)}
                   className={`h-24 p-2 rounded-2xl border transition flex flex-col justify-between cursor-pointer group ${
                     isSelected
-                      ? 'bg-indigo-50/80 border-indigo-500 ring-2 ring-indigo-500/20 shadow-sm'
+                      ? 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-500/30 shadow-sm'
+                      : isToday
+                      ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-400/40 shadow-xs'
                       : dayEvents.length > 0
                       ? 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm'
                       : 'bg-white border-slate-100 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex justify-between items-center">
-                    <span className={`text-xs font-black ${isSelected ? 'text-indigo-600' : 'text-slate-800'}`}>
-                      {dayNum}
+                    <span className={`text-xs font-black px-1.5 py-0.5 rounded-md ${
+                      isToday 
+                        ? 'bg-amber-500 text-white shadow-xs font-black' 
+                        : isSelected 
+                        ? 'text-indigo-600' 
+                        : 'text-slate-800'
+                    }`}>
+                      {dayNum} {isToday && <span className="text-[8px] uppercase tracking-tighter ml-0.5">Today</span>}
                     </span>
                     {dayEvents.length > 0 && (
                       <span className="text-[10px] font-extrabold px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded-full">
@@ -454,6 +487,7 @@ const AcademicCalendarView = () => {
                   <input
                     type="date"
                     required
+                    min={todayStr}
                     value={newEvent.date}
                     onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-bold text-slate-800"

@@ -12,7 +12,6 @@ import {
   Plus,
   Send,
   Calendar as CalendarIcon,
-  BookText,
   Save,
   Check,
   AlertCircle
@@ -36,15 +35,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [savingAttendance, setSavingAttendance] = useState(false);
 
-  // Homework state
-  const [homeworkList, setHomeworkList] = useState([]);
-  const [homeworkForm, setHomeworkForm] = useState({
-    title: '',
-    description: '',
-    due_date: '',
-  });
-  const [assigningHomework, setAssigningHomework] = useState(false);
-
   // Exam Marks state
   const [selectedExam, setSelectedExam] = useState('1'); // Exam ID 1 (Mid Term)
   const [marksData, setMarksData] = useState({}); // { student_id: mark }
@@ -61,9 +51,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
       fetchClassStudents(selectedClass.id || selectedClass.section_id);
       if (selectedClass.is_class_teacher && selectedClass.section_id) {
         fetchAttendanceCalendar(selectedClass.section_id);
-      }
-      if (selectedClass.section_id) {
-        fetchSectionHomework(selectedClass.section_id);
       }
     }
   }, [selectedClass]);
@@ -156,29 +143,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
     }
   };
 
-  const handleAssignHomework = async (e) => {
-    e.preventDefault();
-    if (!selectedClass?.section_id || !homeworkForm.title || !homeworkForm.due_date) return;
-    try {
-      setAssigningHomework(true);
-      await api.post('/homework', {
-        section_id: selectedClass.section_id,
-        subject_id: selectedClass.subject_id,
-        title: homeworkForm.title,
-        description: homeworkForm.description,
-        due_date: homeworkForm.due_date,
-      });
 
-      setMessage('Homework assigned successfully!');
-      setTimeout(() => setMessage(''), 3000);
-      setHomeworkForm({ title: '', description: '', due_date: '' });
-      fetchSectionHomework(selectedClass.section_id);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to assign homework');
-    } finally {
-      setAssigningHomework(false);
-    }
-  };
 
   const handleSaveMarks = async () => {
     if (!selectedClass?.subject_id) {
@@ -279,7 +244,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
                 { id: 'overview', label: 'Overview', icon: BookOpen },
                 { id: 'timetable', label: 'My Timetable', icon: Clock },
                 { id: 'attendance', label: 'Attendance', icon: CalendarDays },
-                { id: 'homework', label: 'Homework', icon: BookText },
                 { id: 'exams', label: 'Exam Marks', icon: Award },
               ].map((tab) => {
                 const IconComp = tab.icon;
@@ -529,92 +493,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
                 </div>
               )}
 
-              {/* --- Homework Tab --- */}
-              {activeTab === 'homework' && (
-                <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-900">Assign Homework / Coursework</h2>
-                      <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Attach assignments to {selectedClass?.name} ({selectedClass?.subject}).
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Assign Homework Form */}
-                  <form onSubmit={handleAssignHomework} className="bg-slate-50 p-5 rounded-2xl border border-slate-200/80 space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Homework Title *</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Read Chapter 5 and answer exercises 1-10"
-                        className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-teal-500"
-                        value={homeworkForm.title}
-                        onChange={(e) => setHomeworkForm({ ...homeworkForm, title: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Due Date *</label>
-                        <input
-                          type="date"
-                          required
-                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-teal-500"
-                          value={homeworkForm.due_date}
-                          onChange={(e) => setHomeworkForm({ ...homeworkForm, due_date: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Instructions / Description</label>
-                        <input
-                          type="text"
-                          placeholder="Optional extra guidelines"
-                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-teal-500"
-                          value={homeworkForm.description}
-                          onChange={(e) => setHomeworkForm({ ...homeworkForm, description: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={assigningHomework}
-                        className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2"
-                      >
-                        <Send className="w-4 h-4" />
-                        {assigningHomework ? 'Assigning...' : 'Assign Work'}
-                      </button>
-                    </div>
-                  </form>
-
-                  {/* Assigned Homework List */}
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-extrabold text-slate-900">Recently Assigned Work</h3>
-                    <div className="space-y-3">
-                      {homeworkList.length === 0 ? (
-                        <p className="text-xs text-slate-400 font-medium italic">No homework assigned yet for this section.</p>
-                      ) : (
-                        homeworkList.map((hw) => (
-                          <div key={hw.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900">{hw.title}</span>
-                              <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                                Due: {hw.due_date ? new Date(hw.due_date).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                            {hw.description && <p className="text-xs text-slate-600 font-medium">{hw.description}</p>}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* --- Exam Marks Spreadsheet Tab --- */}
+              {/* --- Exam Marks Tab --- */}
               {activeTab === 'exams' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
