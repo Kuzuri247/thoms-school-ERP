@@ -22,12 +22,27 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const originalRequest = error.config;
     if (
       error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
       window.location.pathname !== '/' &&
       window.location.pathname !== '/login'
     ) {
-      localStorage.removeItem('token');
+      originalRequest._retry = true;
+      try {
+        const refreshUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/refresh';
+        const res = await axios.post(refreshUrl, {}, { withCredentials: true });
+        const newToken = res.data?.accessToken || res.data?.data?.accessToken;
+        if (newToken) {
+          localStorage.setItem('token', newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        }
+      } catch (refreshErr) {
+        localStorage.removeItem('token');
+      }
     }
     return Promise.reject(error);
   }

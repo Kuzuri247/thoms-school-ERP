@@ -98,7 +98,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
     if (!matchesSearch) return false;
 
     if (activeTab === 'teachers') return u.role === 'teacher';
-    if (activeTab === 'staff') return !['teacher', 'admin', 'super_admin'].includes(u.role);
+    if (activeTab === 'staff') return !['teacher', 'admin', 'super_admin', 'student'].includes(u.role);
     if (activeTab === 'admins') return ['admin', 'super_admin'].includes(u.role);
     return true; // 'all'
   });

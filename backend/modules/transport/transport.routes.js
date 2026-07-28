@@ -87,8 +87,8 @@ router.get('/my-status', verifyToken, authorize(ROLES.STUDENT), async (req, res)
 });
 
 router.get('/my-route-students', verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
-  const [rows] = await pool.query(
-    `SELECT s.first_name, s.last_name, s.admission_no, ts.stop_name,
+  const { route_id } = req.query;
+  let sql = `SELECT s.first_name, s.last_name, s.admission_no, ts.stop_name,
             cl.name AS class_name, sec.name AS section_name
      FROM student_transport st
      JOIN students s ON st.student_id = s.id
@@ -96,9 +96,14 @@ router.get('/my-route-students', verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER
      JOIN transport_routes tr ON st.route_id = tr.id
      LEFT JOIN sections sec ON s.section_id = sec.id
      LEFT JOIN classes cl ON sec.class_id = cl.id
-     WHERE st.is_active = 1
-     ORDER BY ts.stop_order, s.first_name`
-  );
+     WHERE st.is_active = 1`;
+  const params = [];
+  if (route_id) {
+    sql += ` AND st.route_id = ?`;
+    params.push(route_id);
+  }
+  sql += ` ORDER BY ts.stop_order, s.first_name`;
+  const [rows] = await pool.query(sql, params);
   res.json({ success: true, data: rows });
 });
 

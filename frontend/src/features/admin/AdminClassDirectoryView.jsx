@@ -22,44 +22,8 @@ const AdminClassDirectoryView = () => {
   const [loading, setLoading] = useState(true);
 
   // Modals visibility
-  const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [showStudentDetailModal, setShowStudentDetailModal] = useState(null);
-
-  // Staff Form State
-  const [staffForm, setStaffForm] = useState({
-    full_name: '',
-    role: 'teacher',
-    email: '',
-    phone: '',
-    department: '',
-    profile_pic: ''
-  });
-
-  const handleAddStaffFrontend = (e) => {
-    e.preventDefault();
-    if (!staffForm.full_name.trim()) return;
-
-    setFormSuccess(`Staff member "${staffForm.full_name}" added successfully!`);
-    setShowAddStaffModal(false);
-    setStaffForm({
-      full_name: '',
-      role: 'teacher',
-      email: '',
-      phone: '',
-      department: '',
-      profile_pic: ''
-    });
-    setTimeout(() => setFormSuccess(''), 3000);
-  };
-
-  // Add Class Form State
-  const [newClassName, setNewClassName] = useState('');
-  const [newGradeValue, setNewGradeValue] = useState('');
-  const [newSectionName, setNewSectionName] = useState('A');
-  const [newCapacity, setNewCapacity] = useState('40');
-  const [newClassTeacher, setNewClassTeacher] = useState('');
 
   // Add Student Form State (Pure Frontend Design Ready)
   const [studentForm, setStudentForm] = useState({

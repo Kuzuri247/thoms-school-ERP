@@ -28,6 +28,7 @@ import {
   Check,
   Trash2,
   AlertCircle,
+  User,
 } from "lucide-react";
 import useAuthStore from "../store/authStore";
 import {
@@ -49,12 +50,16 @@ const Layout = () => {
 
   // Notification & Admin Message States
   const [notifications, setNotifications] = useState([]);
+  const [readNoticeIds, setReadNoticeIds] = useState(new Set());
+  const [dismissedNoticeIds, setDismissedNoticeIds] = useState(new Set());
   const [showNotificationDropdown, setShowNotificationDropdown] =
     useState(false);
   const [showAdminMsgModal, setShowAdminMsgModal] = useState(false);
   const [adminMsgSubject, setAdminMsgSubject] = useState("");
   const [adminMsgContent, setAdminMsgContent] = useState("");
   const [adminMsgSuccess, setAdminMsgSuccess] = useState("");
+  const [adminMsgError, setAdminMsgError] = useState("");
+  const subjectInputRef = useRef(null);
 
   const fetchNotices = React.useCallback(() => {
     import("../api/axios").then(({ default: api }) => {
@@ -62,21 +67,34 @@ const Layout = () => {
         .get("/notices")
         .then((res) => {
           if (res.data?.data && Array.isArray(res.data.data)) {
-            const fetchedNotices = res.data.data.map((n, idx) => ({
-              id: n.id || `notice-${idx}`,
-              title: n.title,
-              category:
-                n.notice_type === "exam" ? "Academic Calendar" : "Notice Board",
-              time: n.publish_date ? n.publish_date.split("T")[0] : "Recent",
-              unread: idx < 3,
-              type: n.notice_type === "exam" ? "calendar" : "notice",
-            }));
-            setNotifications(fetchedNotices);
+            setNotifications((prev) => {
+              const prevMap = new Map(prev.map((item) => [String(item.id), item]));
+              return res.data.data
+                .map((n, idx) => {
+                  const idStr = String(n.id || `notice-${idx}`);
+                  const prevItem = prevMap.get(idStr);
+                  const isReadLocally = readNoticeIds.has(idStr);
+                  const isRead = isReadLocally || (n.is_read !== undefined ? Boolean(n.is_read) : (prevItem ? !prevItem.unread : idx >= 3));
+
+                  return {
+                    id: n.id || `notice-${idx}`,
+                    title: n.title,
+                    category:
+                      n.notice_type === "exam" ? "Academic Calendar" : "Notice Board",
+                    time: n.publish_date ? n.publish_date.split("T")[0] : "Recent",
+                    unread: !isRead,
+                    type: n.notice_type === "exam" ? "calendar" : "notice",
+                  };
+                })
+                .filter((item) => !dismissedNoticeIds.has(String(item.id)));
+            });
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error("Failed to fetch notices:", err);
+        });
     });
-  }, []);
+  }, [readNoticeIds, dismissedNoticeIds]);
 
   // Fetch Live Notices on Mount or User Change
   React.useEffect(() => {
@@ -89,6 +107,18 @@ const Layout = () => {
       fetchNotices();
     }
   }, [showNotificationDropdown, fetchNotices]);
+
+  // Focus modal input and listen for Escape key
+  useEffect(() => {
+    if (showAdminMsgModal) {
+      subjectInputRef.current?.focus();
+      const handleKeyDown = (e) => {
+        if (e.key === "Escape") setShowAdminMsgModal(false);
+      };
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [showAdminMsgModal]);
 
   const dropdownRef = useRef(null);
 
@@ -114,14 +144,18 @@ const Layout = () => {
   const unreadCount = notifications.filter((n) => n.unread).length;
 
   const handleMarkAllRead = () => {
+    const allIds = new Set(notifications.map((n) => String(n.id)));
+    setReadNoticeIds((prev) => new Set([...prev, ...allIds]));
     setNotifications(notifications.map((n) => ({ ...n, unread: false })));
   };
 
   const handleDismissNotification = (id) => {
-    setNotifications(notifications.filter((n) => n.id !== id));
+    setDismissedNoticeIds((prev) => new Set(prev).add(String(id)));
+    setNotifications((prev) => prev.filter((n) => String(n.id) !== String(id)));
   };
 
   const handleNotificationClick = (n) => {
+    setReadNoticeIds((prev) => new Set(prev).add(String(n.id)));
     setNotifications(
       notifications.map((item) =>
         item.id === n.id ? { ...item, unread: false } : item
@@ -144,6 +178,7 @@ const Layout = () => {
   const handleSendAdminMessage = async (e) => {
     e.preventDefault();
     if (!adminMsgSubject.trim() || !adminMsgContent.trim()) return;
+    setAdminMsgError("");
 
     try {
       const { default: api } = await import("../api/axios");
@@ -158,18 +193,21 @@ const Layout = () => {
 
       if (res.data?.success) {
         fetchNotices();
+        setAdminMsgSuccess(
+          "Official School Notice broadcasted to all users successfully!",
+        );
+        setAdminMsgSubject("");
+        setAdminMsgContent("");
+        setShowAdminMsgModal(false);
+        setTimeout(() => setAdminMsgSuccess(""), 4000);
+      } else {
+        setAdminMsgError(res.data?.message || "Failed to broadcast notice.");
       }
     } catch (err) {
-      // Fallback
+      setAdminMsgError(
+        err.response?.data?.message || "Failed to broadcast notice. Please try again."
+      );
     }
-
-    setAdminMsgSuccess(
-      "Official School Notice broadcasted to all users successfully!",
-    );
-    setAdminMsgSubject("");
-    setAdminMsgContent("");
-    setShowAdminMsgModal(false);
-    setTimeout(() => setAdminMsgSuccess(""), 4000);
   };
 
   const handleLogout = async () => {
@@ -291,7 +329,15 @@ const Layout = () => {
                       notifications.map((n) => (
                         <div
                           key={n.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => handleNotificationClick(n)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleNotificationClick(n);
+                            }
+                          }}
                           className={`p-2.5 rounded-2xl transition flex items-start justify-between gap-2 cursor-pointer ${
                             n.unread
                               ? "bg-indigo-50/50 font-bold hover:bg-indigo-100/60"
@@ -318,7 +364,10 @@ const Layout = () => {
                           </div>
 
                           <button
-                            onClick={() => handleDismissNotification(n.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDismissNotification(n.id);
+                            }}
                             className="p-1 text-slate-300 hover:text-slate-600 rounded transition cursor-pointer"
                             title="Dismiss"
                           >
@@ -379,10 +428,25 @@ const Layout = () => {
         </div>
       )}
 
+      {adminMsgError && (
+        <div className="fixed top-20 right-6 z-50 p-4 bg-rose-600 text-white font-extrabold text-xs rounded-2xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
+          <AlertCircle className="w-5 h-5 text-white" />
+          {adminMsgError}
+        </div>
+      )}
+
       {/* --- MODAL: CUSTOM MESSAGE FOR ADMIN --- */}
       {showAdminMsgModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
+        <div
+          onClick={() => setShowAdminMsgModal(false)}
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95"
+          >
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -415,6 +479,7 @@ const Layout = () => {
                   Notice Subject / Title *
                 </label>
                 <input
+                  ref={subjectInputRef}
                   type="text"
                   required
                   placeholder="e.g. Mid-Term Schedule Update / Holiday Notice"
@@ -485,6 +550,13 @@ const Layout = () => {
                 <LayoutDashboard className="w-4 h-4" /> Dashboard Overview
               </Link>
             )}
+
+            <Link
+              to="/profile"
+              className={navLinkClass("/profile")}
+            >
+              <User className="w-4 h-4" /> My Profile & Security
+            </Link>
 
             <Link
               to="/academic/calendar"

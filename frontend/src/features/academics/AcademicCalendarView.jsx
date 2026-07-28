@@ -18,72 +18,46 @@ import {
   AlertCircle
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
+import { isAdmin as checkIsAdmin, isSuperAdmin as checkIsSuperAdmin } from '../../utils/roleUtils';
 
-const todayStr = new Date().toISOString().split('T')[0];
+const toLocalDateStr = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
-const INITIAL_EVENTS = [
-  {
-    id: 1,
-    title: 'Welcome to Academic Year 2026-2027',
-    date: todayStr,
-    category: 'notice',
-    categoryLabel: 'Important Notice',
-    target: 'All Classes',
-    time: 'All Day',
-    description: 'Official Thomson ERP is live for all students, faculty, cashiers, and administrators.',
-    badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
-    dotColor: 'bg-amber-500'
-  },
-  {
-    id: 2,
-    title: 'Mid-Term Board Examination Starts',
-    date: todayStr,
-    category: 'exam',
-    categoryLabel: 'Exam & Test',
-    target: 'Class 9th to 12th',
-    time: '08:30 AM - 11:30 AM',
-    description: 'Commencement of CBSE pattern mid-term written examinations. Admit cards required.',
-    badgeColor: 'bg-rose-100 text-rose-800 border-rose-300',
-    dotColor: 'bg-rose-500'
-  },
-  {
-    id: 3,
-    title: 'Parent-Teacher Meeting (PTM)',
-    date: todayStr,
-    category: 'notice',
-    categoryLabel: 'Important Notice',
-    target: 'All Students & Staff',
-    time: '10:00 AM - 01:00 PM',
-    description: 'Mandatory PTM scheduled for term evaluation and academic performance review.',
-    badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
-    dotColor: 'bg-amber-500'
-  }
-];
+const todayStr = toLocalDateStr();
 
 const AcademicCalendarView = () => {
   const { user } = useAuthStore();
   const location = useLocation();
-  const isAuthorized = user?.role === 'super_admin' || user?.role === 'admin';
+  const isAuthorized = checkIsAdmin(user) || checkIsSuperAdmin(user);
 
   const [currentDate, setCurrentDate] = useState(new Date()); 
-  const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
-  const [events, setEvents] = useState(INITIAL_EVENTS);
+  const [selectedDateStr, setSelectedDateStr] = useState(todayStr);
+  const [events, setEvents] = useState([]);
   const [filterCategory, setFilterCategory] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [formSuccess, setFormSuccess] = useState('');
+  const [formError, setFormError] = useState('');
+  const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
     if (location.state?.selectedDate) {
       const dateVal = location.state.selectedDate;
       setSelectedDateStr(dateVal);
-      const parsed = new Date(dateVal);
-      if (!isNaN(parsed.getTime())) {
-        setCurrentDate(parsed);
+      if (typeof dateVal === 'string' && dateVal.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [y, m, d] = dateVal.split('-').map(Number);
+        setCurrentDate(new Date(y, m - 1, d));
+      } else {
+        const parsed = new Date(dateVal);
+        if (!isNaN(parsed.getTime())) {
+          setCurrentDate(parsed);
+        }
       }
     }
   }, [location.state]);
-
-  const todayStr = new Date().toISOString().split('T')[0];
 
   React.useEffect(() => {
     import('../../api/axios').then(({ default: api }) => {
@@ -116,9 +90,12 @@ const AcademicCalendarView = () => {
             });
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.error('Failed to fetch calendar notices:', err);
+          setFetchError('Unable to load calendar notices from server.');
+        });
     });
-  }, [todayStr]);
+  }, []);
 
   // New Event Form State
   const [newEvent, setNewEvent] = useState({
@@ -152,10 +129,11 @@ const AcademicCalendarView = () => {
 
   const handleAddEvent = async (e) => {
     e.preventDefault();
+    setFormError('');
     if (!newEvent.title.trim() || !newEvent.date) return;
 
     if (newEvent.date < todayStr) {
-      alert('Events can only be scheduled for today or future dates.');
+      setFormError('Events can only be scheduled for today or future dates.');
       return;
     }
 
@@ -191,7 +169,7 @@ const AcademicCalendarView = () => {
     // Push notice to Notice Board API
     try {
       const { default: api } = await import('../../api/axios');
-      await api.post('/notices', {
+      const res = await api.post('/notices', {
         title: `[Calendar Event] ${newEvent.title}`,
         content: `${newEvent.description || newEvent.title} (Scheduled: ${newEvent.date} ${newEvent.time})`,
         notice_type: newEvent.category === 'exam' ? 'exam' : 'general',
@@ -199,21 +177,27 @@ const AcademicCalendarView = () => {
         publish_date: newEvent.date,
         is_published: 1
       });
-    } catch (err) {
-      // Graceful fallback if backend API is offline
-    }
 
-    setShowAddModal(false);
-    setFormSuccess(`Event "${newEvent.title}" posted to Academic Calendar & pushed to Notice Board!`);
-    setNewEvent({
-      title: '',
-      date: todayStr,
-      category: 'notice',
-      target: 'All Classes',
-      time: '09:00 AM - 12:00 PM',
-      description: ''
-    });
-    setTimeout(() => setFormSuccess(''), 4000);
+      if (res.data?.success) {
+        setShowAddModal(false);
+        setFormSuccess(`Event "${newEvent.title}" posted to Academic Calendar & pushed to Notice Board!`);
+        setNewEvent({
+          title: '',
+          date: todayStr,
+          category: 'notice',
+          target: 'All Classes',
+          time: '09:00 AM - 12:00 PM',
+          description: ''
+        });
+        setTimeout(() => setFormSuccess(''), 4000);
+      } else {
+        setEvents(prev => prev.filter(ev => ev.id !== created.id));
+        setFormError(res.data?.message || 'Failed to post event to server.');
+      }
+    } catch (err) {
+      setEvents(prev => prev.filter(ev => ev.id !== created.id));
+      setFormError(err.response?.data?.message || 'Failed to post event. Please try again.');
+    }
   };
 
   // Helper to format date string YYYY-MM-DD

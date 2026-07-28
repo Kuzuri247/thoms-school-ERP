@@ -35,6 +35,7 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
   const [loading, setLoading] = useState(true);
 
   // Security password state
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState(null);
@@ -74,13 +75,20 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
     setMessage(null);
     setError(null);
 
+    if (!currentPassword) {
+      return setError('Please enter your current password');
+    }
+    if (newPassword.length < 8) {
+      return setError('New password must be at least 8 characters');
+    }
     if (newPassword !== confirmPassword) {
       return setError('Passwords do not match');
     }
 
     try {
-      const response = await api.put('/auth/change-password', { currentPassword: '', newPassword });
+      const response = await api.put('/auth/change-password', { currentPassword, newPassword });
       setMessage(response.data.message || 'Password updated successfully!');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {

@@ -12,7 +12,6 @@ import {
   Plus,
   Send,
   Calendar as CalendarIcon,
-  BookText,
   Save,
   Check,
   AlertCircle
@@ -36,15 +35,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [savingAttendance, setSavingAttendance] = useState(false);
 
-  // Homework state
-  const [homeworkList, setHomeworkList] = useState([]);
-  const [homeworkForm, setHomeworkForm] = useState({
-    title: '',
-    description: '',
-    due_date: '',
-  });
-  const [assigningHomework, setAssigningHomework] = useState(false);
-
   // Exam Marks state
   const [selectedExam, setSelectedExam] = useState('1'); // Exam ID 1 (Mid Term)
   const [marksData, setMarksData] = useState({}); // { student_id: mark }
@@ -61,9 +51,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
       fetchClassStudents(selectedClass.id || selectedClass.section_id);
       if (selectedClass.is_class_teacher && selectedClass.section_id) {
         fetchAttendanceCalendar(selectedClass.section_id);
-      }
-      if (selectedClass.section_id) {
-        fetchSectionHomework(selectedClass.section_id);
       }
     }
   }, [selectedClass]);
@@ -156,29 +143,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = 'overview' }) => {
     }
   };
 
-  const handleAssignHomework = async (e) => {
-    e.preventDefault();
-    if (!selectedClass?.section_id || !homeworkForm.title || !homeworkForm.due_date) return;
-    try {
-      setAssigningHomework(true);
-      await api.post('/homework', {
-        section_id: selectedClass.section_id,
-        subject_id: selectedClass.subject_id,
-        title: homeworkForm.title,
-        description: homeworkForm.description,
-        due_date: homeworkForm.due_date,
-      });
 
-      setMessage('Homework assigned successfully!');
-      setTimeout(() => setMessage(''), 3000);
-      setHomeworkForm({ title: '', description: '', due_date: '' });
-      fetchSectionHomework(selectedClass.section_id);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to assign homework');
-    } finally {
-      setAssigningHomework(false);
-    }
-  };
 
   const handleSaveMarks = async () => {
     if (!selectedClass?.subject_id) {

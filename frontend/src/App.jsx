@@ -55,6 +55,7 @@ function App() {
       {/* Dynamic RBAC Shell */}
       <Route element={<ProtectedRoute allowedRoles={['*']} />}>
         <Route element={<Layout />}>
+          <Route path="/profile" element={<UserProfileView />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
           <Route path="/academic/calendar" element={<AcademicCalendarView />} />
           <Route path="/academic/examinations" element={<ExamResultsView />} />

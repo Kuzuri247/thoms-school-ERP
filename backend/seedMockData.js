@@ -267,7 +267,7 @@ async function seed() {
     let [[rRow]] = await connection.query("SELECT id FROM transport_routes WHERE route_no = 'R-101'");
     if (rRow) {
       await connection.query(`
-        INSERT INTO transport_stops (route_id, stop_name, stop_order, pickup_time, drop_time, monthly_fare) 
+        INSERT IGNORE INTO transport_stops (route_id, stop_name, stop_order, pickup_time, drop_time, monthly_fare) 
         VALUES (?, 'Central Circle Stop', 1, '07:30:00', '15:30:00', 1800.00)
       `, [rRow.id]);
 
@@ -334,17 +334,29 @@ async function seed() {
 
     // 16. Homework Assignments
     if (class10Math) {
-      await connection.query(`
-        INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
-        VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', ?, ?, ?, ?)
-      `, [class10SecA, class10Math, teacherUserIds[0], todayStr, todayStr, sessionId]);
+      const [[existingHw1]] = await connection.query(
+        "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
+        [class10SecA, class10Math, 'Quadratic Equations Worksheet']
+      );
+      if (!existingHw1) {
+        await connection.query(`
+          INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
+          VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', ?, ?, ?, ?)
+        `, [class10SecA, class10Math, teacherUserIds[0], todayStr, todayStr, sessionId]);
+      }
     }
 
     if (class10Phy) {
-      await connection.query(`
-        INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
-        VALUES (?, ?, 'Ray Diagrams & Refraction Worksheet', 'Draw ray diagrams for concave and convex mirrors.', ?, ?, ?, ?)
-      `, [class10SecA, class10Phy, teacherUserIds[1], todayStr, todayStr, sessionId]);
+      const [[existingHw2]] = await connection.query(
+        "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
+        [class10SecA, class10Phy, 'Ray Diagrams & Refraction Worksheet']
+      );
+      if (!existingHw2) {
+        await connection.query(`
+          INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
+          VALUES (?, ?, 'Ray Diagrams & Refraction Worksheet', 'Draw ray diagrams for concave and convex mirrors.', ?, ?, ?, ?)
+        `, [class10SecA, class10Phy, teacherUserIds[1], todayStr, todayStr, sessionId]);
+      }
     }
 
     console.log('\n======================================================');
@@ -359,10 +371,10 @@ async function seed() {
     console.log('5. Student:      student1@erp.com    / password123');
     console.log('======================================================\n');
 
-    process.exit(0);
+    process.exitCode = 0;
   } catch (err) {
     console.error('Seed Error:', err);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     if (connection) await connection.end();
   }
