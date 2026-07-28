@@ -187,15 +187,13 @@ router.get('/stats', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], a
     }
 });
 
-// Get all classes and sections (Admin / Super Admin)
+// Get all classes (Admin / Super Admin) - no sections, each grade is a single class
 router.get('/classes', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
         const [rows] = await pool.query(`
-            SELECT c.id AS class_id, c.name AS class_name, c.numeric_value,
-                   sec.id AS section_id, sec.name AS section_name, sec.capacity
+            SELECT c.id AS class_id, c.name AS class_name, c.numeric_value
             FROM classes c
-            LEFT JOIN sections sec ON sec.class_id = c.id
-            ORDER BY c.numeric_value, sec.name
+            ORDER BY c.numeric_value
         `);
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -203,20 +201,21 @@ router.get('/classes', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)],
     }
 });
 
-// Get students for a specific class or section (Admin / Super Admin)
+// Get students for a specific class (Admin / Super Admin)
 router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
         const { classId } = req.params;
         const [rows] = await pool.query(`
             SELECT s.id AS student_id, s.user_id, s.admission_no, s.roll_no, s.first_name, s.last_name,
-                   s.status, u.email, u.phone, sec.name AS section_name, c.name AS class_name
+                   s.gender, s.blood_group, s.city, s.state, s.admission_date, s.status,
+                   u.email, u.phone, c.id AS class_id, c.name AS class_name
             FROM students s
             JOIN users u ON s.user_id = u.id
             LEFT JOIN sections sec ON s.section_id = sec.id
             LEFT JOIN classes c ON sec.class_id = c.id
-            WHERE c.id = ? OR sec.id = ?
+            WHERE c.id = ?
             ORDER BY s.roll_no, s.first_name
-        `, [classId, classId]);
+        `, [classId]);
         res.json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
