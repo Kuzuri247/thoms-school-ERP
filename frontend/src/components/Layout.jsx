@@ -215,9 +215,21 @@ const Layout = () => {
     navigate("/");
   };
 
-  const isActive = (path) =>
-    location.pathname === path ||
-    (path !== "/" && location.pathname.startsWith(path));
+  const isActive = (path) => {
+    if (path === "/profile") {
+      return location.pathname === "/profile";
+    }
+    if (path === "/admin/classes") {
+      return (
+        location.pathname.startsWith("/admin/classes") ||
+        location.pathname.startsWith("/profile/")
+      );
+    }
+    return (
+      location.pathname === path ||
+      (path !== "/" && location.pathname.startsWith(path))
+    );
+  };
 
   const navLinkClass = (path) => `
     flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200
@@ -712,7 +724,7 @@ const Layout = () => {
 
         {/* Dynamic Route Content */}
         <main className="flex-1 min-w-0">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs min-h-[550px] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs h-full animate-in fade-in duration-200">
             <Outlet />
           </div>
         </main>
