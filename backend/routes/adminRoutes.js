@@ -160,7 +160,7 @@ router.get('/stats', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], a
         const [[{ total_students }]] = await pool.query("SELECT COUNT(*) AS total_students FROM users WHERE role = 'student'");
         const [[{ total_teachers }]] = await pool.query("SELECT COUNT(*) AS total_teachers FROM users WHERE role = 'teacher'");
         const [[{ total_admins }]] = await pool.query("SELECT COUNT(*) AS total_admins FROM users WHERE role IN ('admin', 'super_admin')");
-        const [[{ total_staff }]] = await pool.query("SELECT COUNT(*) AS total_staff FROM users WHERE role IN ('cashier', 'busstaff')");
+        const [[{ total_staff }]] = await pool.query("SELECT COUNT(*) AS total_staff FROM users WHERE role IN ('cashier')");
 
         let total_revenue = null;
         if (req.user.role === 'super_admin') {

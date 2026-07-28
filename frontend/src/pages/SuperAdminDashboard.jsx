@@ -205,7 +205,7 @@ const SuperAdminDashboard = () => {
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Access Control</h4>
               <p className="text-xs font-semibold text-slate-700">Strict Role-Based Access Control (RBAC) is enabled.</p>
               <div className="flex flex-wrap gap-1 mt-2">
-                {['super_admin', 'admin', 'cashier', 'teacher', 'student', 'busstaff'].map((r) => (
+                {['super_admin', 'admin', 'cashier', 'teacher', 'student'].map((r) => (
                   <span key={r} className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
                     {r}
                   </span>

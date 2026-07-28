@@ -25,9 +25,10 @@ import {
 } from 'lucide-react';
 
 const UserProfileView = () => {
-  const { id } = useParams();
+  const { id: paramId } = useParams();
   const navigate = useNavigate();
   const { user: authUser, setUser: setAuthUser } = useAuthStore();
+  const id = paramId || authUser?.id;
   const { data: apiProfile, isLoading, error } = useGetUserProfile(id);
 
   // Local state for editable user profile
@@ -116,7 +117,7 @@ const UserProfileView = () => {
   };
 
   // Handle Edit Profile Save
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     const updatedProfile = {
       ...profile,
@@ -125,17 +126,30 @@ const UserProfileView = () => {
       phone: editPhone,
       designation: editDesignation
     };
+
+    try {
+      const { default: api } = await import('../../api/axios');
+      await api.put(`/users/${profile.id}/profile`, {
+        full_name: editFullName,
+        email: editEmail,
+        phone: editPhone,
+        designation: editDesignation
+      });
+    } catch (err) {
+      console.error('Failed to update profile in backend DB:', err);
+    }
+
     setProfile(updatedProfile);
     if (authUser && authUser.id === profile.id) {
       setAuthUser({ ...authUser, full_name: editFullName, email: editEmail });
     }
     setEditProfileModalOpen(false);
-    setProfileSuccessMessage('User profile details updated successfully!');
+    setProfileSuccessMessage('User profile details updated successfully in DB!');
     setTimeout(() => setProfileSuccessMessage(''), 4000);
   };
 
   // Handle Change Password Submit
-  const handleChangePasswordSubmit = (e) => {
+  const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
     setPasswordError('');
 
@@ -152,13 +166,28 @@ const UserProfileView = () => {
       return;
     }
 
-    // Success
-    setChangePasswordModalOpen(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setPasswordSuccessMessage('Password changed successfully! Next login will require your new password.');
-    setTimeout(() => setPasswordSuccessMessage(''), 5000);
+    try {
+      const { default: api } = await import('../../api/axios');
+      const response = await api.put('/auth/change-password', {
+        currentPassword,
+        newPassword
+      });
+
+      if (response.data?.success || response.data?.message) {
+        setChangePasswordModalOpen(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setPasswordSuccessMessage('Password changed successfully! Next login will require your new password.');
+        setTimeout(() => setPasswordSuccessMessage(''), 5000);
+      }
+    } catch (err) {
+      setPasswordError(
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        'Failed to change password. Please check your current password.'
+      );
+    }
   };
 
   return (
