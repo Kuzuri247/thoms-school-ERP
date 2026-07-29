@@ -30,18 +30,21 @@ async function seed() {
     // Purge legacy data to avoid duplicates and mixed-up grades
     console.log('Purging legacy data...');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
-    await connection.query('TRUNCATE TABLE attendance');
-    await connection.query('TRUNCATE TABLE timetables');
-    await connection.query('TRUNCATE TABLE homework');
-    await connection.query('TRUNCATE TABLE teacher_assignments');
-    await connection.query('TRUNCATE TABLE guardians');
-    await connection.query('TRUNCATE TABLE students');
-    await connection.query('TRUNCATE TABLE staff_profiles');
-    await connection.query('TRUNCATE TABLE subjects');
-    await connection.query('TRUNCATE TABLE sections');
-    await connection.query('TRUNCATE TABLE classes');
-    await connection.query("DELETE FROM users WHERE email LIKE '%@erp.com' OR role IN ('student', 'teacher', 'cashier')");
-    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    try {
+      await connection.query('TRUNCATE TABLE attendance');
+      await connection.query('TRUNCATE TABLE timetables');
+      await connection.query('TRUNCATE TABLE homework');
+      await connection.query('TRUNCATE TABLE teacher_assignments');
+      await connection.query('TRUNCATE TABLE guardians');
+      await connection.query('TRUNCATE TABLE students');
+      await connection.query('TRUNCATE TABLE staff_profiles');
+      await connection.query('TRUNCATE TABLE subjects');
+      await connection.query('TRUNCATE TABLE sections');
+      await connection.query('TRUNCATE TABLE classes');
+      await connection.query("DELETE FROM users WHERE email LIKE '%@erp.com' OR role IN ('student', 'teacher', 'cashier')");
+    } finally {
+      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
 
     // 2. Classes & Sections (14 Standards: LKG, UKG, Class 1 to 12 in exact serial order 1 to 14)
     const classDefs = [

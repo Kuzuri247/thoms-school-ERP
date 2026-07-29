@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGetUserProfile } from "./useUsers";
 import useAuthStore from "../../store/authStore";
+import { getRoleBadgeStyle, isStaff as checkIsStaff } from "../../utils/roleUtils";
+import { validatePassword } from "../../utils/validationUtils";
 import {
   ArrowLeft,
   User,
@@ -11,7 +14,6 @@ import {
   Calendar,
   MapPin,
   Hash,
-  Activity,
   Edit3,
   Lock,
   Key,
@@ -21,17 +23,16 @@ import {
   ShieldCheck,
   Save,
   X,
-  Sparkles,
   GraduationCap,
   Building2,
   Users,
   Award,
-  BookOpen,
 } from "lucide-react";
 
 const UserProfileView = () => {
   const { id: paramId } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user: authUser, setUser: setAuthUser } = useAuthStore();
   const id = paramId || authUser?.id;
   const { data: apiProfile, isLoading, error } = useGetUserProfile(id);
@@ -41,37 +42,40 @@ const UserProfileView = () => {
   const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
 
-  // Base Form States
-  const [editFullName, setEditFullName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [newPasswordInline, setNewPasswordInline] = useState("");
+  // Consolidated Form State
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    employee_code: "",
+    designation: "",
+    department: "",
+    qualification: "",
+    joining_date: "",
+    emergency_contact: "",
+    gender: "male",
+    date_of_birth: "",
+    address: "",
+    blood_group: "",
+    religion: "",
+    nationality: "Indian",
+    city: "",
+    state: "",
+    pincode: "",
+    previous_school: "",
+    father_name: "",
+    father_phone: "",
+    father_occupation: "",
+    mother_name: "",
+    mother_phone: "",
+    mother_occupation: "",
+    guardian_name: "",
+    guardian_phone: "",
+    guardian_relation: "",
+  });
 
-  // Staff Extended Form States
-  const [editEmployeeCode, setEditEmployeeCode] = useState("");
-  const [editDesignation, setEditDesignation] = useState("");
-  const [editDepartment, setEditDepartment] = useState("");
-  const [editQualification, setEditQualification] = useState("");
-  const [editJoiningDate, setEditJoiningDate] = useState("");
-  const [editEmergencyContact, setEditEmergencyContact] = useState("");
-  const [editGender, setEditGender] = useState("");
-  const [editDob, setEditDob] = useState("");
-  const [editAddress, setEditAddress] = useState("");
-
-  // Student Extended Form States
-  const [editBloodGroup, setEditBloodGroup] = useState("");
-  const [editReligion, setEditReligion] = useState("");
-  const [editNationality, setEditNationality] = useState("");
-  const [editCity, setEditCity] = useState("");
-  const [editState, setEditState] = useState("");
-  const [editPincode, setEditPincode] = useState("");
-  const [editPreviousSchool, setEditPreviousSchool] = useState("");
-  const [editFatherName, setEditFatherName] = useState("");
-  const [editFatherPhone, setEditFatherPhone] = useState("");
-  const [editFatherOccupation, setEditFatherOccupation] = useState("");
-  const [editMotherName, setEditMotherName] = useState("");
-  const [editMotherPhone, setEditMotherPhone] = useState("");
-  const [editMotherOccupation, setEditMotherOccupation] = useState("");
+  const [submittingProfile, setSubmittingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   // Form states for password change modal
   const [currentPassword, setCurrentPassword] = useState("");
@@ -87,56 +91,73 @@ const UserProfileView = () => {
     if (apiProfile) {
       setProfile(apiProfile);
       populateFormFields(apiProfile);
-    } else if (authUser) {
-      const fallback = {
-        id: authUser.id || "101",
-        full_name: authUser.full_name || authUser.name || "Thomson User",
-        email: authUser.email || "user@thomsonschool.edu.in",
-        role: authUser.role || "teacher",
-        status: "active",
-        phone: "+91 98765 43210",
-        designation: "Faculty Member",
-        department: "Academic Affairs",
-        employee_code: "TS-EMP-001",
-        profile_type: authUser.role === "student" ? "student" : "staff",
-        qualification: "Master of Science",
-        joining_date: "2022-04-01",
-        gender: "Male",
-        address: "14 Heritage Avenue, Civil Lines",
-      };
-      setProfile(fallback);
-      populateFormFields(fallback);
+    } else if (authUser && (!paramId || String(paramId) === String(authUser.id))) {
+      setProfile(authUser);
+      populateFormFields(authUser);
+    } else if (error) {
+      setProfile(null);
     }
-  }, [apiProfile, authUser]);
+  }, [apiProfile, authUser, paramId, error]);
+
+  // Escape key handler for accessible modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        if (editProfileModalOpen) setEditProfileModalOpen(false);
+        if (changePasswordModalOpen) setChangePasswordModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editProfileModalOpen, changePasswordModalOpen]);
 
   const format10Digits = (val) => (val ? String(val).replace(/\D/g, "").slice(0, 10) : "");
 
+  const normalizeDate = (val) => {
+    if (!val) return "";
+    try {
+      return new Date(val).toISOString().slice(0, 10);
+    } catch (e) {
+      return "";
+    }
+  };
+
+  const handleChange = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
   const populateFormFields = (p) => {
-    setEditFullName(p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim() || "");
-    setEditEmail(p.email || "");
-    setEditPhone(format10Digits(p.phone));
-    setEditEmployeeCode(p.employee_code || "");
-    setEditDesignation(p.designation || "");
-    setEditDepartment(p.department || "");
-    setEditQualification(p.qualification || "");
-    setEditJoiningDate(p.joining_date ? p.joining_date.split("T")[0] : "");
-    setEditEmergencyContact(format10Digits(p.emergency_contact || p.emergency_phone || p.phone));
-    setEditGender(p.gender || "male");
-    setEditDob(p.date_of_birth ? p.date_of_birth.split("T")[0] : "");
-    setEditAddress(p.address || "");
-    setEditBloodGroup(p.blood_group || "");
-    setEditReligion(p.religion || "");
-    setEditNationality(p.nationality || "Indian");
-    setEditCity(p.city || "");
-    setEditState(p.state || "");
-    setEditPincode(p.pincode || "");
-    setEditPreviousSchool(p.previous_school || "");
-    setEditFatherName(p.father_name || "");
-    setEditFatherPhone(format10Digits(p.father_phone));
-    setEditFatherOccupation(p.father_occupation || "");
-    setEditMotherName(p.mother_name || "");
-    setEditMotherPhone(format10Digits(p.mother_phone));
-    setEditMotherOccupation(p.mother_occupation || "");
+    if (!p) return;
+    setForm({
+      full_name: p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim() || "",
+      email: p.email || "",
+      phone: format10Digits(p.phone),
+      employee_code: p.employee_code || "",
+      designation: p.designation || "",
+      department: p.department || "",
+      qualification: p.qualification || "",
+      joining_date: normalizeDate(p.joining_date),
+      emergency_contact: format10Digits(p.emergency_contact || p.emergency_phone || p.phone),
+      gender: p.gender || "male",
+      date_of_birth: normalizeDate(p.date_of_birth),
+      address: p.address || "",
+      blood_group: p.blood_group || "",
+      religion: p.religion || "",
+      nationality: p.nationality || "Indian",
+      city: p.city || "",
+      state: p.state || "",
+      pincode: p.pincode || "",
+      previous_school: p.previous_school || "",
+      father_name: p.father_name || "",
+      father_phone: format10Digits(p.father_phone),
+      father_occupation: p.father_occupation || "",
+      mother_name: p.mother_name || "",
+      mother_phone: format10Digits(p.mother_phone),
+      mother_occupation: p.mother_occupation || "",
+      guardian_name: p.guardian_name || "",
+      guardian_phone: format10Digits(p.guardian_phone),
+      guardian_relation: p.guardian_relation || "",
+    });
   };
 
   if (isLoading && !profile) {
@@ -147,7 +168,7 @@ const UserProfileView = () => {
     );
   }
 
-  if (!profile) {
+  if (!profile || (error && !apiProfile)) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500">
         <User className="w-16 h-16 text-slate-300 mb-4" />
@@ -155,7 +176,7 @@ const UserProfileView = () => {
         <p className="text-sm mt-2">The requested user profile does not exist or you lack permission.</p>
         <button
           onClick={() => navigate(-1)}
-          className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg text-sm"
+          className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg text-sm cursor-pointer"
         >
           Go Back
         </button>
@@ -164,71 +185,32 @@ const UserProfileView = () => {
   }
 
   const isStudent = profile.profile_type === "student" || profile.role === "student";
-  const isStaff = !isStudent;
-
-  const getRoleBadgeStyle = (userRole = "") => {
-    const norm = userRole.toLowerCase();
-    if (norm.includes("super_admin") || norm.includes("admin"))
-      return "bg-purple-100 text-purple-700 border-purple-200";
-    if (norm.includes("teacher"))
-      return "bg-amber-100 text-amber-700 border-amber-200";
-    if (norm.includes("student"))
-      return "bg-emerald-100 text-emerald-700 border-emerald-200";
-    return "bg-slate-100 text-slate-700 border-slate-200";
-  };
+  const isStaffMember = checkIsStaff(profile);
 
   // Handle Save Profile updates to backend DB
   const handleSaveProfile = async (e) => {
     e.preventDefault();
-
-    const payload = {
-      full_name: editFullName,
-      email: editEmail,
-      phone: editPhone,
-      // Staff fields
-      employee_code: editEmployeeCode,
-      designation: editDesignation,
-      department: editDepartment,
-      qualification: editQualification,
-      joining_date: editJoiningDate || undefined,
-      emergency_contact: editEmergencyContact,
-      gender: editGender,
-      date_of_birth: editDob || undefined,
-      address: editAddress,
-      // Student fields
-      blood_group: editBloodGroup,
-      religion: editReligion,
-      nationality: editNationality,
-      city: editCity,
-      state: editState,
-      pincode: editPincode,
-      previous_school: editPreviousSchool,
-      father_name: editFatherName,
-      father_phone: editFatherPhone,
-      father_occupation: editFatherOccupation,
-      mother_name: editMotherName,
-      mother_phone: editMotherPhone,
-      mother_occupation: editMotherOccupation,
-    };
+    setProfileError("");
+    setSubmittingProfile(true);
 
     try {
       const { default: api } = await import("../../api/axios");
-      await api.put(`/users/${profile.id}/profile`, payload);
+      await api.put(`/users/${profile.id}/profile`, form);
 
-      const updated = { ...profile, ...payload };
-      setProfile(updated);
+      queryClient.invalidateQueries(["userProfile", String(profile.id)]);
 
       if (authUser && Number(authUser.id) === Number(profile.id)) {
-        setAuthUser({ ...authUser, full_name: editFullName, email: editEmail });
+        setAuthUser({ ...authUser, full_name: form.full_name, email: form.email });
       }
 
-      setProfileSuccessMessage("Profile information updated successfully!");
+      setProfileSuccessMessage("Profile updated successfully!");
       setTimeout(() => setProfileSuccessMessage(""), 5000);
+      setEditProfileModalOpen(false);
     } catch (err) {
       console.error("Failed to update profile in backend DB:", err);
-      alert(err.response?.data?.message || "Failed to save profile changes.");
+      setProfileError(err.response?.data?.message || "Failed to save profile changes.");
     } finally {
-      setEditProfileModalOpen(false);
+      setSubmittingProfile(false);
     }
   };
 
@@ -241,16 +223,16 @@ const UserProfileView = () => {
       setPasswordError("Please enter your current password.");
       return;
     }
-    if (newPassword.length < 6) {
-      setPasswordError("New password must be at least 6 characters long.");
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters long.");
       return;
     }
     if (!/[A-Z]/.test(newPassword)) {
       setPasswordError("New password must contain at least one uppercase letter (A-Z).");
       return;
     }
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
-      setPasswordError("New password must contain at least one special character (e.g. !@#$%).");
+    if (!/[^A-Za-z0-9]/.test(newPassword)) {
+      setPasswordError("New password must contain at least one special character.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -260,35 +242,36 @@ const UserProfileView = () => {
 
     try {
       const { default: api } = await import("../../api/axios");
-      const response = await api.put("/auth/change-password", {
+      await api.put("/auth/change-password", {
         currentPassword,
         newPassword,
       });
 
-      if (response.data?.success || response.data?.message) {
-        setChangePasswordModalOpen(false);
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-        setPasswordSuccessMessage(
-          "Password updated and saved into database! Next login will require your new password.",
-        );
-        setTimeout(() => setPasswordSuccessMessage(""), 5000);
-      }
+      setChangePasswordModalOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccessMessage(
+        "Password updated successfully! Please log in with your new password on your next login."
+      );
+      setTimeout(() => setPasswordSuccessMessage(""), 5000);
     } catch (err) {
       setPasswordError(
         err.response?.data?.message ||
           err.response?.data?.error ||
-          "Failed to change password. Please verify current password.",
+          "Failed to change password. Please verify current password."
       );
     }
   };
+
+  const statusLabel = profile.staff_status || profile.status || "Not provided";
+  const isStatusActive = String(statusLabel).toLowerCase() === "active";
 
   return (
     <div className="space-y-6 animate-in fade-in max-w-4xl mx-auto pb-12">
       {/* Notifications Banners */}
       {profileSuccessMessage && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between text-xs font-bold shadow-sm animate-in fade-in">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between text-xs font-bold shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             <span>{profileSuccessMessage}</span>
@@ -303,7 +286,7 @@ const UserProfileView = () => {
       )}
 
       {passwordSuccessMessage && (
-        <div className="p-4 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-2xl flex items-center justify-between text-xs font-bold shadow-sm animate-in fade-in">
+        <div className="p-4 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-2xl flex items-center justify-between text-xs font-bold shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-indigo-600" />
             <span>{passwordSuccessMessage}</span>
@@ -322,7 +305,7 @@ const UserProfileView = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-500 transition shadow-sm cursor-pointer"
+            className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-500 transition shadow-xs cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -331,21 +314,27 @@ const UserProfileView = () => {
               User Profile & Identity Record
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              Managing credentials for {profile.full_name || profile.email}
+              Managing credentials for {profile.full_name || profile.email || "Not provided"}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setEditProfileModalOpen(true)}
+            onClick={() => {
+              setProfileError("");
+              setEditProfileModalOpen(true);
+            }}
             className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50 transition shadow-xs flex items-center gap-1.5 cursor-pointer"
           >
             <Edit3 className="w-3.5 h-3.5 text-indigo-600" /> Edit Profile
           </button>
 
           <button
-            onClick={() => setChangePasswordModalOpen(true)}
+            onClick={() => {
+              setPasswordError("");
+              setChangePasswordModalOpen(true);
+            }}
             className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-bold text-xs rounded-xl hover:from-indigo-700 hover:to-violet-700 transition shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer"
           >
             <Key className="w-3.5 h-3.5" /> Change Password
@@ -356,32 +345,36 @@ const UserProfileView = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Column: Avatar & Basic Info */}
         <div className="col-span-1 space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col items-center text-center relative overflow-hidden">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col items-center text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 p-3">
               <span
                 className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase border ${getRoleBadgeStyle(profile.role)}`}
               >
-                {profile.role?.replace("_", " ")}
+                {profile.role ? profile.role.replace("_", " ") : "User"}
               </span>
             </div>
 
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-lg flex items-center justify-center text-3xl font-extrabold text-indigo-700 mt-2 mb-4">
-              {(profile.full_name || profile.email).charAt(0).toUpperCase()}
+              {(profile.full_name || profile.email || "U").charAt(0).toUpperCase()}
             </div>
             <h2 className="text-xl font-bold text-slate-900">
-              {profile.full_name || "N/A"}
+              {profile.full_name || "Not provided"}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">{profile.email}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{profile.email || "Not provided"}</p>
             <div className="mt-4 flex gap-2 justify-center">
               <span
-                className={`px-3 py-1 rounded-full text-[10px] font-bold border ${profile.status === "active" || profile.status === "Active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
+                className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
+                  isStatusActive
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-slate-100 text-slate-700 border-slate-200"
+                }`}
               >
-                Status: {profile.status}
+                Status: {statusLabel}
               </span>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 border-b border-slate-100 pb-2">
               Contact & Identity
             </h3>
@@ -391,7 +384,7 @@ const UserProfileView = () => {
               </div>
               <div className="truncate">
                 <p className="text-xs text-slate-500 font-medium">Account Email / User ID</p>
-                <p className="font-semibold text-slate-800 truncate">{profile.email}</p>
+                <p className="font-semibold text-slate-800 truncate">{profile.email || "Not provided"}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -411,10 +404,10 @@ const UserProfileView = () => {
         {/* Right Column: Detailed Extended Profiles */}
         <div className="col-span-1 md:col-span-2 space-y-6">
           {/* STAFF DETAILED PROFILE CARD */}
-          {isStaff && (
+          {isStaffMember && (
             <div className="space-y-6">
               {/* Professional & Institutional Details */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <Briefcase className="w-5 h-5 text-indigo-500" /> Staff & Institutional Profile
                 </h3>
@@ -425,7 +418,7 @@ const UserProfileView = () => {
                     </p>
                     <p className="font-black text-slate-900 text-sm flex items-center gap-1.5 font-mono">
                       <Hash className="w-4 h-4 text-indigo-600" />
-                      {profile.employee_code || `TS-EMP-${String(profile.id).padStart(3, "0")}`}
+                      {profile.employee_code || "Not provided"}
                     </p>
                   </div>
 
@@ -434,7 +427,7 @@ const UserProfileView = () => {
                       Designation
                     </p>
                     <p className="font-black text-indigo-900 text-sm">
-                      {profile.designation || "Faculty Member"}
+                      {profile.designation || "Not provided"}
                     </p>
                   </div>
 
@@ -442,7 +435,7 @@ const UserProfileView = () => {
                     <p className="text-slate-500 font-medium mb-1">Department</p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Building2 className="w-4 h-4 text-slate-400" />
-                      {profile.department || "Academic Affairs"}
+                      {profile.department || "Not provided"}
                     </p>
                   </div>
 
@@ -450,7 +443,7 @@ const UserProfileView = () => {
                     <p className="text-slate-500 font-medium mb-1">Highest Qualification</p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Award className="w-4 h-4 text-slate-400" />
-                      {profile.qualification || "Post Graduate Degree"}
+                      {profile.qualification || "Not provided"}
                     </p>
                   </div>
 
@@ -460,21 +453,21 @@ const UserProfileView = () => {
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.joining_date
                         ? new Date(profile.joining_date).toLocaleDateString()
-                        : "01/04/2022"}
+                        : "Not provided"}
                     </p>
                   </div>
 
                   <div>
                     <p className="text-slate-500 font-medium mb-1">Working Status</p>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      {profile.staff_status || profile.status || "Active Service"}
+                      {statusLabel}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Personal Information Card for Staff */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <User className="w-5 h-5 text-teal-600" /> Personal & Emergency Details
                 </h3>
@@ -483,7 +476,7 @@ const UserProfileView = () => {
                   <div>
                     <p className="text-slate-500 font-medium mb-1">Gender</p>
                     <p className="font-bold text-slate-800 capitalize">
-                      {profile.gender || "Male"}
+                      {profile.gender || "Not provided"}
                     </p>
                   </div>
 
@@ -493,7 +486,7 @@ const UserProfileView = () => {
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.date_of_birth
                         ? new Date(profile.date_of_birth).toLocaleDateString()
-                        : "Not specified"}
+                        : "Not provided"}
                     </p>
                   </div>
 
@@ -509,7 +502,7 @@ const UserProfileView = () => {
                     <p className="text-slate-500 font-medium mb-1">Residential Address</p>
                     <p className="font-bold text-slate-800 flex items-start gap-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
-                      {profile.address || "Faculty Quarters, Thomson Campus"}
+                      {profile.address || "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -521,7 +514,7 @@ const UserProfileView = () => {
           {isStudent && (
             <div className="space-y-6">
               {/* Academic Record Card */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                     <GraduationCap className="w-5 h-5 text-indigo-600" /> Academic & Enrollment Details
@@ -538,7 +531,7 @@ const UserProfileView = () => {
                     </p>
                     <p className="font-black text-slate-900 text-sm flex items-center gap-1.5 font-mono">
                       <Hash className="w-4 h-4 text-indigo-600" />
-                      {profile.admission_no || `TS-2026-${String(profile.id).padStart(3, "0")}`}
+                      {profile.admission_no || "Not provided"}
                     </p>
                   </div>
 
@@ -547,7 +540,7 @@ const UserProfileView = () => {
                       Roll Number
                     </p>
                     <p className="font-black text-slate-900 text-sm font-mono">
-                      {profile.roll_no || "101"}
+                      {profile.roll_no || "Not provided"}
                     </p>
                   </div>
 
@@ -556,7 +549,7 @@ const UserProfileView = () => {
                       Academic Class / Standard
                     </p>
                     <p className="font-black text-indigo-900 text-sm">
-                      {profile.class_name || profile.class || "Class 10"}
+                      {profile.class_name || profile.class || "Not provided"}
                     </p>
                   </div>
 
@@ -566,7 +559,7 @@ const UserProfileView = () => {
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.admission_date
                         ? new Date(profile.admission_date).toLocaleDateString()
-                        : "01/04/2026"}
+                        : "Not provided"}
                     </p>
                   </div>
 
@@ -574,14 +567,14 @@ const UserProfileView = () => {
                     <p className="text-slate-500 font-medium mb-1">Previous School Attended</p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Building2 className="w-4 h-4 text-slate-400" />
-                      {profile.previous_school || "St. Xavier Convent High School"}
+                      {profile.previous_school || "Not provided"}
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Personal & Residential Details Card */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <User className="w-5 h-5 text-emerald-600" /> Personal Details
                 </h3>
@@ -590,7 +583,7 @@ const UserProfileView = () => {
                   <div>
                     <p className="text-slate-500 font-medium mb-1">Gender</p>
                     <p className="font-bold text-slate-800 capitalize">
-                      {profile.gender || "Male"}
+                      {profile.gender || "Not provided"}
                     </p>
                   </div>
 
@@ -600,14 +593,14 @@ const UserProfileView = () => {
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.date_of_birth
                         ? new Date(profile.date_of_birth).toLocaleDateString()
-                        : "15/08/2010"}
+                        : "Not provided"}
                     </p>
                   </div>
 
                   <div>
                     <p className="text-slate-500 font-medium mb-1">Blood Group</p>
                     <p className="font-extrabold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full inline-block border border-rose-100">
-                      {profile.blood_group || "O+"}
+                      {profile.blood_group || "Not provided"}
                     </p>
                   </div>
 
@@ -615,14 +608,14 @@ const UserProfileView = () => {
                     <p className="text-slate-500 font-medium mb-1">Residential Address</p>
                     <p className="font-bold text-slate-800 flex items-start gap-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
-                      {profile.address || "14/B Heritage Park, MG Road, New Delhi"}
+                      {profile.address || "Not provided"}
                     </p>
                   </div>
                 </div>
               </div>
 
               {/* Parents & Guardian Information Card */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
                   <Users className="w-5 h-5 text-purple-600" /> Parents & Guardian Information
                 </h3>
@@ -635,13 +628,13 @@ const UserProfileView = () => {
                     <div>
                       <p className="text-slate-500 font-medium">Full Name</p>
                       <p className="font-extrabold text-slate-900 text-sm">
-                        {profile.father_name || "Vikram Sharma"}
+                        {profile.father_name || "Not provided"}
                       </p>
                     </div>
                     <div>
                       <p className="text-slate-500 font-medium">Contact Phone</p>
                       <p className="font-bold text-slate-800 font-mono">
-                        {profile.father_phone || "+91 98111 22334"}
+                        {profile.father_phone || "Not provided"}
                       </p>
                     </div>
                   </div>
@@ -653,13 +646,13 @@ const UserProfileView = () => {
                     <div>
                       <p className="text-slate-500 font-medium">Full Name</p>
                       <p className="font-extrabold text-slate-900 text-sm">
-                        {profile.mother_name || "Priyanka Sharma"}
+                        {profile.mother_name || "Not provided"}
                       </p>
                     </div>
                     <div>
                       <p className="text-slate-500 font-medium">Contact Phone</p>
                       <p className="font-bold text-slate-800 font-mono">
-                        {profile.mother_phone || "+91 98111 22335"}
+                        {profile.mother_phone || "Not provided"}
                       </p>
                     </div>
                   </div>
@@ -672,10 +665,15 @@ const UserProfileView = () => {
 
       {/* --- EDIT PROFILE & CREDENTIALS MODAL --- */}
       {editProfileModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-profile-title"
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <h3 id="edit-profile-title" className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-indigo-600" /> Edit Profile & Account Information
               </h3>
               <button
@@ -685,6 +683,12 @@ const UserProfileView = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {profileError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl">
+                {profileError}
+              </div>
+            )}
 
             <form onSubmit={handleSaveProfile} className="space-y-4 text-xs font-semibold text-slate-700">
               {/* Account Credentials */}
@@ -699,8 +703,8 @@ const UserProfileView = () => {
                     <input
                       type="text"
                       required
-                      value={editFullName}
-                      onChange={(e) => setEditFullName(e.target.value)}
+                      value={form.full_name}
+                      onChange={(e) => handleChange("full_name", e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -710,8 +714,8 @@ const UserProfileView = () => {
                     <input
                       type="email"
                       required
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
+                      value={form.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                     />
                   </div>
@@ -722,8 +726,8 @@ const UserProfileView = () => {
                       type="tel"
                       maxLength={10}
                       placeholder="10-digit number"
-                      value={editPhone}
-                      onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      value={form.phone}
+                      onChange={(e) => handleChange("phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
@@ -731,7 +735,7 @@ const UserProfileView = () => {
               </div>
 
               {/* Staff Specific Fields */}
-              {isStaff && (
+              {isStaffMember && (
                 <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100 space-y-3">
                   <h4 className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider flex items-center gap-2">
                     <Briefcase className="w-4 h-4 text-indigo-600" /> Staff & Institutional Fields
@@ -742,8 +746,8 @@ const UserProfileView = () => {
                       <label className="block mb-1">Employee Code</label>
                       <input
                         type="text"
-                        value={editEmployeeCode}
-                        onChange={(e) => setEditEmployeeCode(e.target.value)}
+                        value={form.employee_code}
+                        onChange={(e) => handleChange("employee_code", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -752,8 +756,8 @@ const UserProfileView = () => {
                       <label className="block mb-1">Designation</label>
                       <input
                         type="text"
-                        value={editDesignation}
-                        onChange={(e) => setEditDesignation(e.target.value)}
+                        value={form.designation}
+                        onChange={(e) => handleChange("designation", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -762,8 +766,8 @@ const UserProfileView = () => {
                       <label className="block mb-1">Department</label>
                       <input
                         type="text"
-                        value={editDepartment}
-                        onChange={(e) => setEditDepartment(e.target.value)}
+                        value={form.department}
+                        onChange={(e) => handleChange("department", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -772,8 +776,41 @@ const UserProfileView = () => {
                       <label className="block mb-1">Highest Qualification</label>
                       <input
                         type="text"
-                        value={editQualification}
-                        onChange={(e) => setEditQualification(e.target.value)}
+                        value={form.qualification}
+                        onChange={(e) => handleChange("qualification", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Gender</label>
+                      <select
+                        value={form.gender}
+                        onChange={(e) => handleChange("gender", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={form.date_of_birth}
+                        onChange={(e) => handleChange("date_of_birth", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Date of Joining</label>
+                      <input
+                        type="date"
+                        value={form.joining_date}
+                        onChange={(e) => handleChange("joining_date", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -784,18 +821,18 @@ const UserProfileView = () => {
                         type="tel"
                         maxLength={10}
                         placeholder="10-digit emergency contact"
-                        value={editEmergencyContact}
-                        onChange={(e) => setEditEmergencyContact(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        value={form.emergency_contact}
+                        onChange={(e) => handleChange("emergency_contact", e.target.value.replace(/\D/g, "").slice(0, 10))}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
 
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="block mb-1">Residential Address</label>
                       <input
                         type="text"
-                        value={editAddress}
-                        onChange={(e) => setEditAddress(e.target.value)}
+                        value={form.address}
+                        onChange={(e) => handleChange("address", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -814,8 +851,8 @@ const UserProfileView = () => {
                     <div>
                       <label className="block mb-1">Blood Group</label>
                       <select
-                        value={editBloodGroup}
-                        onChange={(e) => setEditBloodGroup(e.target.value)}
+                        value={form.blood_group}
+                        onChange={(e) => handleChange("blood_group", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
                       >
                         <option value="">Select Blood Group</option>
@@ -831,11 +868,77 @@ const UserProfileView = () => {
                     </div>
 
                     <div>
+                      <label className="block mb-1">Religion</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Hindu / Christian / Muslim"
+                        value={form.religion}
+                        onChange={(e) => handleChange("religion", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Nationality</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Indian"
+                        value={form.nationality}
+                        onChange={(e) => handleChange("nationality", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Previous School Attended</label>
+                      <input
+                        type="text"
+                        placeholder="Previous school name"
+                        value={form.previous_school}
+                        onChange={(e) => handleChange("previous_school", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">City</label>
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={form.city}
+                        onChange={(e) => handleChange("city", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">State</label>
+                      <input
+                        type="text"
+                        placeholder="State"
+                        value={form.state}
+                        onChange={(e) => handleChange("state", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Pincode</label>
+                      <input
+                        type="text"
+                        placeholder="Pincode"
+                        value={form.pincode}
+                        onChange={(e) => handleChange("pincode", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block mb-1">Father's Name</label>
                       <input
                         type="text"
-                        value={editFatherName}
-                        onChange={(e) => setEditFatherName(e.target.value)}
+                        value={form.father_name}
+                        onChange={(e) => handleChange("father_name", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -846,9 +949,20 @@ const UserProfileView = () => {
                         type="tel"
                         maxLength={10}
                         placeholder="10-digit father contact"
-                        value={editFatherPhone}
-                        onChange={(e) => setEditFatherPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        value={form.father_phone}
+                        onChange={(e) => handleChange("father_phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Father's Occupation</label>
+                      <input
+                        type="text"
+                        placeholder="Occupation"
+                        value={form.father_occupation}
+                        onChange={(e) => handleChange("father_occupation", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
 
@@ -856,8 +970,8 @@ const UserProfileView = () => {
                       <label className="block mb-1">Mother's Name</label>
                       <input
                         type="text"
-                        value={editMotherName}
-                        onChange={(e) => setEditMotherName(e.target.value)}
+                        value={form.mother_name}
+                        onChange={(e) => handleChange("mother_name", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -868,9 +982,20 @@ const UserProfileView = () => {
                         type="tel"
                         maxLength={10}
                         placeholder="10-digit mother contact"
-                        value={editMotherPhone}
-                        onChange={(e) => setEditMotherPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        value={form.mother_phone}
+                        onChange={(e) => handleChange("mother_phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block mb-1">Mother's Occupation</label>
+                      <input
+                        type="text"
+                        placeholder="Occupation"
+                        value={form.mother_occupation}
+                        onChange={(e) => handleChange("mother_occupation", e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
 
@@ -878,8 +1003,8 @@ const UserProfileView = () => {
                       <label className="block mb-1">Residential Address</label>
                       <input
                         type="text"
-                        value={editAddress}
-                        onChange={(e) => setEditAddress(e.target.value)}
+                        value={form.address}
+                        onChange={(e) => handleChange("address", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -897,9 +1022,10 @@ const UserProfileView = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer"
+                  disabled={submittingProfile}
+                  className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  <Save className="w-4 h-4" /> Save All Profile Updates
+                  <Save className="w-4 h-4" /> {submittingProfile ? "Saving..." : "Save All Profile Updates"}
                 </button>
               </div>
             </form>
@@ -909,10 +1035,15 @@ const UserProfileView = () => {
 
       {/* --- DEDICATED CHANGE PASSWORD MODAL --- */}
       {changePasswordModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="change-password-title"
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+        >
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <h3 id="change-password-title" className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
                 <Key className="w-4 h-4 text-indigo-600" /> Change Security Password
               </h3>
               <button
@@ -943,6 +1074,7 @@ const UserProfileView = () => {
                   />
                   <button
                     type="button"
+                    aria-label="Show password"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                   >
@@ -957,13 +1089,14 @@ const UserProfileView = () => {
                   <input
                     type={showNewPassword ? "text" : "password"}
                     required
-                    placeholder="At least 6 characters"
+                    placeholder="At least 8 characters, 1 uppercase letter, 1 special character"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 pr-10"
                   />
                   <button
                     type="button"
+                    aria-label="Show password"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                   >

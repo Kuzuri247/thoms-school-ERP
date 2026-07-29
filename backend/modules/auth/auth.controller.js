@@ -58,6 +58,19 @@ exports.students = async (req, res) => {
   res.json({ success: true, data: rows });
 };
 
+exports.validatePassword = (password) => {
+  if (!password || password.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters long.' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter (A-Z).' };
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one special character.' };
+  }
+  return { valid: true };
+};
+
 exports.changePassword = async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const bcrypt = require('bcrypt');
@@ -66,14 +79,10 @@ exports.changePassword = async (req, res) => {
   if (!currentPassword) {
     return res.status(400).json({ success: false, message: 'Current password is required' });
   }
-  if (!newPassword || newPassword.length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
-  }
-  if (!/[A-Z]/.test(newPassword)) {
-    return res.status(400).json({ success: false, message: 'Password must contain at least one uppercase letter (A-Z).' });
-  }
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
-    return res.status(400).json({ success: false, message: 'Password must contain at least one special character (e.g. !@#$%).' });
+
+  const passCheck = exports.validatePassword(newPassword);
+  if (!passCheck.valid) {
+    return res.status(400).json({ success: false, message: passCheck.message });
   }
 
   const [[user]] = await pool.query('SELECT password FROM users WHERE id = ?', [req.user.id]);

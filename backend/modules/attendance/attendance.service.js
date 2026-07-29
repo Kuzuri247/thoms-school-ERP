@@ -6,14 +6,20 @@ const markBulk = async (sectionId, date, records, markedBy) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    for (const rec of records) {
-      await conn.query(
-        `INSERT INTO attendance (student_id, section_id, date, status, marked_by, remarks)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), marked_by = VALUES(marked_by)`,
-        [rec.student_id, sectionId, date, rec.status, markedBy, rec.remarks || null]
-      );
-    }
+    const values = records.map((rec) => [
+      rec.student_id,
+      sectionId,
+      date,
+      rec.status,
+      markedBy,
+      rec.remarks || null,
+    ]);
+    await conn.query(
+      `INSERT INTO attendance (student_id, section_id, date, status, marked_by, remarks)
+       VALUES ?
+       ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), marked_by = VALUES(marked_by)`,
+      [values]
+    );
     await conn.commit();
   } catch (err) {
     await conn.rollback();

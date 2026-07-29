@@ -217,13 +217,13 @@ const Layout = () => {
 
   const isActive = (path) => {
     if (path === "/profile") {
-      return location.pathname === "/profile";
-    }
-    if (path === "/admin/classes") {
       return (
-        location.pathname.startsWith("/admin/classes") ||
+        location.pathname === "/profile" ||
         location.pathname.startsWith("/profile/")
       );
+    }
+    if (path === "/admin/classes") {
+      return location.pathname.startsWith("/admin/classes");
     }
     return (
       location.pathname === path ||

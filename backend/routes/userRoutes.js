@@ -29,8 +29,8 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
     const user = users[0];
     const isTargetStudent = user.role === ROLES.STUDENT;
 
-    // Access check: allow if self, admin, teacher, or if target profile is a student
-    if (!isSelf && !isAdmin && !isTeacher && !isTargetStudent) {
+    // Access check: allow if self, admin, or teacher
+    if (!isSelf && !isAdmin && !isTeacher) {
       return res
         .status(403)
         .json({
@@ -46,7 +46,7 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
       const [students] = await pool.query(
         `SELECT s.id AS student_db_id, s.admission_no, s.roll_no, s.first_name, s.last_name,
                 s.date_of_birth, s.gender, s.blood_group, s.religion, s.nationality,
-                s.address, s.city, s.state, s.pincode, s.admission_date,
+                s.address, s.city, s.state, s.pincode, s.admission_date, s.previous_school,
                 s.status AS student_status, c.name AS class_name
          FROM students s
          LEFT JOIN sections sec ON s.section_id = sec.id
@@ -78,7 +78,7 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
             }
           });
         } catch (gErr) {
-          // Ignore guardian query error if schema empty
+          console.warn("Failed to fetch student guardians:", gErr);
         }
 
         profileData = {
@@ -87,8 +87,8 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
           ...guardianFields,
           full_name:
             profileData.full_name ||
-            `${student.first_name || ""} ${student.last_name || ""}`.trim(),
-          class_name: student.class_name || profileData.class || "Class 10",
+            `${student.first_name || ""} ${student.last_name || ""}`.trim() || null,
+          class_name: student.class_name || profileData.class || null,
           profile_type: "student",
         };
       }
@@ -104,15 +104,15 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
       if (staff.length > 0) {
         profileData = { ...profileData, ...staff[0], profile_type: "staff" };
       } else {
-        // Fallback structure for staff member without record
         profileData = {
           ...profileData,
-          employee_code: `TS-EMP-${String(userId).padStart(3, "0")}`,
-          designation: user.role === "teacher" ? "Faculty Member" : "Staff Member",
-          department: user.role === "teacher" ? "Academics" : "Administration",
-          qualification: "Bachelor's Degree",
-          joining_date: "2022-04-01",
+          employee_code: null,
+          designation: null,
+          department: null,
+          qualification: null,
+          joining_date: null,
           profile_type: "staff",
+          profile_incomplete: true,
         };
       }
     }
@@ -124,7 +124,7 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
   }
 });
 
-// PUT /api/users/:id/profile - Update user profile details and password in DB
+// PUT /api/users/:id/profile - Update user profile details in DB
 router.put("/:id/profile", verifyToken, async (req, res) => {
   try {
     const userId = req.params.id;
@@ -139,7 +139,6 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
       full_name,
       email,
       phone,
-      password,
       // Staff fields
       employee_code,
       first_name,
@@ -171,21 +170,42 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
       guardian_relation,
     } = req.body;
 
-    // 1. Update Base User Table
-    let userUpdateQuery = "UPDATE users SET full_name = COALESCE(?, full_name), email = COALESCE(?, email), phone = COALESCE(?, phone)";
-    const userParams = [full_name || null, email || null, phone || null];
-
-    // Handle Password Update if provided
-    if (password && String(password).trim().length >= 6) {
-      const hashedPassword = await bcrypt.hash(String(password).trim(), 8);
-      userUpdateQuery += ", password = ?";
-      userParams.push(hashedPassword);
+    // Validate email format if provided
+    if (email && typeof email === "string") {
+      const trimmedEmail = email.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmedEmail)) {
+        return res.status(400).json({ success: false, message: "Invalid email format" });
+      }
+      // Check for existing email belonging to another user
+      const [existingEmail] = await pool.query(
+        "SELECT id FROM users WHERE email = ? AND id != ?",
+        [trimmedEmail, userId]
+      );
+      if (existingEmail.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already in use by another account.",
+        });
+      }
     }
 
-    userUpdateQuery += " WHERE id = ?";
-    userParams.push(userId);
+    // 1. Update Base User Table (Passwords must use /api/auth/change-password)
+    const userUpdateQuery =
+      "UPDATE users SET full_name = COALESCE(?, full_name), email = COALESCE(?, email), phone = COALESCE(?, phone) WHERE id = ?";
+    const userParams = [full_name || null, email ? email.trim() : null, phone || null, userId];
 
-    await pool.query(userUpdateQuery, userParams);
+    try {
+      await pool.query(userUpdateQuery, userParams);
+    } catch (dbErr) {
+      if (dbErr.code === "ER_DUP_ENTRY") {
+        return res.status(409).json({
+          success: false,
+          message: "Email is already in use by another account.",
+        });
+      }
+      throw dbErr;
+    }
 
     // 2. Fetch User Role to update corresponding profile tables
     const [[targetUser]] = await pool.query("SELECT role FROM users WHERE id = ?", [userId]);
@@ -207,7 +227,8 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
              address = COALESCE(?, address),
              city = COALESCE(?, city),
              state = COALESCE(?, state),
-             pincode = COALESCE(?, pincode)
+             pincode = COALESCE(?, pincode),
+             previous_school = COALESCE(?, previous_school)
            WHERE id = ?`,
           [
             first_name || null,
@@ -221,6 +242,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
             city || null,
             state || null,
             pincode || null,
+            previous_school || null,
             studentId,
           ]
         );
@@ -242,12 +264,21 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
             [studentId, mother_name, mother_phone || null, mother_occupation || null]
           );
         }
+        if (guardian_name) {
+          const rel = guardian_relation || 'guardian';
+          await pool.query(
+            `INSERT INTO guardians (student_id, relation, full_name, phone)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone)`,
+            [studentId, rel, guardian_name, guardian_phone || null]
+          );
+        }
       }
     } else {
       // Update Staff Profiles Table
       const [staffRows] = await pool.query("SELECT id FROM staff_profiles WHERE user_id = ?", [userId]);
-      const fname = first_name || (full_name ? full_name.split(" ")[0] : "Staff");
-      const lname = last_name || (full_name ? full_name.split(" ").slice(1).join(" ") : "Member");
+      const fname = first_name || (full_name ? full_name.split(" ")[0] : null);
+      const lname = last_name || (full_name ? full_name.split(" ").slice(1).join(" ") : null);
       const empCode = employee_code || `TS-EMP-${String(userId).padStart(3, "0")}`;
 
       if (staffRows.length > 0) {
@@ -291,13 +322,13 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
             empCode,
             fname,
             lname,
-            designation || "Staff Member",
-            department || "General",
-            qualification || "Bachelor's Degree",
+            designation || null,
+            department || null,
+            qualification || null,
             phone || null,
             emergency_contact || null,
             address || null,
-            gender || "male",
+            gender || null,
             date_of_birth || null,
             joining_date || null,
           ]
@@ -305,7 +336,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: "Profile and credentials updated successfully in database" });
+    res.json({ success: true, message: "Profile updated successfully" });
   } catch (error) {
     console.error("Error updating profile:", error);
     res.status(500).json({ success: false, error: error.message });
