@@ -3,14 +3,15 @@ const pool = require('../../config/db');
 
 const create = async (data, assignedBy) => {
   const [result] = await pool.query(
-    `INSERT INTO homework (section_id, subject_id, title, description, attachment_path, assigned_by, assigned_date, due_date, session_id)
-     VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?)`,
+    `INSERT INTO homework (section_id, subject_id, title, description, attachment_path, classroom_url, assigned_by, assigned_date, due_date, session_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?)`,
     [
       data.section_id,
       data.subject_id || null,
       data.title,
       data.description || null,
       data.attachment_path || null,
+      data.classroom_url || null,
       assignedBy,
       data.due_date,
       data.session_id,
@@ -65,7 +66,7 @@ const getSubmissionsForHomework = async (homeworkId) => {
 
 const getForStudent = async (studentId) => {
   const [rows] = await pool.query(
-    `SELECT h.id AS homework_id, h.title, h.description, h.due_date, h.assigned_date,
+    `SELECT h.id AS homework_id, h.title, h.description, h.classroom_url, h.due_date, h.assigned_date,
             sub.name AS subject_name, hs.status, hs.remarks, hs.submitted_at
      FROM homework_submissions hs
      JOIN homework h ON hs.homework_id = h.id
@@ -77,4 +78,53 @@ const getForStudent = async (studentId) => {
   return rows;
 };
 
-module.exports = { create, updateStatus, listForSection, getSubmissionsForHomework, getForStudent };
+const listForTeacher = async (teacherUserId) => {
+  const [rows] = await pool.query(
+    `SELECT h.*, sub.name AS subject_name, c.name AS class_name, sec.name AS section_name,
+            COUNT(hs.id) AS total_students,
+            SUM(hs.status = 'completed') AS completed_count
+     FROM homework h
+     JOIN sections sec ON h.section_id = sec.id
+     JOIN classes c ON sec.class_id = c.id
+     LEFT JOIN subjects sub ON h.subject_id = sub.id
+     LEFT JOIN homework_submissions hs ON hs.homework_id = h.id
+     WHERE h.assigned_by = ?
+     GROUP BY h.id
+     ORDER BY h.due_date DESC`,
+    [teacherUserId]
+  );
+  return rows;
+};
+
+const listAllForAdmin = async () => {
+  const [rows] = await pool.query(
+    `SELECT h.*, sub.name AS subject_name, c.id AS class_id, c.name AS class_name, sec.name AS section_name,
+            u.full_name AS teacher_name,
+            COUNT(hs.id) AS total_students,
+            SUM(hs.status = 'completed') AS completed_count
+     FROM homework h
+     JOIN sections sec ON h.section_id = sec.id
+     JOIN classes c ON sec.class_id = c.id
+     LEFT JOIN subjects sub ON h.subject_id = sub.id
+     LEFT JOIN users u ON h.assigned_by = u.id
+     LEFT JOIN homework_submissions hs ON hs.homework_id = h.id
+     GROUP BY h.id
+     ORDER BY c.numeric_value, h.due_date DESC`
+  );
+  return rows;
+};
+
+const deleteHomework = async (homeworkId) => {
+  await pool.query('DELETE FROM homework WHERE id = ?', [homeworkId]);
+};
+
+module.exports = {
+  create,
+  updateStatus,
+  listForSection,
+  getSubmissionsForHomework,
+  getForStudent,
+  listForTeacher,
+  listAllForAdmin,
+  deleteHomework,
+};

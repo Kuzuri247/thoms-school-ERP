@@ -207,12 +207,15 @@ router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, RO
         const { classId } = req.params;
         const [rows] = await pool.query(`
             SELECT s.id AS student_id, s.user_id, s.admission_no, s.roll_no, s.first_name, s.last_name,
-                   s.gender, s.blood_group, s.city, s.state, s.admission_date, s.status,
-                   u.email, u.phone, c.id AS class_id, c.name AS class_name
+                   s.gender, s.blood_group, s.city, s.state, s.admission_date, s.status, s.address, s.previous_school,
+                   u.email, u.phone, c.id AS class_id, c.name AS class_name,
+                   g_father.full_name AS father_name, g_guard.full_name AS guardian_name
             FROM students s
             JOIN users u ON s.user_id = u.id
             LEFT JOIN sections sec ON s.section_id = sec.id
             LEFT JOIN classes c ON sec.class_id = c.id
+            LEFT JOIN guardians g_father ON g_father.student_id = s.id AND g_father.relation = 'father'
+            LEFT JOIN guardians g_guard ON g_guard.student_id = s.id AND g_guard.relation = 'guardian'
             WHERE c.id = ?
             ORDER BY s.roll_no, s.first_name
         `, [classId]);
