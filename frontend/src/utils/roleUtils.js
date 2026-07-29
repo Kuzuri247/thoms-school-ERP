@@ -89,6 +89,16 @@ export const isStudent = (user) => {
 };
 
 /**
+ * Staff check (Admin, Super Admin, Teacher).
+ * @param {Object} [user]
+ * @returns {boolean}
+ */
+export const isStaff = (user) => {
+  const norm = normalizeRole(user?.role);
+  return norm === ROLES.ADMIN || norm === ROLES.SUPER_ADMIN || norm === ROLES.TEACHER;
+};
+
+/**
  * Fail-closed RBAC check for allowed roles.
  * @param {Object} [user]
  * @param {Array<string>} [allowedRoles]

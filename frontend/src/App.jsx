@@ -14,9 +14,10 @@ import FinanceDashboard from './features/fees/FinanceDashboard';
 import AdminUserManagementView from './features/admin/AdminUserManagementView';
 import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
 import UserProfileView from './features/users/UserProfileView';
+import AdminHomeworkView from './features/admin/AdminHomeworkView';
 import Noticeboard from './features/noticeboard/Noticeboard';
 import AcademicCalendarView from './features/academics/AcademicCalendarView';
-import ExamResultsView from './features/academics/ExamResultsView';
+// import ExamResultsView from './features/academics/ExamResultsView';
 import CommunicationCenterView from './features/communication/CommunicationCenterView';
 import SystemSettingsView from './features/admin/SystemSettingsView';
 import TransportManagementView from './features/transport/TransportManagementView';
@@ -58,7 +59,7 @@ function App() {
           <Route path="/profile" element={<UserProfileView />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
           <Route path="/academic/calendar" element={<AcademicCalendarView />} />
-          <Route path="/academic/examinations" element={<ExamResultsView />} />
+          {/* <Route path="/academic/examinations" element={<ExamResultsView />} /> */}
 
           {/* Super Admin Exclusive Route */}
           <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
@@ -71,6 +72,7 @@ function App() {
             <Route path="/admin/users" element={<AdminUserManagementView initialTab="all" />} />
             <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
             <Route path="/admin/notices" element={<Noticeboard />} />
+            <Route path="/admin/homework" element={<AdminHomeworkView />} />
             <Route path="/admin/settings" element={<SystemSettingsView />} />
             <Route path="/communication/center" element={<CommunicationCenterView />} />
             <Route path="/transport/management" element={<TransportManagementView />} />
@@ -82,6 +84,7 @@ function App() {
             <Route path="/teacher/attendance" element={<TeacherDashboard activeTab="attendance" />} />
             <Route path="/teacher/academics" element={<TeacherDashboard activeTab="exams" />} />
             <Route path="/teacher/timetable" element={<TeacherDashboard activeTab="timetable" />} />
+            <Route path="/teacher/homework" element={<TeacherDashboard activeTab="homework" />} />
           </Route>
 
           {/* Student Portal Routes (Strictly Student, Admin, Super Admin) */}

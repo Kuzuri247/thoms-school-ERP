@@ -22,3 +22,25 @@ export const useGetStudentTransport = (studentId) => {
     enabled: !!studentId,
   });
 };
+
+export const useGetRouteStops = (routeId) => {
+  return useQuery({
+    queryKey: ['transportRouteStops', routeId],
+    queryFn: async () => {
+      if (!routeId) return null;
+      const { data } = await api.get(`/transport/routes/${routeId}/stops`);
+      return data;
+    },
+    enabled: !!routeId,
+  });
+};
+
+export const useGetMyRouteStudents = () => {
+  return useQuery({
+    queryKey: ['myRouteStudents'],
+    queryFn: async () => {
+      const { data } = await api.get('/transport/my-route-students');
+      return data;
+    },
+  });
+};

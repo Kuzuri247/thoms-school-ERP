@@ -2,32 +2,23 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import {
-  BookOpen,
-  Users,
-  ChevronRight,
   Search,
   GraduationCap,
-  Building2,
   Plus,
   X,
   Check,
-  Shield,
   UserPlus,
-  Phone,
-  Mail,
-  Home,
-  Award,
   User,
-  Image as ImageIcon,
-  Filter,
-  Layers,
-  Briefcase,
-  Heart,
   Eye,
   Upload,
-  Camera,
 } from "lucide-react";
 import useAuthStore from "../../store/authStore";
+
+const DEMO_CLASSES = [
+  { class_id: 101, class_name: "Class 10", numeric_value: 10 },
+  { class_id: 102, class_name: "Class 11", numeric_value: 11 },
+  { class_id: 103, class_name: "Class 12", numeric_value: 12 },
+];
 
 const AdminClassDirectoryView = () => {
   const navigate = useNavigate();
@@ -41,7 +32,6 @@ const AdminClassDirectoryView = () => {
 
   // Modals visibility
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showStudentDetailModal, setShowStudentDetailModal] = useState(null);
   const [showAddClassModal, setShowAddClassModal] = useState(false);
 
   // Add Class Form State
@@ -49,7 +39,7 @@ const AdminClassDirectoryView = () => {
   const [newGradeValue, setNewGradeValue] = useState("");
   const [newClassTeacher, setNewClassTeacher] = useState("");
 
-  // Add Student Form State (Pure Frontend Design Ready)
+  // Add Student Form State
   const [studentForm, setStudentForm] = useState({
     first_name: "",
     last_name: "",
@@ -75,6 +65,18 @@ const AdminClassDirectoryView = () => {
 
   const [formSuccess, setFormSuccess] = useState("");
 
+  // Escape key handler for accessible modals
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        if (showAddStudentModal) setShowAddStudentModal(false);
+        if (showAddClassModal) setShowAddClassModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showAddStudentModal, showAddClassModal]);
+
   useEffect(() => {
     fetchClasses();
   }, []);
@@ -91,38 +93,26 @@ const AdminClassDirectoryView = () => {
       const res = await api.get("/admin/classes");
       const raw = res.data?.data || [];
 
-      // Each row is a single class — no section grouping needed
-      const list = raw
-        .map((r) => ({
-          class_id: r.class_id,
-          class_name: r.class_name,
-          numeric_value: r.numeric_value,
-        }))
-        .sort((a, b) => a.numeric_value - b.numeric_value);
+      const list = raw.length > 0
+        ? raw
+            .map((r) => ({
+              class_id: r.class_id,
+              class_name: r.class_name,
+              numeric_value: r.numeric_value,
+            }))
+            .sort((a, b) => a.numeric_value - b.numeric_value)
+        : DEMO_CLASSES;
 
+      setClassesData(list);
       const savedClassId = sessionStorage.getItem("selectedClassId");
-
-      // Fallback demo classes if DB is empty
-      if (list.length === 0) {
-        const demoList = [
-          { class_id: 101, class_name: "Class 10", numeric_value: 10 },
-          { class_id: 102, class_name: "Class 11", numeric_value: 11 },
-          { class_id: 103, class_name: "Class 12", numeric_value: 12 },
-        ];
-        setClassesData(demoList);
-        const foundSaved = savedClassId
-          ? demoList.find((c) => String(c.class_id) === String(savedClassId))
-          : null;
-        setSelectedClass(foundSaved || demoList[0]);
-      } else {
-        setClassesData(list);
-        const foundSaved = savedClassId
-          ? list.find((c) => String(c.class_id) === String(savedClassId))
-          : null;
-        setSelectedClass(foundSaved || list[0]);
-      }
+      const foundSaved = savedClassId
+        ? list.find((c) => String(c.class_id) === String(savedClassId))
+        : null;
+      setSelectedClass(foundSaved || list[0]);
     } catch (err) {
       console.error("Failed to fetch classes:", err);
+      setClassesData(DEMO_CLASSES);
+      setSelectedClass(DEMO_CLASSES[0]);
     } finally {
       setLoading(false);
     }
@@ -132,67 +122,14 @@ const AdminClassDirectoryView = () => {
     try {
       const res = await api.get(`/admin/classes/${classId}/students`);
       const apiStudents = res.data?.data || [];
-
-      if (apiStudents.length > 0) {
-        setStudents(apiStudents);
-      } else {
-        // Enriched Frontend Mock Data with all requested details
-        setStudents([
-          {
-            student_id: 1,
-            user_id: 11,
-            admission_no: "TS-2026-001",
-            roll_no: "101",
-            first_name: "Aarav",
-            last_name: "Sharma",
-            email: "student@thomson.edu",
-            phone: "+91 98765 43210",
-            profile_pic:
-              "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
-            address: "14/B Heritage Park, MG Road, New Delhi",
-            previous_school: "St. Xavier Convent High School",
-            father_name: "Vikram Sharma",
-            father_phone: "+91 98111 22334",
-            father_occupation: "Senior Software Engineer",
-            mother_name: "Priyanka Sharma",
-            mother_phone: "+91 98111 22335",
-            mother_occupation: "Architect",
-            guardian_name: "Ramesh Sharma (Grandfather)",
-            guardian_phone: "+91 98111 00000",
-            guardian_relation: "Grandfather",
-          },
-          {
-            student_id: 2,
-            user_id: 12,
-            admission_no: "TS-2026-002",
-            roll_no: "102",
-            first_name: "Ananya",
-            last_name: "Patel",
-            section_name: "A",
-            email: "ananya.p@thomson.edu",
-            phone: "+91 98989 12345",
-            profile_pic:
-              "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=200",
-            address: "702 Lakeview Apartments, Civil Lines",
-            previous_school: "Delhi Public School",
-            father_name: "Rajesh Patel",
-            father_phone: "+91 99000 11223",
-            father_occupation: "Business Owner",
-            mother_name: "Sunita Patel",
-            mother_phone: "+91 99000 11224",
-            mother_occupation: "Doctor (Pediatrician)",
-            guardian_name: "Rajesh Patel",
-            guardian_phone: "+91 99000 11223",
-            guardian_relation: "Father",
-          },
-        ]);
-      }
+      setStudents(apiStudents);
     } catch (err) {
       console.error("Failed to fetch class students:", err);
+      setStudents([]);
     }
   };
 
-  // Add Class Handler (Frontend Only State Update)
+  // Add Class Handler
   const handleAddClassFrontend = (e) => {
     e.preventDefault();
     if (!newClassName.trim()) return;
@@ -202,17 +139,19 @@ const AdminClassDirectoryView = () => {
       class_id: newId,
       class_name: newClassName.trim(),
       numeric_value: parseInt(newGradeValue) || classesData.length + 1,
+      class_teacher: newClassTeacher.trim() || undefined,
     };
 
     setClassesData((prev) => [...prev, createdClass]);
     setSelectedClass(createdClass);
+    sessionStorage.setItem("selectedClassId", String(createdClass.class_id));
     setShowAddClassModal(false);
 
     // Reset Form
     setNewClassName("");
     setNewGradeValue("");
     setNewClassTeacher("");
-    setFormSuccess("Class added successfully!");
+    setFormSuccess("Class added locally (preview mode)");
     setTimeout(() => setFormSuccess(""), 3000);
   };
 
@@ -232,23 +171,21 @@ const AdminClassDirectoryView = () => {
     }
   };
 
-  // Add Student Handler (Frontend Only State Update)
+  // Add Student Handler
   const handleAddStudentFrontend = (e) => {
     e.preventDefault();
     if (!studentForm.first_name.trim()) return;
 
     const chosenClassId = studentForm.class_id || selectedClass?.class_id;
-
     const targetClass =
       classesData.find((c) => String(c.class_id) === String(chosenClassId)) ||
       selectedClass;
-    if (targetClass) {
-      setSelectedClass(targetClass);
-    }
+
+    const validUserId = students.length > 0 && students[0].user_id ? students[0].user_id : 1;
 
     const newStu = {
       student_id: Date.now(),
-      user_id: Date.now(),
+      user_id: validUserId,
       class_id: chosenClassId,
       admission_no:
         studentForm.admission_no ||
@@ -260,23 +197,24 @@ const AdminClassDirectoryView = () => {
         studentForm.email ||
         `${studentForm.first_name.toLowerCase()}@student.thomson.edu`,
       phone: studentForm.phone || "+91 99999 88888",
-      profile_pic:
-        studentForm.profile_pic ||
-        "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200",
-      address: studentForm.address || "Address provided on record",
-      previous_school: studentForm.previous_school || "N/A",
-      father_name: studentForm.father_name || "Father Name",
-      father_phone: studentForm.father_phone || "N/A",
-      father_occupation: studentForm.father_occupation || "N/A",
-      mother_name: studentForm.mother_name || "Mother Name",
-      mother_phone: studentForm.mother_phone || "N/A",
-      mother_occupation: studentForm.mother_occupation || "N/A",
-      guardian_name:
-        studentForm.guardian_name || studentForm.father_name || "Guardian",
-      guardian_phone:
-        studentForm.guardian_phone || studentForm.father_phone || "N/A",
+      profile_pic: studentForm.profile_pic || "",
+      address: studentForm.address || "",
+      previous_school: studentForm.previous_school || "",
+      father_name: studentForm.father_name || "",
+      father_phone: studentForm.father_phone || "",
+      father_occupation: studentForm.father_occupation || "",
+      mother_name: studentForm.mother_name || "",
+      mother_phone: studentForm.mother_phone || "",
+      mother_occupation: studentForm.mother_occupation || "",
+      guardian_name: studentForm.guardian_name || studentForm.father_name || "",
+      guardian_phone: studentForm.guardian_phone || studentForm.father_phone || "",
       guardian_relation: studentForm.guardian_relation || "Parent",
     };
+
+    if (targetClass && targetClass.class_id !== selectedClass?.class_id) {
+      setSelectedClass(targetClass);
+      sessionStorage.setItem("selectedClassId", String(targetClass.class_id));
+    }
 
     setStudents((prev) => [newStu, ...prev]);
     setShowAddStudentModal(false);
@@ -305,15 +243,24 @@ const AdminClassDirectoryView = () => {
       guardian_relation: "",
     });
 
-    setFormSuccess("Student added to roster successfully!");
+    setFormSuccess("Student added locally to roster!");
     setTimeout(() => setFormSuccess(""), 3000);
+  };
+
+  const goToProfile = (s) => {
+    if (selectedClass) {
+      sessionStorage.setItem("selectedClassId", String(selectedClass.class_id));
+    }
+    navigate(`/profile/${s.user_id || s.student_id}`);
   };
 
   const filteredStudents = students.filter((s) => {
     const term = searchTerm.toLowerCase();
     const fullName = `${s.first_name || ""} ${s.last_name || ""}`.toLowerCase();
+    const rollNoStr = String(s.roll_no || "").toLowerCase();
     return (
       fullName.includes(term) ||
+      rollNoStr.includes(term) ||
       (s.admission_no || "").toLowerCase().includes(term) ||
       (s.email || "").toLowerCase().includes(term)
     );
@@ -331,29 +278,38 @@ const AdminClassDirectoryView = () => {
             Standards & Student Directory
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Manage academic standards, assigned class teachers, and student
-            profiles.
+            Manage academic standards and student profiles.
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           {(user?.role === "super_admin" || user?.role === "admin") && (
-            <button
-              onClick={() => {
-                const initialClassId =
-                  selectedClass?.class_id || classesData[0]?.class_id || "";
-                setStudentForm((prev) => ({
-                  ...prev,
-                  class_id: initialClassId,
-                }));
-                setShowAddStudentModal(true);
-              }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4" />
-              Add Student
-            </button>
+            <>
+              <button
+                onClick={() => setShowAddClassModal(true)}
+                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                Add Class Standard
+              </button>
+
+              <button
+                onClick={() => {
+                  const initialClassId =
+                    selectedClass?.class_id || classesData[0]?.class_id || "";
+                  setStudentForm((prev) => ({
+                    ...prev,
+                    class_id: initialClassId,
+                  }));
+                  setShowAddStudentModal(true);
+                }}
+                className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Student
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -384,6 +340,9 @@ const AdminClassDirectoryView = () => {
               return (
                 <div
                   key={cls.class_id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select ${cls.class_name}`}
                   onClick={() => {
                     setSelectedClass(cls);
                     sessionStorage.setItem(
@@ -391,10 +350,20 @@ const AdminClassDirectoryView = () => {
                       String(cls.class_id),
                     );
                   }}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedClass(cls);
+                      sessionStorage.setItem(
+                        "selectedClassId",
+                        String(cls.class_id),
+                      );
+                    }
+                  }}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all outline-none ${
                     isSelected
                       ? "bg-indigo-50/90 border-indigo-300 shadow-xs ring-2 ring-indigo-500/20"
-                      : "bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs"
+                      : "bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs focus:ring-2 focus:ring-indigo-500/20"
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -425,7 +394,7 @@ const AdminClassDirectoryView = () => {
                 <p className="text-xs font-semibold text-slate-500 mt-1">
                   Enrolled Students:{" "}
                   <span className="text-slate-800 font-bold">
-                    {filteredStudents.length}
+                    {students.length}
                   </span>
                 </p>
               </div>
@@ -445,122 +414,112 @@ const AdminClassDirectoryView = () => {
           </div>
 
           {/* Student Roster Table */}
-          {
-            /* Student Roster Table */
-            <div className="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-xs">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-xs">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
+                <tr>
+                  <th className="px-4 py-3">Student</th>
+                  <th className="px-4 py-3">Admission & Roll</th>
+                  <th className="px-4 py-3">Parent / Guardian</th>
+                  <th className="px-4 py-3">Contact Email & Phone</th>
+                  <th className="px-4 py-3 text-right">Profile View</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredStudents.length === 0 ? (
                   <tr>
-                    <th className="px-4 py-3">Student</th>
-                    <th className="px-4 py-3">Admission & Roll</th>
-                    <th className="px-4 py-3">Parent / Guardian</th>
-                    <th className="px-4 py-3">Contact Email & Phone</th>
-                    <th className="px-4 py-3 text-right">Profile View</th>
+                    <td
+                      colSpan="5"
+                      className="px-4 py-8 text-center text-slate-400 text-xs font-medium"
+                    >
+                      No students found for this class.
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {filteredStudents.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan="5"
-                        className="px-4 py-8 text-center text-slate-400 text-xs font-medium"
-                      >
-                        No students found for this class.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredStudents.map((s) => (
-                      <tr
-                        key={s.student_id}
-                        className="hover:bg-slate-50/80 transition cursor-pointer"
-                        onClick={() => {
-                          if (selectedClass)
-                            sessionStorage.setItem(
-                              "selectedClassId",
-                              String(selectedClass.class_id),
-                            );
-                          navigate(`/profile/${s.user_id || s.student_id}`);
-                        }}
-                      >
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={
-                                s.profile_pic ||
-                                "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"
-                              }
-                              alt={s.first_name}
-                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs"
-                            />
-                            <div>
-                              <div className="font-extrabold text-slate-900 text-xs">
-                                {s.first_name} {s.last_name}
-                              </div>
-                              <div className="text-[10px] font-semibold text-slate-400">
-                                Roll {s.roll_no || "—"}
-                              </div>
+                ) : (
+                  filteredStudents.map((s) => (
+                    <tr
+                      key={s.student_id}
+                      className="hover:bg-slate-50/80 transition cursor-pointer"
+                      onClick={() => goToProfile(s)}
+                    >
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={
+                              s.profile_pic ||
+                              "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200"
+                            }
+                            alt={s.first_name}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200 shadow-2xs"
+                          />
+                          <div>
+                            <div className="font-extrabold text-slate-900 text-xs">
+                              {s.first_name} {s.last_name}
+                            </div>
+                            <div className="text-[10px] font-semibold text-slate-400">
+                              Roll {s.roll_no || "—"}
                             </div>
                           </div>
-                        </td>
+                        </div>
+                      </td>
 
-                        <td className="px-4 py-3.5">
-                          <div className="font-mono font-bold text-xs text-slate-800">
-                            {s.admission_no}
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-medium">
-                            Roll No: {s.roll_no}
-                          </div>
-                        </td>
+                      <td className="px-4 py-3.5">
+                        <div className="font-mono font-bold text-xs text-slate-800">
+                          {s.admission_no || "—"}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          Roll No: {s.roll_no || "—"}
+                        </div>
+                      </td>
 
-                        <td className="px-4 py-3.5 text-xs">
-                          <div className="font-extrabold text-slate-800">
-                            {s.father_name || s.guardian_name || "N/A"}
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-medium">
-                            {s.father_occupation || "Parent"}
-                          </div>
-                        </td>
+                      <td className="px-4 py-3.5 text-xs">
+                        <div className="font-extrabold text-slate-800">
+                          {s.father_name || s.guardian_name || "Not provided"}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {s.father_occupation || "Parent"}
+                        </div>
+                      </td>
 
-                        <td className="px-4 py-3.5 text-xs">
-                          <div className="font-medium text-slate-700">
-                            {s.email || "N/A"}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-500">
-                            {s.phone || "N/A"}
-                          </div>
-                        </td>
+                      <td className="px-4 py-3.5 text-xs">
+                        <div className="font-medium text-slate-700">
+                          {s.email || "Not provided"}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500">
+                          {s.phone || "Not provided"}
+                        </div>
+                      </td>
 
-                        <td className="px-4 py-3.5 text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (selectedClass)
-                                sessionStorage.setItem(
-                                  "selectedClassId",
-                                  String(selectedClass.class_id),
-                                );
-                              navigate(`/profile/${s.user_id || s.student_id}`);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition flex items-center gap-1 text-xs font-bold ml-auto"
-                            title="View Full Student Profile"
-                          >
-                            <Eye className="w-4 h-4 text-indigo-600" />
-                            <span>View Profile</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          }
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            goToProfile(s);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 transition flex items-center gap-1 text-xs font-bold ml-auto cursor-pointer"
+                          title="View Full Student Profile"
+                        >
+                          <Eye className="w-4 h-4 text-indigo-600" />
+                          <span>View Profile</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {/* Add Class Modal (Pure Frontend) */}
+      {/* Add Class Modal */}
       {showAddClassModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-class-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+        >
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
@@ -568,7 +527,7 @@ const AdminClassDirectoryView = () => {
                   <GraduationCap className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 id="add-class-title" className="text-base font-black text-slate-900">
                     Add Academic Class / Standard
                   </h3>
                   <p className="text-[11px] font-semibold text-slate-400">
@@ -578,7 +537,7 @@ const AdminClassDirectoryView = () => {
               </div>
               <button
                 onClick={() => setShowAddClassModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -629,7 +588,7 @@ const AdminClassDirectoryView = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddClassModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -645,9 +604,14 @@ const AdminClassDirectoryView = () => {
         </div>
       )}
 
-      {/* Add Student Modal (Pure Frontend Design Ready) */}
+      {/* Add Student Modal */}
       {showAddStudentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-student-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+        >
           <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 space-y-5 animate-in fade-in zoom-in duration-200 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
@@ -655,7 +619,7 @@ const AdminClassDirectoryView = () => {
                   <UserPlus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 id="add-student-title" className="text-base font-black text-slate-900">
                     Add New Student Profile
                   </h3>
                   <p className="text-[11px] font-semibold text-slate-400">
@@ -666,7 +630,7 @@ const AdminClassDirectoryView = () => {
               </div>
               <button
                 onClick={() => setShowAddStudentModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1062,7 +1026,7 @@ const AdminClassDirectoryView = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddStudentModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1077,8 +1041,6 @@ const AdminClassDirectoryView = () => {
           </div>
         </div>
       )}
-
-      {/* Add Student Modal (Pure Frontend Design Ready) */}
     </div>
   );
 };

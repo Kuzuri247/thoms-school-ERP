@@ -30,18 +30,21 @@ async function seed() {
     // Purge legacy data to avoid duplicates and mixed-up grades
     console.log('Purging legacy data...');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
-    await connection.query('TRUNCATE TABLE attendance');
-    await connection.query('TRUNCATE TABLE timetables');
-    await connection.query('TRUNCATE TABLE homework');
-    await connection.query('TRUNCATE TABLE teacher_assignments');
-    await connection.query('TRUNCATE TABLE guardians');
-    await connection.query('TRUNCATE TABLE students');
-    await connection.query('TRUNCATE TABLE staff_profiles');
-    await connection.query('TRUNCATE TABLE subjects');
-    await connection.query('TRUNCATE TABLE sections');
-    await connection.query('TRUNCATE TABLE classes');
-    await connection.query("DELETE FROM users WHERE email LIKE '%@erp.com' OR role IN ('student', 'teacher', 'cashier')");
-    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    try {
+      await connection.query('TRUNCATE TABLE attendance');
+      await connection.query('TRUNCATE TABLE timetables');
+      await connection.query('TRUNCATE TABLE homework');
+      await connection.query('TRUNCATE TABLE teacher_assignments');
+      await connection.query('TRUNCATE TABLE guardians');
+      await connection.query('TRUNCATE TABLE students');
+      await connection.query('TRUNCATE TABLE staff_profiles');
+      await connection.query('TRUNCATE TABLE subjects');
+      await connection.query('TRUNCATE TABLE sections');
+      await connection.query('TRUNCATE TABLE classes');
+      await connection.query("DELETE FROM users WHERE email LIKE '%@erp.com' OR role IN ('student', 'teacher', 'cashier')");
+    } finally {
+      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+    }
 
     // 2. Classes & Sections (14 Standards: LKG, UKG, Class 1 to 12 in exact serial order 1 to 14)
     const classDefs = [
@@ -148,6 +151,10 @@ async function seed() {
       { email: 'teacher@thomson.edu', code: 'TCH012', fname: 'Rajesh', lname: 'Verma', desc: 'Class Teacher - Class 10 (HOD)', cls: 'Class 10' },
       { email: 'teacher.c11@thomson.edu', code: 'TCH013', fname: 'Dr. S. K.', lname: 'Gupta', desc: 'Class Teacher - Class 11', cls: 'Class 11' },
       { email: 'teacher.c12@thomson.edu', code: 'TCH014', fname: 'Meenakshi', lname: 'Sundaram', desc: 'Class Teacher - Class 12', cls: 'Class 12' },
+      // Pure Subject Teachers (Not Class Teachers)
+      { email: 'teacher.phy@thomson.edu', code: 'TCH020', fname: 'Dr. Vikram', lname: 'Sarabhai', desc: 'Physics Senior Faculty', cls: null },
+      { email: 'teacher.chem@thomson.edu', code: 'TCH021', fname: 'Priyanka', lname: 'Sen', desc: 'Chemistry Department Lead', cls: null },
+      { email: 'teacher.eng@thomson.edu', code: 'TCH022', fname: 'David', lname: 'Miller', desc: 'English & Humanities Lecturer', cls: null },
     ];
 
     const teacherUserIds = [];
@@ -155,12 +162,14 @@ async function seed() {
       const uId = await createUser(t.email, 'teacher', `Prof. ${t.fname} ${t.lname}`);
       await createStaff(uId, t.code, t.fname, t.lname, t.desc, 'Academics');
       teacherUserIds.push(uId);
-      const secId = sectionIds[t.cls]['Section A'];
-      if (secId) {
-        await connection.query(`
-          INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher) 
-          VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE is_class_teacher=1
-        `, [uId, secId, sessionId]);
+      if (t.cls) {
+        const secId = sectionIds[t.cls]['Section A'];
+        if (secId) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher) 
+            VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE is_class_teacher=1
+          `, [uId, secId, sessionId]);
+        }
       }
     }
 
@@ -234,7 +243,38 @@ async function seed() {
       }
     }
 
+    // Assign Subject Teachers (is_class_teacher = 0)
+    const phyTeacherId = teacherUserIds[13]; // Dr. Vikram Sarabhai
+    const chemTeacherId = teacherUserIds[14]; // Priyanka Sen
+    const engTeacherId = teacherUserIds[15]; // David Miller
 
+    const targetClassesForSubjectTeachers = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
+    for (const clsName of targetClassesForSubjectTeachers) {
+      const secId = sectionIds[clsName] ? sectionIds[clsName]['Section A'] : null;
+      if (secId) {
+        // Physics Subject Teacher
+        if (phyTeacherId && subjectIdsByClass[clsName]['Physics']) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
+            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
+          `, [phyTeacherId, secId, subjectIdsByClass[clsName]['Physics'], sessionId]);
+        }
+        // Chemistry Subject Teacher
+        if (chemTeacherId && subjectIdsByClass[clsName]['Chemistry']) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
+            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
+          `, [chemTeacherId, secId, subjectIdsByClass[clsName]['Chemistry'], sessionId]);
+        }
+        // English Subject Teacher
+        if (engTeacherId && subjectIdsByClass[clsName]['English']) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
+            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
+          `, [engTeacherId, secId, subjectIdsByClass[clsName]['English'], sessionId]);
+        }
+      }
+    }
 
     // 10. Attendance Records (Past 10 Days)
     for (let dayOffset = 0; dayOffset < 10; dayOffset++) {
@@ -252,38 +292,36 @@ async function seed() {
       }
     }
 
-    // 11. Timetable Schedule (Periods 1 to 4 Mon-Fri for Class 10)
+    // 11. Timetable Schedule (7 Periods Mon-Sat with Recess between Period 3 & 4)
     const class10SecA = sectionIds['Class 10'] ? sectionIds['Class 10']['Section A'] : null;
     const class10Math = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Mathematics'] : null;
     const class10Phy = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Physics'] : null;
+    const class10Chem = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Chemistry'] : null;
     const class10Eng = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['English'] : null;
     const class10CS = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Computer Science'] : null;
+    const class10SST = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Social Studies'] : null;
+    const class10Bio = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Biology'] : null;
 
-    if (class10SecA && class10Math && class10Phy && class10Eng && class10CS) {
-      for (let day = 1; day <= 5; day++) {
-        await connection.query(`
-          INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-          VALUES (?, ?, ?, ?, 1, '08:30:00', '09:15:00', ?)
-          ON DUPLICATE KEY UPDATE start_time='08:30:00'
-        `, [class10SecA, class10Math, teacherUserIds[0], day, sessionId]);
+    if (class10SecA && class10Math && class10Phy && class10Chem && class10Eng && class10CS && class10SST && class10Bio) {
+      const periods7 = [
+        { period: 1, start: '08:30:00', end: '09:15:00', sub: class10Math, teacher: teacherUserIds[10] || teacherUserIds[0] },
+        { period: 2, start: '09:15:00', end: '10:00:00', sub: class10Phy, teacher: phyTeacherId || teacherUserIds[0] },
+        { period: 3, start: '10:00:00', end: '10:45:00', sub: class10Chem, teacher: chemTeacherId || teacherUserIds[0] },
+        // RECESS BREAK: 10:45 AM - 11:15 AM
+        { period: 4, start: '11:15:00', end: '12:00:00', sub: class10Eng, teacher: engTeacherId || teacherUserIds[0] },
+        { period: 5, start: '12:00:00', end: '12:45:00', sub: class10CS, teacher: teacherUserIds[10] || teacherUserIds[0] },
+        { period: 6, start: '12:45:00', end: '13:30:00', sub: class10SST, teacher: teacherUserIds[10] || teacherUserIds[0] },
+        { period: 7, start: '13:30:00', end: '14:15:00', sub: class10Bio, teacher: teacherUserIds[10] || teacherUserIds[0] },
+      ];
 
-        await connection.query(`
-          INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-          VALUES (?, ?, ?, ?, 2, '09:15:00', '10:00:00', ?)
-          ON DUPLICATE KEY UPDATE start_time='09:15:00'
-        `, [class10SecA, class10Phy, teacherUserIds[1] || teacherUserIds[0], day, sessionId]);
-
-        await connection.query(`
-          INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-          VALUES (?, ?, ?, ?, 3, '10:15:00', '11:00:00', ?)
-          ON DUPLICATE KEY UPDATE start_time='10:15:00'
-        `, [class10SecA, class10Eng, teacherUserIds[2] || teacherUserIds[0], day, sessionId]);
-
-        await connection.query(`
-          INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-          VALUES (?, ?, ?, ?, 4, '11:00:00', '11:45:00', ?)
-          ON DUPLICATE KEY UPDATE start_time='11:00:00'
-        `, [class10SecA, class10CS, teacherUserIds[3] || teacherUserIds[0], day, sessionId]);
+      for (let day = 1; day <= 6; day++) {
+        for (const p of periods7) {
+          await connection.query(`
+            INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE start_time=VALUES(start_time), end_time=VALUES(end_time), subject_id=VALUES(subject_id)
+          `, [class10SecA, p.sub, p.teacher, day, p.period, p.start, p.end, sessionId]);
+        }
       }
     }
 
@@ -385,6 +423,12 @@ async function seed() {
     }
 
     // 16. Homework Assignments
+    try {
+      await connection.query("ALTER TABLE homework ADD COLUMN classroom_url VARCHAR(500) DEFAULT NULL");
+    } catch (e) {
+      // Column may already exist
+    }
+
     if (class10Math) {
       const [[existingHw1]] = await connection.query(
         "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
@@ -392,8 +436,8 @@ async function seed() {
       );
       if (!existingHw1) {
         await connection.query(`
-          INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
-          VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', ?, ?, ?, ?)
+          INSERT INTO homework (section_id, subject_id, title, description, classroom_url, assigned_by, assigned_date, due_date, session_id) 
+          VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njky', ?, ?, ?, ?)
         `, [class10SecA, class10Math, teacherUserIds[0], todayStr, todayStr, sessionId]);
       }
     }
@@ -405,8 +449,8 @@ async function seed() {
       );
       if (!existingHw2) {
         await connection.query(`
-          INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
-          VALUES (?, ?, 'Ray Diagrams & Refraction Worksheet', 'Draw ray diagrams for concave and convex mirrors.', ?, ?, ?, ?)
+          INSERT INTO homework (section_id, subject_id, title, description, classroom_url, assigned_by, assigned_date, due_date, session_id) 
+          VALUES (?, ?, 'Ray Diagrams & Refraction Worksheet', 'Draw ray diagrams for concave and convex mirrors.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njkz', ?, ?, ?, ?)
         `, [class10SecA, class10Phy, teacherUserIds[1], todayStr, todayStr, sessionId]);
       }
     }

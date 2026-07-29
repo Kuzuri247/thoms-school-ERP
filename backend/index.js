@@ -36,6 +36,8 @@ app.use('/api/timetable', require('./modules/academics/timetable.route'));
 app.use('/api/teacher', require('./modules/academics/teacher.route'));
 app.use('/api/transport', require('./modules/transport/transport.routes'));
 app.use('/api/reports', require('./modules/reports/reports.route'));
+app.use('/api/global-reports', require('./modules/reports/globalReports.routes'));
+app.use('/api/staff', require('./modules/staff/teacherAssignment.routes'));
 app.use('/api/notices', require('./modules/notices/notices.route'));
 
 app.get('/', (req, res) => {

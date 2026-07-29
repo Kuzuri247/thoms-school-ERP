@@ -123,7 +123,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/80 pb-4 gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5 tracking-tight">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100">
+            <div className="p-2 bg-slate-100 text-slate-800 rounded-xl border border-slate-200">
               <Users className="w-6 h-6" />
             </div>
             User Directory & Access Controls
@@ -135,7 +135,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-indigo-500/20 transition active:scale-[0.99] cursor-pointer"
+          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
         >
           <UserPlus className="w-4 h-4" /> Provision New User / Staff
         </button>

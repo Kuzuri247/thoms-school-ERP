@@ -217,13 +217,13 @@ const Layout = () => {
 
   const isActive = (path) => {
     if (path === "/profile") {
-      return location.pathname === "/profile";
-    }
-    if (path === "/admin/classes") {
       return (
-        location.pathname.startsWith("/admin/classes") ||
+        location.pathname === "/profile" ||
         location.pathname.startsWith("/profile/")
       );
+    }
+    if (path === "/admin/classes") {
+      return location.pathname.startsWith("/admin/classes");
     }
     return (
       location.pathname === path ||
@@ -577,12 +577,12 @@ const Layout = () => {
               <Calendar className="w-4 h-4" /> Academic Calendar
             </Link>
 
-            <Link
+            {/* <Link
               to="/academic/examinations"
               className={navLinkClass("/academic/examinations")}
             >
               <Award className="w-4 h-4" /> Examination Section
-            </Link>
+            </Link> */}
 
             {/* Admin & Super Admin Exclusive Links */}
             {(isSuperAdmin || isAdmin) && (
@@ -616,6 +616,12 @@ const Layout = () => {
                   className={navLinkClass("/admin/notices")}
                 >
                   <Megaphone className="w-4 h-4" /> Notice Board
+                </Link>
+                <Link
+                  to="/admin/homework"
+                  className={navLinkClass("/admin/homework")}
+                >
+                  <BookText className="w-4 h-4" /> Homework Repository
                 </Link>
                 <Link
                   to="/finance/dashboard"
@@ -658,16 +664,22 @@ const Layout = () => {
                   <CalendarCheck className="w-4 h-4" /> Attendance Register
                 </Link>
                 <Link
-                  to="/teacher/academics"
-                  className={navLinkClass("/teacher/academics")}
+                  to="/teacher/homework"
+                  className={navLinkClass("/teacher/homework")}
                 >
-                  <Award className="w-4 h-4" /> Marks & Grading
+                  <BookOpen className="w-4 h-4" /> Class Homework
                 </Link>
                 <Link
                   to="/teacher/timetable"
                   className={navLinkClass("/teacher/timetable")}
                 >
                   <Clock className="w-4 h-4" /> Class Schedule
+                </Link>
+                <Link
+                  to="/teacher/academics"
+                  className={navLinkClass("/teacher/academics")}
+                >
+                  <Award className="w-4 h-4" /> Marks & Grading
                 </Link>
               </>
             )}
