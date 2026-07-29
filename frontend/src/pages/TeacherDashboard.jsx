@@ -11,6 +11,11 @@ import {
   ChevronRight,
   Edit3,
   X,
+  Clock,
+  BookText,
+  BookOpen,
+  Plus,
+  Trash2,
 } from "lucide-react";
 
 const daysOfWeek = [
@@ -48,6 +53,14 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const todayStr = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, "0")}-${String(localNow.getDate()).padStart(2, "0")}`;
   const isSunday = localNow.getDay() === 0;
 
+  const tomorrowObj = new Date(localNow);
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const minDueDateStr = `${tomorrowObj.getFullYear()}-${String(tomorrowObj.getMonth() + 1).padStart(2, "0")}-${String(tomorrowObj.getDate()).padStart(2, "0")}`;
+
+  const maxDueDateObj = new Date(localNow);
+  maxDueDateObj.setMonth(maxDueDateObj.getMonth() + 4);
+  const maxDueDateStr = `${maxDueDateObj.getFullYear()}-${String(maxDueDateObj.getMonth() + 1).padStart(2, "0")}-${String(maxDueDateObj.getDate()).padStart(2, "0")}`;
+
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [students, setStudents] = useState([]);
@@ -69,9 +82,20 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [savingMarks, setSavingMarks] = useState(false);
   const [message, setMessage] = useState("");
 
+  // Teacher Homework State
+  const [teacherHomeworks, setTeacherHomeworks] = useState([]);
+  const [loadingHomeworks, setLoadingHomeworks] = useState(false);
+  const [newHwTitle, setNewHwTitle] = useState("");
+  const [newHwDesc, setNewHwDesc] = useState("");
+  const [newHwDueDate, setNewHwDueDate] = useState("");
+  const [newHwClassroomUrl, setNewHwClassroomUrl] = useState("");
+  const [postingHw, setPostingHw] = useState(false);
+  const [hwMessage, setHwMessage] = useState("");
+
   useEffect(() => {
     fetchTeacherClasses();
     fetchTeacherTimetable();
+    fetchTeacherHomeworks();
   }, []);
 
   useEffect(() => {
@@ -154,6 +178,76 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
       setTimetable(res.data?.data || []);
     } catch (err) {
       console.error("Failed to fetch timetable:", err);
+    }
+  };
+
+  const fetchTeacherHomeworks = async () => {
+    try {
+      setLoadingHomeworks(true);
+      const res = await api.get("/homework/teacher");
+      setTeacherHomeworks(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch teacher homeworks:", err);
+    } finally {
+      setLoadingHomeworks(false);
+    }
+  };
+
+  const handlePostHomework = async (e) => {
+    e.preventDefault();
+    if (!selectedClass) {
+      alert("Please select a target class to assign homework.");
+      return;
+    }
+    if (!newHwTitle || !newHwDueDate) {
+      alert("Title and Due Date are required.");
+      return;
+    }
+
+    if (newHwDueDate < minDueDateStr) {
+      alert(`Homework due date must be at least 1 day ahead from today (tomorrow, ${minDueDateStr}, or later).`);
+      return;
+    }
+
+    if (newHwDueDate > maxDueDateStr) {
+      alert(`Homework due date cannot be more than 4 months in advance (up to ${maxDueDateStr}).`);
+      return;
+    }
+
+    try {
+      setPostingHw(true);
+      await api.post("/homework", {
+        section_id: selectedClass.section_id,
+        subject_id: selectedClass.subject_id,
+        title: newHwTitle,
+        description: newHwDesc,
+        classroom_url: newHwClassroomUrl,
+        due_date: newHwDueDate,
+      });
+
+      setHwMessage("Homework assigned successfully!");
+      setNewHwTitle("");
+      setNewHwDesc("");
+      setNewHwDueDate("");
+      setNewHwClassroomUrl("");
+      fetchTeacherHomeworks();
+      setTimeout(() => setHwMessage(""), 4000);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to assign homework.");
+    } finally {
+      setPostingHw(false);
+    }
+  };
+
+  const handleDeleteHomework = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this homework?")) return;
+    try {
+      await api.delete(`/homework/${id}`);
+      setTeacherHomeworks((prev) => prev.filter((h) => h.id !== id));
+      setHwMessage("Homework deleted successfully.");
+      setTimeout(() => setHwMessage(""), 4000);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete homework.");
     }
   };
 
@@ -686,7 +780,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                             <td className="py-3 px-4 font-mono font-bold text-slate-700">{s.roll}</td>
                             <td className="py-3 px-4 font-bold text-slate-900">{s.name}</td>
                             <td className="py-3 px-4 text-right">
-                              <input
+                          <input
                                 type="number"
                                 min="0"
                                 max="100"
@@ -710,60 +804,310 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   </div>
                 </div>
               )}
+
+              {activeTab === "timetable" && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-teal-600" /> My Teaching Schedule (7 Periods)
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-500 mt-1">
+                        Weekly teaching timetable with 7 periods daily and Recess Break after 3rd period.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {daysOfWeek.map((day, dayIdx) => {
+                      const dayClasses = timetable.filter((t) => Number(t.day_of_week) === dayIdx + 1);
+
+                      const defaultSlots = [
+                        { p: 1, label: "08:30 - 09:15" },
+                        { p: 2, label: "09:15 - 10:00" },
+                        { p: 3, label: "10:00 - 10:45" },
+                        // RECESS BREAK
+                        { p: 4, label: "11:15 - 12:00" },
+                        { p: 5, label: "12:00 - 12:45" },
+                        { p: 6, label: "12:45 - 01:30" },
+                        { p: 7, label: "01:30 - 02:15" },
+                      ];
+
+                      return (
+                        <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+                          <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                            <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                              {day}
+                            </h4>
+                            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                              7 Periods
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {defaultSlots.map((slot) => {
+                              const item = dayClasses.find((t) => Number(t.period_no) === slot.p);
+
+                              return (
+                                <React.Fragment key={`t-slot-${slot.p}`}>
+                                  <div className="p-2 bg-white rounded-xl border border-slate-100 flex items-center justify-between">
+                                    <div>
+                                      <span className="text-xs font-bold text-slate-900 block">
+                                        P{slot.p}: {item ? `${item.class_name} ${item.section_name}` : "Free Period"}
+                                      </span>
+                                      {item?.subject_name && (
+                                        <span className="text-[10px] text-teal-700 font-semibold block">
+                                          {item.subject_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                      {item ? `${item.start_time?.slice(0, 5)} - ${item.end_time?.slice(0, 5)}` : slot.label}
+                                    </span>
+                                  </div>
+
+                                  {/* RECESS BREAK Banner after Period 3 */}
+                                  {slot.p === 3 && (
+                                    <div className="py-1.5 px-3 bg-amber-50 border border-amber-200/80 rounded-xl text-center shadow-2xs">
+                                      <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">
+                                        ☕ Recess Break (10:45 AM - 11:15 AM)
+                                      </span>
+                                    </div>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "homework" && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <BookText className="w-5 h-5 text-teal-600" /> Class Homework Workstation
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-500 mt-1">
+                        Post homework for homeroom classes and subject teaching classes.
+                      </p>
+                    </div>
+                  </div>
+
+                  {hwMessage && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-600" /> {hwMessage}
+                    </div>
+                  )}
+
+                  {/* Create Homework Form */}
+                  <form onSubmit={handlePostHomework} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-teal-600" /> Assign New Homework
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Target Class & Subject</label>
+                        <select
+                          value={selectedClass ? `${selectedClass.id}-${selectedClass.section_id}` : ""}
+                          onChange={(e) => {
+                            const [cId, sId] = e.target.value.split("-");
+                            const found = classes.find(c => String(c.id) === cId && String(c.section_id) === sId);
+                            if (found) setSelectedClass(found);
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {classes.map((cls) => (
+                            <option key={`${cls.id}-${cls.section_id}`} value={`${cls.id}-${cls.section_id}`}>
+                              {cls.name} ({cls.subject} - {cls.role})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Due Date</label>
+                        <input
+                          type="date"
+                          required
+                          min={minDueDateStr}
+                          max={maxDueDateStr}
+                          value={newHwDueDate}
+                          onChange={(e) => setNewHwDueDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                        />
+                        <span className="text-[10px] text-slate-500 font-semibold block mt-1">
+                          Allowed: Tomorrow ({minDueDateStr}) up to 4 months ahead ({maxDueDateStr})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Homework Title</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Chapter 4 Practice Problems & Worksheet"
+                        value={newHwTitle}
+                        onChange={(e) => setNewHwTitle(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Instructions / Description</label>
+                      <textarea
+                        rows="3"
+                        placeholder="Detail the problems, page numbers, or submission requirements..."
+                        value={newHwDesc}
+                        onChange={(e) => setNewHwDesc(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1 flex items-center gap-1">
+                        Google Classroom Link <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="url"
+                        placeholder="e.g. https://classroom.google.com/c/MzkxOTk2MTQ0Njky"
+                        value={newHwClassroomUrl}
+                        onChange={(e) => setNewHwClassroomUrl(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={postingHw}
+                        className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" /> {postingHw ? "Assigning..." : "Publish Homework"}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* List of Posted Homeworks */}
+                  <div className="space-y-4 pt-2">
+                    <h3 className="text-sm font-extrabold text-slate-900 border-b border-slate-100 pb-2">
+                      My Assigned Homework History
+                    </h3>
+
+                    {loadingHomeworks ? (
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">Loading homework assignments...</p>
+                    ) : teacherHomeworks.length === 0 ? (
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">You have not posted any homework assignments yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {teacherHomeworks.map((hw) => {
+                          const pct = hw.total_students > 0 ? Math.round(((hw.completed_count || 0) / hw.total_students) * 100) : 0;
+                          return (
+                            <div key={hw.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100 uppercase">
+                                    {hw.class_name} {hw.section_name} • {hw.subject_name || "General"}
+                                  </span>
+                                  <h4 className="text-sm font-bold text-slate-900 mt-1">{hw.title}</h4>
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteHomework(hw.id)}
+                                  className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                                  title="Delete Homework"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {hw.description && <p className="text-xs text-slate-600 font-medium line-clamp-2">{hw.description}</p>}
+
+                              {hw.classroom_url && (
+                                <a
+                                  href={hw.classroom_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg transition"
+                                >
+                                  <span>Google Classroom</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+
+                              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 pt-2 border-t border-slate-100">
+                                <span>Due: {hw.due_date ? new Date(hw.due_date).toLocaleDateString() : "N/A"}</span>
+                                <span className="font-bold text-teal-700">
+                                  {hw.completed_count || 0}/{hw.total_students || 0} Done ({pct}%)
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
 
-      {showConfirmAttendanceModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
-        >
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-teal-600" /> Confirm Today's Attendance
-              </h3>
-              <button
-                onClick={() => setShowConfirmAttendanceModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-3 text-xs font-semibold text-slate-700">
-              <p>Review the summary for <strong>{selectedClass?.name}</strong> on <strong>{todayStr}</strong>:</p>
-              <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="text-center p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
-                  <span className="text-[10px] font-extrabold uppercase text-emerald-700 block">Present</span>
-                  <span className="text-xl font-black text-emerald-900">{presentCount}</span>
-                </div>
-                <div className="text-center p-2 bg-rose-50 border border-rose-200 rounded-xl">
-                  <span className="text-[10px] font-extrabold uppercase text-rose-700 block">Absent</span>
-                  <span className="text-xl font-black text-rose-900">{absentCount}</span>
+        {showConfirmAttendanceModal && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+          >
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-teal-600" /> Confirm Today's Attendance
+                </h3>
+                <button
+                  onClick={() => setShowConfirmAttendanceModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-3 text-xs font-semibold text-slate-700">
+                <p>Review the summary for <strong>{selectedClass?.name}</strong> on <strong>{todayStr}</strong>:</p>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="text-center p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <span className="text-[10px] font-extrabold uppercase text-emerald-700 block">Present</span>
+                    <span className="text-xl font-black text-emerald-900">{presentCount}</span>
+                  </div>
+                  <div className="text-center p-2 bg-rose-50 border border-rose-200 rounded-xl">
+                    <span className="text-[10px] font-extrabold uppercase text-rose-700 block">Absent</span>
+                    <span className="text-xl font-black text-rose-900">{absentCount}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setShowConfirmAttendanceModal(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition cursor-pointer text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmMarkAttendance}
-                disabled={savingAttendance}
-                className="px-5 py-2 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition shadow-md flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                <Save className="w-4 h-4" /> {savingAttendance ? "Saving..." : "Confirm & Submit"}
-              </button>
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setShowConfirmAttendanceModal(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmMarkAttendance}
+                  disabled={savingAttendance}
+                  className="px-5 py-2 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition shadow-md flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <Save className="w-4 h-4" /> {savingAttendance ? "Saving..." : "Confirm & Submit"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

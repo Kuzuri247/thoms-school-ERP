@@ -5,6 +5,22 @@ const { verifyToken } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/rbac');
 const { ROLES } = require('../../config/constants');
 
+// GET /api/notices/public - List published global public notices (unauthenticated for school landing page)
+router.get('/public', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT n.id, n.title, n.content, n.notice_type, n.publish_date
+      FROM notices n
+      WHERE n.is_published = 1 AND (n.type = 'global' OR n.type IS NULL)
+      ORDER BY n.publish_date DESC, n.created_at DESC 
+      LIMIT 10
+    `);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/notices - List published global notices
 router.get('/', verifyToken, async (req, res) => {
   try {

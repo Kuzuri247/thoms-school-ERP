@@ -618,6 +618,12 @@ const Layout = () => {
                   <Megaphone className="w-4 h-4" /> Notice Board
                 </Link>
                 <Link
+                  to="/admin/homework"
+                  className={navLinkClass("/admin/homework")}
+                >
+                  <BookText className="w-4 h-4" /> Homework Repository
+                </Link>
+                <Link
                   to="/finance/dashboard"
                   className={navLinkClass("/finance/dashboard")}
                 >
@@ -658,16 +664,22 @@ const Layout = () => {
                   <CalendarCheck className="w-4 h-4" /> Attendance Register
                 </Link>
                 <Link
-                  to="/teacher/academics"
-                  className={navLinkClass("/teacher/academics")}
+                  to="/teacher/homework"
+                  className={navLinkClass("/teacher/homework")}
                 >
-                  <Award className="w-4 h-4" /> Marks & Grading
+                  <BookOpen className="w-4 h-4" /> Class Homework
                 </Link>
                 <Link
                   to="/teacher/timetable"
                   className={navLinkClass("/teacher/timetable")}
                 >
                   <Clock className="w-4 h-4" /> Class Schedule
+                </Link>
+                <Link
+                  to="/teacher/academics"
+                  className={navLinkClass("/teacher/academics")}
+                >
+                  <Award className="w-4 h-4" /> Marks & Grading
                 </Link>
               </>
             )}
