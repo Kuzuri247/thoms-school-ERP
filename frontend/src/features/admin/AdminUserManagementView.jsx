@@ -89,6 +89,9 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
   ];
 
   const filteredUsers = displayUsers.filter((u) => {
+    // Exclude students entirely from Staff & User Management section
+    if (u.role === 'student') return false;
+
     const matchesSearch = 
       (u.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (u.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -98,9 +101,9 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
     if (!matchesSearch) return false;
 
     if (activeTab === 'teachers') return u.role === 'teacher';
-    if (activeTab === 'staff') return !['teacher', 'admin', 'super_admin', 'student'].includes(u.role);
+    if (activeTab === 'staff') return !['teacher', 'admin', 'super_admin'].includes(u.role);
     if (activeTab === 'admins') return ['admin', 'super_admin'].includes(u.role);
-    return true; // 'all'
+    return true; // 'all' staff
   });
 
   const getRoleBadgeStyle = (userRole = '') => {
@@ -108,7 +111,7 @@ const AdminUserManagementView = ({ initialTab = 'all' }) => {
   };
 
   const tabs = [
-    { id: 'all', label: 'All Users' },
+    { id: 'all', label: 'All Staff' },
     { id: 'teachers', label: 'Teachers' },
     { id: 'staff', label: 'Other Staff' },
     { id: 'admins', label: 'Admins' },

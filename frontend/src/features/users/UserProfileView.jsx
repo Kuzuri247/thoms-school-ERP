@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useGetUserProfile } from './useUsers';
-import useAuthStore from '../../store/authStore';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useGetUserProfile } from "./useUsers";
+import useAuthStore from "../../store/authStore";
 import {
   ArrowLeft,
   User,
@@ -21,8 +21,11 @@ import {
   ShieldCheck,
   Save,
   X,
-  Sparkles
-} from 'lucide-react';
+  Sparkles,
+  GraduationCap,
+  Building2,
+  Users,
+} from "lucide-react";
 
 const UserProfileView = () => {
   const { id: paramId } = useParams();
@@ -37,44 +40,44 @@ const UserProfileView = () => {
   const [changePasswordModalOpen, setChangePasswordModalOpen] = useState(false);
 
   // Form states for profile edit
-  const [editFullName, setEditFullName] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [editDesignation, setEditDesignation] = useState('');
-  const [editLocation, setEditLocation] = useState('');
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editDesignation, setEditDesignation] = useState("");
+  const [editLocation, setEditLocation] = useState("");
 
   // Form states for password edit
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
-  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState('');
-  const [profileSuccessMessage, setProfileSuccessMessage] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
+  const [profileSuccessMessage, setProfileSuccessMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   // Initialize or fallback profile data
   useEffect(() => {
     if (apiProfile) {
       setProfile(apiProfile);
-      setEditFullName(apiProfile.full_name || '');
-      setEditEmail(apiProfile.email || '');
-      setEditPhone(apiProfile.phone || apiProfile.emergency_phone || '');
-      setEditDesignation(apiProfile.designation || apiProfile.roll_no || '');
+      setEditFullName(apiProfile.full_name || "");
+      setEditEmail(apiProfile.email || "");
+      setEditPhone(apiProfile.phone || apiProfile.emergency_phone || "");
+      setEditDesignation(apiProfile.designation || apiProfile.roll_no || "");
     } else if (authUser) {
       // Fallback for auth user if API query returns error or empty
       const fallback = {
-        id: authUser.id || '101',
-        full_name: authUser.full_name || authUser.name || 'Thomson Admin',
-        email: authUser.email || 'admin@thomsonschool.edu.in',
-        role: authUser.role || 'super_admin',
-        status: 'active',
-        phone: '+91 98765 43210',
-        designation: 'Senior Administrator',
-        department: 'Academic Operations',
-        employee_code: 'TS-EMP-001',
-        profile_type: 'staff',
-        joining_date: '2022-04-01'
+        id: authUser.id || "101",
+        full_name: authUser.full_name || authUser.name || "Thomson Admin",
+        email: authUser.email || "admin@thomsonschool.edu.in",
+        role: authUser.role || "super_admin",
+        status: "active",
+        phone: "+91 98765 43210",
+        designation: "Senior Administrator",
+        department: "Academic Operations",
+        employee_code: "TS-EMP-001",
+        profile_type: "staff",
+        joining_date: "2022-04-01",
       };
       setProfile(fallback);
       setEditFullName(fallback.full_name);
@@ -97,23 +100,32 @@ const UserProfileView = () => {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500">
         <User className="w-16 h-16 text-slate-300 mb-4" />
         <h2 className="text-xl font-bold text-slate-700">Profile Not Found</h2>
-        <p className="text-sm mt-2">The requested user profile does not exist or you lack permission.</p>
-        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg text-sm">
+        <p className="text-sm mt-2">
+          The requested user profile does not exist or you lack permission.
+        </p>
+        <button
+          onClick={() => navigate(-1)}
+          className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg text-sm"
+        >
           Go Back
         </button>
       </div>
     );
   }
 
-  const isStaff = profile.profile_type === 'staff' || profile.role !== 'student';
-  const isStudent = profile.profile_type === 'student' || profile.role === 'student';
+  const isStudent =
+    profile.profile_type === "student" || profile.role === "student";
+  const isStaff = !isStudent;
 
-  const getRoleBadgeStyle = (userRole = '') => {
+  const getRoleBadgeStyle = (userRole = "") => {
     const norm = userRole.toLowerCase();
-    if (norm.includes('super_admin') || norm.includes('admin')) return 'bg-purple-100 text-purple-700 border-purple-200';
-    if (norm.includes('teacher')) return 'bg-amber-100 text-amber-700 border-amber-200';
-    if (norm.includes('student')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    return 'bg-slate-100 text-slate-700 border-slate-200';
+    if (norm.includes("super_admin") || norm.includes("admin"))
+      return "bg-purple-100 text-purple-700 border-purple-200";
+    if (norm.includes("teacher"))
+      return "bg-amber-100 text-amber-700 border-amber-200";
+    if (norm.includes("student"))
+      return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    return "bg-slate-100 text-slate-700 border-slate-200";
   };
 
   // Handle Edit Profile Save
@@ -124,19 +136,19 @@ const UserProfileView = () => {
       full_name: editFullName,
       email: editEmail,
       phone: editPhone,
-      designation: editDesignation
+      designation: editDesignation,
     };
 
     try {
-      const { default: api } = await import('../../api/axios');
+      const { default: api } = await import("../../api/axios");
       await api.put(`/users/${profile.id}/profile`, {
         full_name: editFullName,
         email: editEmail,
         phone: editPhone,
-        designation: editDesignation
+        designation: editDesignation,
       });
     } catch (err) {
-      console.error('Failed to update profile in backend DB:', err);
+      console.error("Failed to update profile in backend DB:", err);
     }
 
     setProfile(updatedProfile);
@@ -144,48 +156,52 @@ const UserProfileView = () => {
       setAuthUser({ ...authUser, full_name: editFullName, email: editEmail });
     }
     setEditProfileModalOpen(false);
-    setProfileSuccessMessage('User profile details updated successfully in DB!');
-    setTimeout(() => setProfileSuccessMessage(''), 4000);
+    setProfileSuccessMessage(
+      "User profile details updated successfully in DB!",
+    );
+    setTimeout(() => setProfileSuccessMessage(""), 4000);
   };
 
   // Handle Change Password Submit
   const handleChangePasswordSubmit = async (e) => {
     e.preventDefault();
-    setPasswordError('');
+    setPasswordError("");
 
     if (!currentPassword) {
-      setPasswordError('Please enter your current password.');
+      setPasswordError("Please enter your current password.");
       return;
     }
     if (newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters long.');
+      setPasswordError("New password must be at least 6 characters long.");
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('New password and confirmation do not match.');
+      setPasswordError("New password and confirmation do not match.");
       return;
     }
 
     try {
-      const { default: api } = await import('../../api/axios');
-      const response = await api.put('/auth/change-password', {
+      const { default: api } = await import("../../api/axios");
+      const response = await api.put("/auth/change-password", {
         currentPassword,
-        newPassword
+        newPassword,
       });
 
       if (response.data?.success || response.data?.message) {
         setChangePasswordModalOpen(false);
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-        setPasswordSuccessMessage('Password changed successfully! Next login will require your new password.');
-        setTimeout(() => setPasswordSuccessMessage(''), 5000);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPasswordSuccessMessage(
+          "Password changed successfully! Next login will require your new password.",
+        );
+        setTimeout(() => setPasswordSuccessMessage(""), 5000);
       }
     } catch (err) {
       setPasswordError(
         err.response?.data?.message ||
-        err.response?.data?.error ||
-        'Failed to change password. Please check your current password.'
+          err.response?.data?.error ||
+          "Failed to change password. Please check your current password.",
       );
     }
   };
@@ -199,7 +215,10 @@ const UserProfileView = () => {
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             <span>{profileSuccessMessage}</span>
           </div>
-          <button onClick={() => setProfileSuccessMessage('')} className="p-1 hover:bg-emerald-100 rounded-lg">
+          <button
+            onClick={() => setProfileSuccessMessage("")}
+            className="p-1 hover:bg-emerald-100 rounded-lg"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -211,7 +230,10 @@ const UserProfileView = () => {
             <ShieldCheck className="w-5 h-5 text-indigo-600" />
             <span>{passwordSuccessMessage}</span>
           </div>
-          <button onClick={() => setPasswordSuccessMessage('')} className="p-1 hover:bg-indigo-100 rounded-lg">
+          <button
+            onClick={() => setPasswordSuccessMessage("")}
+            className="p-1 hover:bg-indigo-100 rounded-lg"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -220,12 +242,20 @@ const UserProfileView = () => {
       {/* Header / Back button & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-500 transition shadow-sm cursor-pointer">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 bg-white hover:bg-slate-50 rounded-full border border-slate-200 text-slate-500 transition shadow-sm cursor-pointer"
+          >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">User Profile & ID Management</h1>
-            <p className="text-xs text-slate-500 font-medium">Viewing & managing credentials for {profile.full_name || profile.email}</p>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              User Profile & ID Management
+            </h1>
+            <p className="text-xs text-slate-500 font-medium">
+              Viewing & managing credentials for{" "}
+              {profile.full_name || profile.email}
+            </p>
           </div>
         </div>
 
@@ -251,32 +281,44 @@ const UserProfileView = () => {
         <div className="col-span-1 space-y-6">
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col items-center text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 p-3">
-              <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase border ${getRoleBadgeStyle(profile.role)}`}>
-                {profile.role?.replace('_', ' ')}
+              <span
+                className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase border ${getRoleBadgeStyle(profile.role)}`}
+              >
+                {profile.role?.replace("_", " ")}
               </span>
             </div>
 
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-lg flex items-center justify-center text-3xl font-extrabold text-indigo-700 mt-2 mb-4">
               {(profile.full_name || profile.email).charAt(0).toUpperCase()}
             </div>
-            <h2 className="text-xl font-bold text-slate-900">{profile.full_name || 'N/A'}</h2>
+            <h2 className="text-xl font-bold text-slate-900">
+              {profile.full_name || "N/A"}
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">{profile.email}</p>
             <div className="mt-4 flex gap-2 justify-center">
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${profile.status === 'active' || profile.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+              <span
+                className={`px-3 py-1 rounded-full text-[10px] font-bold border ${profile.status === "active" || profile.status === "Active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}
+              >
                 Status: {profile.status}
               </span>
             </div>
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 border-b border-slate-100 pb-2">Contact & Identity</h3>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 border-b border-slate-100 pb-2">
+              Contact & Identity
+            </h3>
             <div className="flex items-center gap-3 text-sm">
               <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400">
                 <Mail className="w-4 h-4" />
               </div>
               <div className="truncate">
-                <p className="text-xs text-slate-500 font-medium">User ID / Email</p>
-                <p className="font-semibold text-slate-800 truncate">{profile.email}</p>
+                <p className="text-xs text-slate-500 font-medium">
+                  User ID / Email
+                </p>
+                <p className="font-semibold text-slate-800 truncate">
+                  {profile.email}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -284,8 +326,12 @@ const UserProfileView = () => {
                 <Phone className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs text-slate-500 font-medium">Phone Number</p>
-                <p className="font-semibold text-slate-800">{profile.phone || profile.emergency_phone || 'Not provided'}</p>
+                <p className="text-xs text-slate-500 font-medium">
+                  Phone Number
+                </p>
+                <p className="font-semibold text-slate-800">
+                  {profile.phone || profile.emergency_phone || "Not provided"}
+                </p>
               </div>
             </div>
           </div>
@@ -293,50 +339,47 @@ const UserProfileView = () => {
 
         {/* Right Column: Extended Info & Password Security Overview */}
         <div className="col-span-1 md:col-span-2 space-y-6">
-          {/* Security & Password Card */}
-          <div className="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl p-6 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-indigo-300 text-xs font-black uppercase tracking-wider">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" /> Account Security & Password
-              </div>
-              <h3 className="text-base font-bold">Password & Authentication Settings</h3>
-              <p className="text-xs text-slate-300 font-medium">
-                Keep your login password updated to protect institutional records and student datasets.
-              </p>
-            </div>
-            <button
-              onClick={() => setChangePasswordModalOpen(true)}
-              className="px-4 py-2 bg-white text-slate-900 font-extrabold text-xs rounded-xl hover:bg-indigo-50 transition shadow-md whitespace-nowrap cursor-pointer"
-            >
-              Update Password
-            </button>
-          </div>
-
           {isStaff && (
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-6">
-                <Briefcase className="w-5 h-5 text-indigo-500" /> Staff & Institutional Details
+                <Briefcase className="w-5 h-5 text-indigo-500" /> Staff &
+                Institutional Details
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Employee / Staff Code</p>
+                  <p className="text-xs text-slate-500 font-medium mb-1">
+                    Employee / Staff Code
+                  </p>
                   <p className="font-semibold text-slate-800 flex items-center gap-2">
-                    <Hash className="w-4 h-4 text-slate-400" /> {profile.employee_code || 'TS-EMP-001'}
+                    <Hash className="w-4 h-4 text-slate-400" />{" "}
+                    {profile.employee_code || "TS-EMP-001"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Designation</p>
-                  <p className="font-semibold text-slate-800">{profile.designation || 'Faculty Member'}</p>
+                  <p className="text-xs text-slate-500 font-medium mb-1">
+                    Designation
+                  </p>
+                  <p className="font-semibold text-slate-800">
+                    {profile.designation || "Faculty Member"}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Department</p>
-                  <p className="font-semibold text-slate-800">{profile.department || 'Academic Affairs'}</p>
+                  <p className="text-xs text-slate-500 font-medium mb-1">
+                    Department
+                  </p>
+                  <p className="font-semibold text-slate-800">
+                    {profile.department || "Academic Affairs"}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Joining Date</p>
+                  <p className="text-xs text-slate-500 font-medium mb-1">
+                    Joining Date
+                  </p>
                   <p className="font-semibold text-slate-800 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-slate-400" /> 
-                    {profile.joining_date ? new Date(profile.joining_date).toLocaleDateString() : '01/04/2022'}
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    {profile.joining_date
+                      ? new Date(profile.joining_date).toLocaleDateString()
+                      : "01/04/2022"}
                   </p>
                 </div>
               </div>
@@ -344,24 +387,222 @@ const UserProfileView = () => {
           )}
 
           {isStudent && (
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-6">
-                <User className="w-5 h-5 text-emerald-500" /> Academic Student Profile
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Admission No.</p>
-                  <p className="font-semibold text-slate-800 flex items-center gap-2">
-                    <Hash className="w-4 h-4 text-slate-400" /> {profile.admission_no || 'TS-2024-88'}
-                  </p>
+            <div className="space-y-6">
+              {/* Academic Record Card */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-indigo-600" />{" "}
+                    Academic & Enrollment Details
+                  </h3>
+                  <span className="text-[11px] font-bold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
+                    Enrolled Student
+                  </span>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Roll No.</p>
-                  <p className="font-semibold text-slate-800">{profile.roll_no || '101'}</p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
+                      Admission Number
+                    </p>
+                    <p className="font-black text-slate-900 text-sm flex items-center gap-1.5 font-mono">
+                      <Hash className="w-4 h-4 text-indigo-600" />
+                      {profile.admission_no || "TS-2026-001"}
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
+                      Roll Number
+                    </p>
+                    <p className="font-black text-slate-900 text-sm font-mono">
+                      {profile.roll_no || "101"}
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mb-1">
+                      Academic Class / Standard
+                    </p>
+                    <p className="font-black text-indigo-900 text-sm">
+                      {profile.class_name || profile.class || "Class 10"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Date of Admission
+                    </p>
+                    <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      {profile.admission_date
+                        ? new Date(profile.admission_date).toLocaleDateString()
+                        : "01/04/2026"}
+                    </p>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <p className="text-slate-500 font-medium mb-1">
+                      Previous School Attended
+                    </p>
+                    <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-slate-400" />
+                      {profile.previous_school ||
+                        "St. Xavier Convent High School"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium mb-1">Class & Section</p>
-                  <p className="font-semibold text-slate-800">{profile.class || 'Class 10'} - {profile.section || 'A'}</p>
+              </div>
+
+              {/* Personal & Residential Details Card */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <User className="w-5 h-5 text-emerald-600" /> Personal &
+                  Residence Details
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
+                  <div>
+                    <p className="text-slate-500 font-medium mb-1">Gender</p>
+                    <p className="font-bold text-slate-800 capitalize">
+                      {profile.gender || "Male"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Date of Birth
+                    </p>
+                    <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      {profile.date_of_birth
+                        ? new Date(profile.date_of_birth).toLocaleDateString()
+                        : "15/08/2010"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Blood Group
+                    </p>
+                    <p className="font-extrabold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full inline-block border border-rose-100">
+                      {profile.blood_group || "O+"}
+                    </p>
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <p className="text-slate-500 font-medium mb-1">
+                      Residential Address
+                    </p>
+                    <p className="font-bold text-slate-800 flex items-start gap-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                      <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+                      {profile.address ||
+                        "14/B Heritage Park, MG Road, New Delhi"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parents & Guardian Information Card */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <Users className="w-5 h-5 text-purple-600" /> Parents &
+                  Guardian Information
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Father Details */}
+                  <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-100 space-y-2 text-xs">
+                    <div className="font-black text-indigo-900 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-indigo-600" /> Father's
+                      Details
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">Full Name</p>
+                      <p className="font-extrabold text-slate-900 text-sm">
+                        {profile.father_name || "Vikram Sharma"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">
+                        Contact Phone
+                      </p>
+                      <p className="font-bold text-slate-800 font-mono">
+                        {profile.father_phone || "+91 98111 22334"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">Occupation</p>
+                      <p className="font-semibold text-slate-700">
+                        {profile.father_occupation ||
+                          "Senior Software Engineer"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Mother Details */}
+                  <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-100 space-y-2 text-xs">
+                    <div className="font-black text-purple-900 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-purple-600" /> Mother's
+                      Details
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">Full Name</p>
+                      <p className="font-extrabold text-slate-900 text-sm">
+                        {profile.mother_name || "Priyanka Sharma"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">
+                        Contact Phone
+                      </p>
+                      <p className="font-bold text-slate-800 font-mono">
+                        {profile.mother_phone || "+91 98111 22335"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">Occupation</p>
+                      <p className="font-semibold text-slate-700">
+                        {profile.mother_occupation || "Architect"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Guardian Details */}
+                  <div className="sm:col-span-2 bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100 space-y-2 text-xs">
+                    <div className="font-black text-emerald-900 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />{" "}
+                      Designated Emergency Guardian
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-slate-500 font-medium">
+                          Guardian Name
+                        </p>
+                        <p className="font-extrabold text-slate-900">
+                          {profile.guardian_name ||
+                            profile.father_name ||
+                            "Ramesh Sharma"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-medium">
+                          Contact Phone
+                        </p>
+                        <p className="font-bold text-slate-800 font-mono">
+                          {profile.guardian_phone ||
+                            profile.father_phone ||
+                            "+91 98111 00000"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-medium">Relation</p>
+                        <p className="font-bold text-emerald-800 capitalize">
+                          {profile.guardian_relation || "Grandfather"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -375,14 +616,21 @@ const UserProfileView = () => {
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-indigo-600" /> Edit Profile & User ID Details
+                <Edit3 className="w-4 h-4 text-indigo-600" /> Edit Profile &
+                User ID Details
               </h3>
-              <button onClick={() => setEditProfileModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+              <button
+                onClick={() => setEditProfileModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-4 text-xs font-semibold text-slate-700">
+            <form
+              onSubmit={handleSaveProfile}
+              className="space-y-4 text-xs font-semibold text-slate-700"
+            >
               <div>
                 <label className="block mb-1">Full Name *</label>
                 <input
@@ -453,9 +701,13 @@ const UserProfileView = () => {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <Key className="w-4 h-4 text-indigo-600" /> Change Security Password
+                <Key className="w-4 h-4 text-indigo-600" /> Change Security
+                Password
               </h3>
-              <button onClick={() => setChangePasswordModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+              <button
+                onClick={() => setChangePasswordModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -466,12 +718,15 @@ const UserProfileView = () => {
               </div>
             )}
 
-            <form onSubmit={handleChangePasswordSubmit} className="space-y-3.5 text-xs font-semibold text-slate-700">
+            <form
+              onSubmit={handleChangePasswordSubmit}
+              className="space-y-3.5 text-xs font-semibold text-slate-700"
+            >
               <div>
                 <label className="block mb-1">Current Password *</label>
                 <div className="relative">
                   <input
-                    type={showCurrentPassword ? 'text' : 'password'}
+                    type={showCurrentPassword ? "text" : "password"}
                     required
                     placeholder="Enter current password"
                     value={currentPassword}
@@ -483,7 +738,11 @@ const UserProfileView = () => {
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                   >
-                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showCurrentPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -492,7 +751,7 @@ const UserProfileView = () => {
                 <label className="block mb-1">New Password *</label>
                 <div className="relative">
                   <input
-                    type={showNewPassword ? 'text' : 'password'}
+                    type={showNewPassword ? "text" : "password"}
                     required
                     placeholder="At least 6 characters"
                     value={newPassword}
@@ -504,7 +763,11 @@ const UserProfileView = () => {
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                   >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showNewPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>

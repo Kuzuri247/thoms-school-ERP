@@ -13,11 +13,11 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   const demoAccounts = [
-    { role: 'Super Admin', email: 'superadmin@erp.com', pass: 'password123', targetRole: 'super_admin', icon: Crown, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-    { role: 'Admin', email: 'admin1@erp.com', pass: 'password123', targetRole: 'admin', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
-    { role: 'Teacher', email: 'teacher1@erp.com', pass: 'password123', targetRole: 'teacher', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
-    { role: 'Student', email: 'student1@erp.com', pass: 'password123', targetRole: 'student', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    { role: 'Cashier', email: 'cashier1@erp.com', pass: 'password123', targetRole: 'cashier', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { role: 'Super Admin', email: 'superadmin@thomson.edu', pass: 'Thomson2026!', targetRole: 'super_admin', icon: Crown, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    { role: 'Admin', email: 'admin@thomson.edu', pass: 'Thomson2026!', targetRole: 'admin', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { role: 'Teacher', email: 'teacher@thomson.edu', pass: 'Thomson2026!', targetRole: 'teacher', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { role: 'Student', email: 'student@thomson.edu', pass: 'Thomson2026!', targetRole: 'student', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { role: 'Cashier', email: 'cashier@thomson.edu', pass: 'Thomson2026!', targetRole: 'cashier', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
   ];
 
   const redirectUserByRole = (userRole) => {

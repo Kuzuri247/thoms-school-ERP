@@ -57,15 +57,15 @@ The application features 5 strictly isolated role portals:
 
 ## 🔑 Default Demo Login Credentials
 
-All seeded accounts share the default password: **`password123`**
+All seeded accounts share the default password: **`Thomson2026!`**
 
 | Role | Email | Default Password | Initial View |
 | :--- | :--- | :--- | :--- |
-| **Super Admin** | `superadmin@erp.com` | `password123` | Financial Audit & Super Admin Overview |
-| **Admin** | `admin1@erp.com` | `password123` | Admin Directory & School Workstation |
-| **Teacher** | `teacher1@erp.com` | `password123` | Class 10 Workstation & Attendance |
-| **Student** | `student1@erp.com` | `password123` | Class 10-A Student Portal |
-| **Cashier** | `cashier1@erp.com` | `password123` | Fees Terminal |
+| **Super Admin** | `superadmin@thomson.edu` | `Thomson2026!` | Financial Audit & Super Admin Overview |
+| **Admin** | `admin@thomson.edu` | `Thomson2026!` | Admin Directory & School Workstation |
+| **Teacher** | `teacher@thomson.edu` | `Thomson2026!` | Class 10 Workstation & Attendance |
+| **Student** | `student@thomson.edu` | `Thomson2026!` | Class 10-A Student Portal |
+| **Cashier** | `cashier@thomson.edu` | `Thomson2026!` | Fees Terminal |
 
 > 💡 **Quick Login**: On the `/login` page, you can use the **Demo Accounts Quick Selector** cards to automatically log into any account in one click.
 
@@ -121,7 +121,7 @@ Follow these step-by-step instructions to get the project running locally.
 
 ### **Step 1: Clone the Repository**
 ```bash
-git clone https://github.com/Kuzuri247/thoms-school-ERP.git
+git clone 
 cd thoms-school-ERP
 ```
 
