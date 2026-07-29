@@ -38,8 +38,7 @@ router.get('/classes/:classId/students', verifyToken, authorize(ROLES.TEACHER, R
   try {
     const { classId } = req.params;
     const [rows] = await pool.query(`
-      SELECT s.id, s.admission_no AS roll, s.roll_no, CONCAT(s.first_name, ' ', s.last_name) AS name, 
-             'Present' AS attendance, 0 AS englishMark
+      SELECT s.id, COALESCE(s.roll_no, s.admission_no) AS roll, s.roll_no, CONCAT(s.first_name, ' ', s.last_name) AS name, s.section_id
       FROM students s
       JOIN sections sec ON s.section_id = sec.id
       WHERE sec.class_id = ? OR sec.id = ?

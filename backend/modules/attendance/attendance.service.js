@@ -10,7 +10,7 @@ const markBulk = async (sectionId, date, records, markedBy) => {
       await conn.query(
         `INSERT INTO attendance (student_id, section_id, date, status, marked_by, remarks)
          VALUES (?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks)`,
+         ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), marked_by = VALUES(marked_by)`,
         [rec.student_id, sectionId, date, rec.status, markedBy, rec.remarks || null]
       );
     }

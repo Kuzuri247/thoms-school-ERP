@@ -15,7 +15,7 @@ const attachTeacherContext = async (req, res, next) => {
       `SELECT section_id, subject_id, is_class_teacher
        FROM teacher_assignments
        WHERE teacher_user_id = ?
-         AND session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1)`,
+         AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1) OR NOT EXISTS (SELECT 1 FROM academic_sessions WHERE is_current = 1))`,
       [req.user.id]
     );
 

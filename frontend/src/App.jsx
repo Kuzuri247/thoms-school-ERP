@@ -16,7 +16,7 @@ import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
 import UserProfileView from './features/users/UserProfileView';
 import Noticeboard from './features/noticeboard/Noticeboard';
 import AcademicCalendarView from './features/academics/AcademicCalendarView';
-import ExamResultsView from './features/academics/ExamResultsView';
+// import ExamResultsView from './features/academics/ExamResultsView';
 import CommunicationCenterView from './features/communication/CommunicationCenterView';
 import SystemSettingsView from './features/admin/SystemSettingsView';
 import TransportManagementView from './features/transport/TransportManagementView';
@@ -58,7 +58,7 @@ function App() {
           <Route path="/profile" element={<UserProfileView />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
           <Route path="/academic/calendar" element={<AcademicCalendarView />} />
-          <Route path="/academic/examinations" element={<ExamResultsView />} />
+          {/* <Route path="/academic/examinations" element={<ExamResultsView />} /> */}
 
           {/* Super Admin Exclusive Route */}
           <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>

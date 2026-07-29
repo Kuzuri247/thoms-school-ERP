@@ -67,7 +67,13 @@ exports.changePassword = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Current password is required' });
   }
   if (!newPassword || newPassword.length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
+  }
+  if (!/[A-Z]/.test(newPassword)) {
+    return res.status(400).json({ success: false, message: 'Password must contain at least one uppercase letter (A-Z).' });
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword)) {
+    return res.status(400).json({ success: false, message: 'Password must contain at least one special character (e.g. !@#$%).' });
   }
 
   const [[user]] = await pool.query('SELECT password FROM users WHERE id = ?', [req.user.id]);

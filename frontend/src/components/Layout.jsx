@@ -577,12 +577,12 @@ const Layout = () => {
               <Calendar className="w-4 h-4" /> Academic Calendar
             </Link>
 
-            <Link
+            {/* <Link
               to="/academic/examinations"
               className={navLinkClass("/academic/examinations")}
             >
               <Award className="w-4 h-4" /> Examination Section
-            </Link>
+            </Link> */}
 
             {/* Admin & Super Admin Exclusive Links */}
             {(isSuperAdmin || isAdmin) && (
