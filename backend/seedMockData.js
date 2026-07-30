@@ -158,10 +158,12 @@ async function seed() {
     ];
 
     const teacherUserIds = [];
+    const teacherUserIdsByEmail = {};
     for (const t of teachersData) {
       const uId = await createUser(t.email, 'teacher', `Prof. ${t.fname} ${t.lname}`);
       await createStaff(uId, t.code, t.fname, t.lname, t.desc, 'Academics');
       teacherUserIds.push(uId);
+      teacherUserIdsByEmail[t.email] = uId;
       if (t.cls) {
         const secId = sectionIds[t.cls]['Section A'];
         if (secId) {
@@ -244,9 +246,9 @@ async function seed() {
     }
 
     // Assign Subject Teachers (is_class_teacher = 0)
-    const phyTeacherId = teacherUserIds[13]; // Dr. Vikram Sarabhai
-    const chemTeacherId = teacherUserIds[14]; // Priyanka Sen
-    const engTeacherId = teacherUserIds[15]; // David Miller
+    const phyTeacherId = teacherUserIdsByEmail['teacher.phy@thomson.edu']; // Dr. Vikram Sarabhai
+    const chemTeacherId = teacherUserIdsByEmail['teacher.chem@thomson.edu']; // Priyanka Sen
+    const engTeacherId = teacherUserIdsByEmail['teacher.eng@thomson.edu']; // David Miller
 
     const targetClassesForSubjectTeachers = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
     for (const clsName of targetClassesForSubjectTeachers) {

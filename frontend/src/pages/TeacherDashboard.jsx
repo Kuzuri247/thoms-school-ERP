@@ -16,6 +16,7 @@ import {
   BookOpen,
   Plus,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 
 const daysOfWeek = [
