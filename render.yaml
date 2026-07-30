@@ -16,16 +16,16 @@ services:
         sync: false
         previewValue: localhost
       - key: DB_PORT
-        value: 3306
+        value: 28388
       - key: DB_USER
         sync: false
-        previewValue: root
+        previewValue: avnadmin
       - key: DB_PASSWORD
         sync: false
         previewValue: root
       - key: DB_NAME
         sync: false
-        previewValue: school_erp
+        previewValue: defaultdb
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
