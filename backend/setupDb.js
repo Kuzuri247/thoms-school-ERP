@@ -2,15 +2,22 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 
+const rawHost = process.env.DB_HOST || 'localhost';
+const cleanHost = rawHost.replace(/^(mysql:\/\/|https?:\/\/)/, '').split('/')[0].split(':')[0];
+const useSSL = process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' || cleanHost.includes('aivencloud.com');
+
 async function setup() {
     try {
         const connection = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
+            host: cleanHost,
+            port: parseInt(process.env.DB_PORT || '28388'),
             user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || ''
+            password: process.env.DB_PASSWORD || '',
+            ssl: useSSL ? { rejectUnauthorized: false } : undefined,
+            connectTimeout: 20000,
         });
 
-        const dbName = process.env.DB_NAME || 'school_erp';
+        const dbName = process.env.DB_NAME || 'defaultdb';
         await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
         await connection.query(`USE \`${dbName}\`;`);
 
