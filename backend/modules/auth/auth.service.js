@@ -16,7 +16,7 @@ const generateTokens = (user) => {
 const login = async (emailOrId, password) => {
   const parsedId = isNaN(parseInt(emailOrId)) ? -1 : parseInt(emailOrId);
   const [rows] = await pool.query(
-    'SELECT id, email, full_name, password, role, status FROM users WHERE (email = ? OR id = ?) AND status = "active"',
+    "SELECT id, email, full_name, password, role, status FROM users WHERE (email = ? OR id = ?) AND (status = 'active' OR status IS NULL)",
     [emailOrId, parsedId]
   );
   if (!rows.length) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
@@ -46,7 +46,7 @@ const refresh = async (token) => {
   }
   const hash = crypto.createHash('sha256').update(token).digest('hex');
   const [rows] = await pool.query(
-    'SELECT id, email, full_name, role, status FROM users WHERE id = ? AND refresh_token_hash = ? AND status = "active"',
+    "SELECT id, email, full_name, role, status FROM users WHERE id = ? AND refresh_token_hash = ? AND (status = 'active' OR status IS NULL)",
     [decoded.id, hash]
   );
   if (!rows.length) throw Object.assign(new Error('Session expired'), { status: 401 });
