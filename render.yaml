@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: thomson-school-erp-backend
+    env: node
+    buildCommand: cd backend && npm install --legacy-peer-deps
+    startCommand: cd backend && node index.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DB_SSL
+        value: REQUIRED
+      - key: DB_HOST
+        sync: false
+        previewValue: localhost
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        sync: false
+        previewValue: root
+      - key: DB_PASSWORD
+        sync: false
+        previewValue: root
+      - key: DB_NAME
+        sync: false
+        previewValue: school_erp
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+        previewValue: https://thomson-school-erp.pages.dev
+
