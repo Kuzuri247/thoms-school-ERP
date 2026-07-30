@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'thomson_erp_access_secret_key_2026';
+
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -7,7 +9,7 @@ const verifyToken = (req, res, next) => {
   }
   const token = authHeader.split(' ')[1];
   try {
-    req.user = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    req.user = jwt.verify(token, ACCESS_SECRET);
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token invalid or expired' });
