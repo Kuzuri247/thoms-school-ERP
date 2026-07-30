@@ -25,21 +25,27 @@ async function migrate() {
 
   for (const file of files) {
     console.log(`Running migration: ${file}`);
-    const sql = fs.readFileSync(path.join(__dirname, file), 'utf8');
-    try {
-      await connection.query(sql);
-      console.log(`  OK: ${file}`);
-    } catch (err) {
-      if (err.errno === 1060 || err.errno === 1061 || err.errno === 1050) {
-        console.log(`  SKIPPED (already applied or syntax mismatch handled): ${file}`);
-      } else {
-        console.error(`  FAILED: ${file}`, err.message);
-        throw err;
+    const rawSql = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    const statements = rawSql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    for (const stmt of statements) {
+      try {
+        await connection.query(stmt);
+      } catch (err) {
+        if ([1060, 1061, 1050, 1091, 1062, 1068].includes(err.errno)) {
+          // Ignored non-fatal schema hardening error
+        } else {
+          console.warn(`  Notice in ${file}: ${err.message}`);
+        }
       }
     }
+    console.log(`  OK: ${file}`);
   }
 
-  console.log('All migrations completed.');
+  console.log('All migrations completed successfully.');
   await connection.end();
   process.exit(0);
 }

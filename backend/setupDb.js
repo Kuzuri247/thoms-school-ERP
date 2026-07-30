@@ -1,27 +1,33 @@
-const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
-require('dotenv').config();
+const mysql = require("mysql2/promise");
+const bcrypt = require("bcrypt");
+require("dotenv").config();
 
-const rawHost = process.env.DB_HOST || 'localhost';
-const cleanHost = rawHost.replace(/^(mysql:\/\/|https?:\/\/)/, '').split('/')[0].split(':')[0];
-const useSSL = process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' || cleanHost.includes('aivencloud.com');
+const rawHost = process.env.DB_HOST || "localhost";
+const cleanHost = rawHost
+  .replace(/^(mysql:\/\/|https?:\/\/)/, "")
+  .split("/")[0]
+  .split(":")[0];
+const useSSL =
+  process.env.DB_SSL === "true" ||
+  process.env.DB_SSL === "REQUIRED" ||
+  cleanHost.includes("aivencloud.com");
 
 async function setup() {
-    try {
-        const connection = await mysql.createConnection({
-            host: cleanHost,
-            port: parseInt(process.env.DB_PORT || '28388'),
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || '',
-            ssl: useSSL ? { rejectUnauthorized: false } : undefined,
-            connectTimeout: 20000,
-        });
+  try {
+    const connection = await mysql.createConnection({
+      host: cleanHost,
+      port: parseInt(process.env.DB_PORT || "28388"),
+      user: process.env.DB_USER || "root",
+      password: process.env.DB_PASSWORD || "",
+      ssl: useSSL ? { rejectUnauthorized: false } : undefined,
+      connectTimeout: 20000,
+    });
 
-        const dbName = process.env.DB_NAME || 'defaultdb';
-        await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
-        await connection.query(`USE \`${dbName}\`;`);
+    const dbName = process.env.DB_NAME || "defaultdb";
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
+    await connection.query(`USE \`${dbName}\`;`);
 
-        await connection.query(`
+    await connection.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 email VARCHAR(255) NOT NULL UNIQUE,
@@ -31,24 +37,29 @@ async function setup() {
             );
         `);
 
-        // Check if super admin exists
-        const [rows] = await connection.query(`SELECT * FROM users WHERE role = 'super_admin'`);
-        if (rows.length === 0) {
-            const hashedPassword = await bcrypt.hash('Thomson2026!', 8);
-            await connection.query(`
+    // Check if super admin exists
+    const [rows] = await connection.query(
+      `SELECT * FROM users WHERE role = 'super_admin'`,
+    );
+    if (rows.length === 0) {
+      const hashedPassword = await bcrypt.hash("Thomson2026!", 8);
+      await connection.query(
+        `
                 INSERT INTO users (email, password, role) VALUES ('superadmin@thomson.edu', ?, 'super_admin');
-            `, [hashedPassword]);
-            console.log('Super admin created: superadmin@thomson.edu / Thomson2026!');
-        } else {
-            console.log('Super admin already exists.');
-        }
-
-        console.log('Database setup complete.');
-        process.exit(0);
-    } catch (err) {
-        console.error(err);
-        process.exit(1);
+            `,
+        [hashedPassword],
+      );
+      console.log("Super admin created: superadmin@thomson.edu / Thomson2026!");
+    } else {
+      console.log("Super admin already exists.");
     }
+
+    console.log("Database setup complete.");
+    process.exit(0);
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
 }
 
 setup();
