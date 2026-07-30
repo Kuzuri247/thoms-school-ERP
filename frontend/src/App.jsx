@@ -14,7 +14,14 @@ import FinanceDashboard from './features/fees/FinanceDashboard';
 import AdminUserManagementView from './features/admin/AdminUserManagementView';
 import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
 import UserProfileView from './features/users/UserProfileView';
+import AdminHomeworkView from './features/admin/AdminHomeworkView';
 import Noticeboard from './features/noticeboard/Noticeboard';
+import AcademicCalendarView from './features/academics/AcademicCalendarView';
+// import ExamResultsView from './features/academics/ExamResultsView';
+import CommunicationCenterView from './features/communication/CommunicationCenterView';
+import SystemSettingsView from './features/admin/SystemSettingsView';
+import TransportManagementView from './features/transport/TransportManagementView';
+import FinancialReportsView from './features/reports/FinancialReportsView';
 
 function App() {
   return (
@@ -49,7 +56,10 @@ function App() {
       {/* Dynamic RBAC Shell */}
       <Route element={<ProtectedRoute allowedRoles={['*']} />}>
         <Route element={<Layout />}>
+          <Route path="/profile" element={<UserProfileView />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
+          <Route path="/academic/calendar" element={<AcademicCalendarView />} />
+          {/* <Route path="/academic/examinations" element={<ExamResultsView />} /> */}
 
           {/* Super Admin Exclusive Route */}
           <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
@@ -62,6 +72,10 @@ function App() {
             <Route path="/admin/users" element={<AdminUserManagementView initialTab="all" />} />
             <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
             <Route path="/admin/notices" element={<Noticeboard />} />
+            <Route path="/admin/homework" element={<AdminHomeworkView />} />
+            <Route path="/admin/settings" element={<SystemSettingsView />} />
+            <Route path="/communication/center" element={<CommunicationCenterView />} />
+            <Route path="/transport/management" element={<TransportManagementView />} />
           </Route>
 
           {/* Teacher Suite Routes (Strictly Teacher, Admin, Super Admin) */}
@@ -84,6 +98,7 @@ function App() {
           {/* Finance & Fees Terminal Routes */}
           <Route element={<ProtectedRoute allowedRoles={['cashier', 'admin', 'super_admin']} />}>
             <Route path="/finance/dashboard" element={<FinanceDashboard />} />
+            <Route path="/finance/reports" element={<FinancialReportsView />} />
             <Route path="/fees/collect" element={<Navigate to="/finance/dashboard" replace />} />
           </Route>
         </Route>

@@ -4,44 +4,88 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 async function seed() {
+  let connection;
   try {
-    const connection = await mysql.createConnection({
+    connection = await mysql.createConnection({
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'school_erp'
     });
 
-    console.log('Connected to database. Starting comprehensive demo seed...');
+    console.log('Connected to MySQL Database. Starting comprehensive extended demo seed...');
 
-    const defaultPassword = 'password123';
+    const defaultPassword = 'Thomson2026!';
     const hashedPassword = await bcrypt.hash(defaultPassword, 8);
 
-    // 1. Create Academic Session
-    const [sessionRes] = await connection.query(`
+    // 1. Academic Session
+    await connection.query(`
       INSERT INTO academic_sessions (name, start_date, end_date, is_current) 
       VALUES ('2026-2027', '2026-04-01', '2027-03-31', 1)
       ON DUPLICATE KEY UPDATE is_current=1
     `);
-    let sessionId = sessionRes.insertId;
-    if (!sessionId) {
-      let [sessRow] = await connection.query(`SELECT id FROM academic_sessions WHERE name='2026-2027'`);
-      sessionId = sessRow[0].id;
+    const [[sessRow]] = await connection.query(`SELECT id FROM academic_sessions WHERE name='2026-2027'`);
+    const sessionId = sessRow.id;
+
+    // Purge legacy data to avoid duplicates and mixed-up grades
+    console.log('Purging legacy data...');
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+      await connection.query('TRUNCATE TABLE attendance');
+      await connection.query('TRUNCATE TABLE timetables');
+      await connection.query('TRUNCATE TABLE homework');
+      await connection.query('TRUNCATE TABLE teacher_assignments');
+      await connection.query('TRUNCATE TABLE guardians');
+      await connection.query('TRUNCATE TABLE students');
+      await connection.query('TRUNCATE TABLE staff_profiles');
+      await connection.query('TRUNCATE TABLE subjects');
+      await connection.query('TRUNCATE TABLE sections');
+      await connection.query('TRUNCATE TABLE classes');
+      await connection.query("DELETE FROM users WHERE email LIKE '%@erp.com' OR role IN ('student', 'teacher', 'cashier')");
+    } finally {
+      await connection.query('SET FOREIGN_KEY_CHECKS = 1');
     }
 
-    // 2. Create Class and Section
-    await connection.query(`INSERT IGNORE INTO classes (name, numeric_value) VALUES ('Class 10', 10)`);
-    let [classRow] = await connection.query(`SELECT id FROM classes WHERE name='Class 10'`);
-    const classId = classRow[0].id;
+    // 2. Classes & Sections (14 Standards: LKG, UKG, Class 1 to 12 in exact serial order 1 to 14)
+    const classDefs = [
+      { name: 'LKG', num: 1 },
+      { name: 'UKG', num: 2 },
+      { name: 'Class 1', num: 3 },
+      { name: 'Class 2', num: 4 },
+      { name: 'Class 3', num: 5 },
+      { name: 'Class 4', num: 6 },
+      { name: 'Class 5', num: 7 },
+      { name: 'Class 6', num: 8 },
+      { name: 'Class 7', num: 9 },
+      { name: 'Class 8', num: 10 },
+      { name: 'Class 9', num: 11 },
+      { name: 'Class 10', num: 12 },
+      { name: 'Class 11', num: 13 },
+      { name: 'Class 12', num: 14 },
+    ];
 
-    await connection.query(`INSERT IGNORE INTO sections (class_id, name, capacity) VALUES (?, 'A', 40)`, [classId]);
-    let [secRow] = await connection.query(`SELECT id FROM sections WHERE class_id=? AND name='A'`, [classId]);
-    const sectionId = secRow[0].id;
+    const classIds = {};
+    const sectionIds = {};
 
-    // Helper to insert user
+    for (const c of classDefs) {
+      await connection.query(`INSERT INTO classes (name, numeric_value) VALUES (?, ?)`, [c.name, c.num]);
+      const [[cRow]] = await connection.query(`SELECT id FROM classes WHERE name=?`, [c.name]);
+      classIds[c.name] = cRow.id;
+
+      sectionIds[c.name] = {};
+      const secName = 'Section A';
+      await connection.query(`INSERT INTO sections (class_id, name, capacity) VALUES (?, ?, 40)`, [cRow.id, secName]);
+      const [[sRow]] = await connection.query(`SELECT id FROM sections WHERE class_id=? AND name=?`, [cRow.id, secName]);
+      sectionIds[c.name][secName] = sRow.id;
+    }
+
+    // Helper functions
     async function createUser(email, role, fullName) {
       let [existing] = await connection.query('SELECT id FROM users WHERE email=?', [email]);
-      if (existing.length > 0) return existing[0].id;
+      if (existing.length > 0) {
+        await connection.query("UPDATE users SET password=?, role=?, full_name=?, status='active' WHERE id=?", [hashedPassword, role, fullName, existing[0].id]);
+        return existing[0].id;
+      }
 
       const [res] = await connection.query(`
         INSERT INTO users (email, password, role, full_name, status)
@@ -58,233 +102,379 @@ async function seed() {
       `, [userId, empCode, fname, lname, desc, dept]);
     }
 
-    async function createStudent(userId, admnNo, fname, lname, roll) {
+    async function createStudent(userId, admnNo, fname, lname, roll, sectionId) {
+      let [existingStu] = await connection.query('SELECT id FROM students WHERE user_id = ?', [userId]);
+      if (existingStu.length > 0) {
+        await connection.query('UPDATE students SET section_id = ?, first_name = ?, last_name = ? WHERE id = ?', [sectionId, fname, lname, existingStu[0].id]);
+        return existingStu[0].id;
+      }
       await connection.query(`
         INSERT INTO students (user_id, admission_no, roll_no, first_name, last_name, section_id, session_id, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
         ON DUPLICATE KEY UPDATE section_id=VALUES(section_id)
       `, [userId, admnNo, roll, fname, lname, sectionId, sessionId]);
 
-      let [stuRow] = await connection.query('SELECT id FROM students WHERE user_id = ?', [userId]);
-      return stuRow[0]?.id;
+      let [[stuRow]] = await connection.query('SELECT id FROM students WHERE user_id = ?', [userId]);
+      return stuRow?.id;
     }
 
-    // 3. Create Super Admin
-    let saId = await createUser('superadmin@erp.com', 'super_admin', 'Super Admin Official');
+    // 3. Super Admin
+    let saId = await createUser('superadmin@thomson.edu', 'super_admin', 'Super Admin Official');
 
-    // 4. Create Admins
-    let admin1Id = await createUser('admin1@erp.com', 'admin', 'Principal Admin');
-    await createStaff(admin1Id, 'ADM001', 'Principal', 'Admin', 'School Administrator', 'Management');
+    // 4. Admins
+    let admin1Id = await createUser('admin@thomson.edu', 'admin', 'Principal Rajesh Sharma');
+    await createStaff(admin1Id, 'ADM001', 'Rajesh', 'Sharma', 'Principal & Director', 'Management');
     
-    let admin2Id = await createUser('admin2@erp.com', 'admin', 'Vice Principal Admin');
-    await createStaff(admin2Id, 'ADM002', 'Vice', 'Principal', 'Vice Administrator', 'Management');
+    let admin2Id = await createUser('admin2@thomson.edu', 'admin', 'Vice Principal Meenakshi');
+    await createStaff(admin2Id, 'ADM002', 'Meenakshi', 'Sundaram', 'Vice Principal', 'Management');
 
-    // 5. Create Cashier
-    let cashierId = await createUser('cashier1@erp.com', 'cashier', 'Senior Cashier Desk');
-    await createStaff(cashierId, 'CSH001', 'Senior', 'Cashier', 'Finance Officer', 'Finance');
+    // 5. Cashiers
+    let cashier1Id = await createUser('cashier@thomson.edu', 'cashier', 'Senior Cashier Vikram');
+    await createStaff(cashier1Id, 'CSH001', 'Vikram', 'Mehta', 'Senior Cashier & Fee Incharge', 'Finance');
 
-    // 6. Create Teachers
-    let tch1Id = await createUser('teacher1@erp.com', 'teacher', 'Mathematics HOD (Teacher 1)');
-    await createStaff(tch1Id, 'TCH001', 'Rajesh', 'Sharma', 'HOD Mathematics', 'Academics');
+    let cashier2Id = await createUser('cashier2@thomson.edu', 'cashier', 'Accountant Sunita');
+    await createStaff(cashier2Id, 'CSH002', 'Sunita', 'Kapoor', 'Accounts Officer', 'Finance');
 
-    let tch2Id = await createUser('teacher2@erp.com', 'teacher', 'Science Faculty (Teacher 2)');
-    await createStaff(tch2Id, 'TCH002', 'Anita', 'Deshmukh', 'Science Faculty', 'Academics');
+    // 6. Class Teachers (14 Class Teachers - 1 for each class)
+    const teachersData = [
+      { email: 'teacher.lkg@thomson.edu', code: 'TCH001', fname: 'Sunita', lname: 'Sharma', desc: 'Class Teacher - LKG', cls: 'LKG' },
+      { email: 'teacher.ukg@thomson.edu', code: 'TCH002', fname: 'Priya', lname: 'Verma', desc: 'Class Teacher - UKG', cls: 'UKG' },
+      { email: 'teacher.c1@thomson.edu', code: 'TCH003', fname: 'Ramesh', lname: 'Gupta', desc: 'Class Teacher - Class 1', cls: 'Class 1' },
+      { email: 'teacher.c2@thomson.edu', code: 'TCH004', fname: 'Kavita', lname: 'Singh', desc: 'Class Teacher - Class 2', cls: 'Class 2' },
+      { email: 'teacher.c3@thomson.edu', code: 'TCH005', fname: 'Manoj', lname: 'Kumar', desc: 'Class Teacher - Class 3', cls: 'Class 3' },
+      { email: 'teacher.c4@thomson.edu', code: 'TCH006', fname: 'Rekha', lname: 'Patel', desc: 'Class Teacher - Class 4', cls: 'Class 4' },
+      { email: 'teacher.c5@thomson.edu', code: 'TCH007', fname: 'Amit', lname: 'Joshi', desc: 'Class Teacher - Class 5', cls: 'Class 5' },
+      { email: 'teacher.c6@thomson.edu', code: 'TCH008', fname: 'Suman', lname: 'Rao', desc: 'Class Teacher - Class 6', cls: 'Class 6' },
+      { email: 'teacher.c7@thomson.edu', code: 'TCH009', fname: 'Deepak', lname: 'Kulkarni', desc: 'Class Teacher - Class 7', cls: 'Class 7' },
+      { email: 'teacher.c8@thomson.edu', code: 'TCH010', fname: 'Arvind', lname: 'Sharma', desc: 'Class Teacher - Class 8', cls: 'Class 8' },
+      { email: 'teacher.c9@thomson.edu', code: 'TCH011', fname: 'Anita', lname: 'Deshmukh', desc: 'Class Teacher - Class 9', cls: 'Class 9' },
+      { email: 'teacher@thomson.edu', code: 'TCH012', fname: 'Rajesh', lname: 'Verma', desc: 'Class Teacher - Class 10 (HOD)', cls: 'Class 10' },
+      { email: 'teacher.c11@thomson.edu', code: 'TCH013', fname: 'Dr. S. K.', lname: 'Gupta', desc: 'Class Teacher - Class 11', cls: 'Class 11' },
+      { email: 'teacher.c12@thomson.edu', code: 'TCH014', fname: 'Meenakshi', lname: 'Sundaram', desc: 'Class Teacher - Class 12', cls: 'Class 12' },
+      // Pure Subject Teachers (Not Class Teachers)
+      { email: 'teacher.phy@thomson.edu', code: 'TCH020', fname: 'Dr. Vikram', lname: 'Sarabhai', desc: 'Physics Senior Faculty', cls: null },
+      { email: 'teacher.chem@thomson.edu', code: 'TCH021', fname: 'Priyanka', lname: 'Sen', desc: 'Chemistry Department Lead', cls: null },
+      { email: 'teacher.eng@thomson.edu', code: 'TCH022', fname: 'David', lname: 'Miller', desc: 'English & Humanities Lecturer', cls: null },
+    ];
 
-    let tch3Id = await createUser('teacher3@erp.com', 'teacher', 'English Faculty (Teacher 3)');
-    await createStaff(tch3Id, 'TCH003', 'Vikram', 'Mehta', 'English Faculty', 'Academics');
+    const teacherUserIds = [];
+    const teacherUserIdsByEmail = {};
+    for (const t of teachersData) {
+      const uId = await createUser(t.email, 'teacher', `Prof. ${t.fname} ${t.lname}`);
+      await createStaff(uId, t.code, t.fname, t.lname, t.desc, 'Academics');
+      teacherUserIds.push(uId);
+      teacherUserIdsByEmail[t.email] = uId;
+      if (t.cls) {
+        const secId = sectionIds[t.cls]['Section A'];
+        if (secId) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher) 
+            VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE is_class_teacher=1
+          `, [uId, secId, sessionId]);
+        }
+      }
+    }
 
-    // 7. Create Bus Staff
-    let busStaffId = await createUser('busstaff1@erp.com', 'busstaff', 'Driver Ramesh (Bus Staff)');
-    await createStaff(busStaffId, 'BUS001', 'Ramesh', 'Yadav', 'Senior Bus Driver', 'Transport');
+    // 7. Students (28 Students across 14 classes - 2 per class)
+    const studentDefs = [
+      // LKG
+      { fname: 'Aarav', lname: 'Malhotra', cls: 'LKG', roll: '101', admn: 'TS-2026-LKG-01', email: 'aarav.lkg@thomson.edu' },
+      { fname: 'Avani', lname: 'Sharma', cls: 'LKG', roll: '102', admn: 'TS-2026-LKG-02', email: 'avani.lkg@thomson.edu' },
+      // UKG
+      { fname: 'Vivaan', lname: 'Gupta', cls: 'UKG', roll: '101', admn: 'TS-2026-UKG-01', email: 'vivaan.ukg@thomson.edu' },
+      { fname: 'Ananya', lname: 'Roy', cls: 'UKG', roll: '102', admn: 'TS-2026-UKG-02', email: 'ananya.ukg@thomson.edu' },
+      // Class 1
+      { fname: 'Reyansh', lname: 'Verma', cls: 'Class 1', roll: '101', admn: 'TS-2026-C01-01', email: 'reyansh.c1@thomson.edu' },
+      { fname: 'Diya', lname: 'Patel', cls: 'Class 1', roll: '102', admn: 'TS-2026-C01-02', email: 'diya.c1@thomson.edu' },
+      // Class 2
+      { fname: 'Dhruv', lname: 'Singh', cls: 'Class 2', roll: '101', admn: 'TS-2026-C02-01', email: 'dhruv.c2@thomson.edu' },
+      { fname: 'Myra', lname: 'Kapoor', cls: 'Class 2', roll: '102', admn: 'TS-2026-C02-02', email: 'myra.c2@thomson.edu' },
+      // Class 3
+      { fname: 'Kabir', lname: 'Joshi', cls: 'Class 3', roll: '101', admn: 'TS-2026-C03-01', email: 'kabir.c3@thomson.edu' },
+      { fname: 'Anvi', lname: 'Mehta', cls: 'Class 3', roll: '102', admn: 'TS-2026-C03-02', email: 'anvi.c3@thomson.edu' },
+      // Class 4
+      { fname: 'Sai', lname: 'Reddy', cls: 'Class 4', roll: '101', admn: 'TS-2026-C04-01', email: 'sai.c4@thomson.edu' },
+      { fname: 'Isha', lname: 'Nair', cls: 'Class 4', roll: '102', admn: 'TS-2026-C04-02', email: 'isha.c4@thomson.edu' },
+      // Class 5
+      { fname: 'Advait', lname: 'Rao', cls: 'Class 5', roll: '101', admn: 'TS-2026-C05-01', email: 'advait.c5@thomson.edu' },
+      { fname: 'Sara', lname: 'Das', cls: 'Class 5', roll: '102', admn: 'TS-2026-C05-02', email: 'sara.c5@thomson.edu' },
+      // Class 6
+      { fname: 'Yash', lname: 'Kulkarni', cls: 'Class 6', roll: '101', admn: 'TS-2026-C06-01', email: 'yash.c6@thomson.edu' },
+      { fname: 'Riya', lname: 'Chawla', cls: 'Class 6', roll: '102', admn: 'TS-2026-C06-02', email: 'riya.c6@thomson.edu' },
+      // Class 7
+      { fname: 'Atharva', lname: 'Sen', cls: 'Class 7', roll: '101', admn: 'TS-2026-C07-01', email: 'atharva.c7@thomson.edu' },
+      { fname: 'Pari', lname: 'Yadav', cls: 'Class 7', roll: '102', admn: 'TS-2026-C07-02', email: 'pari.c7@thomson.edu' },
+      // Class 8
+      { fname: 'Shlok', lname: 'Bose', cls: 'Class 8', roll: '101', admn: 'TS-2026-C08-01', email: 'shlok.c8@thomson.edu' },
+      { fname: 'Navya', lname: 'Pillai', cls: 'Class 8', roll: '102', admn: 'TS-2026-C08-02', email: 'navya.c8@thomson.edu' },
+      // Class 9
+      { fname: 'Ishita', lname: 'Joshi', cls: 'Class 9', roll: '101', admn: 'TS-2026-C09-01', email: 'ishita.c9@thomson.edu' },
+      { fname: 'Karan', lname: 'Patel', cls: 'Class 9', roll: '102', admn: 'TS-2026-C09-02', email: 'karan.c9@thomson.edu' },
+      // Class 10
+      { fname: 'Aarav', lname: 'Kumar', cls: 'Class 10', roll: '101', admn: 'TS-2026-C10-01', email: 'student@thomson.edu' },
+      { fname: 'Riya', lname: 'Singh', cls: 'Class 10', roll: '102', admn: 'TS-2026-C10-02', email: 'riya.c10@thomson.edu' },
+      // Class 11
+      { fname: 'Siddharth', lname: 'Rao', cls: 'Class 11', roll: '101', admn: 'TS-2026-C11-01', email: 'siddharth.c11@thomson.edu' },
+      { fname: 'Tanvi', lname: 'Chawla', cls: 'Class 11', roll: '102', admn: 'TS-2026-C11-02', email: 'tanvi.c11@thomson.edu' },
+      // Class 12
+      { fname: 'Vivek', lname: 'Reddy', cls: 'Class 12', roll: '101', admn: 'TS-2026-C12-01', email: 'vivek.c12@thomson.edu' },
+      { fname: 'Pooja', lname: 'Nair', cls: 'Class 12', roll: '102', admn: 'TS-2026-C12-02', email: 'pooja.c12@thomson.edu' },
+    ];
 
-    // 8. Create Students
     const studentDbIds = [];
-    for (let i = 1; i <= 5; i++) {
-      let uId = await createUser(`student${i}@erp.com`, 'student', `Student ${i} Kumar`);
-      let sId = await createStudent(uId, `ADM-2026-0${i}`, `Student${i}`, 'Kumar', `100${i}`);
-      studentDbIds.push(sId);
+    for (const st of studentDefs) {
+      const uId = await createUser(st.email, 'student', `${st.fname} ${st.lname}`);
+      const secId = sectionIds[st.cls]['Section A'];
+      const sId = await createStudent(uId, st.admn, st.fname, st.lname, st.roll, secId);
+      if (sId) {
+        studentDbIds.push({ id: sId, userId: uId, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
+      }
     }
 
-    // 9. Subjects
-    await connection.query("INSERT IGNORE INTO subjects (name, code, class_id, max_marks, pass_marks) VALUES ('Mathematics', 'MATH-10', ?, 100, 35)", [classId]);
-    await connection.query("INSERT IGNORE INTO subjects (name, code, class_id, max_marks, pass_marks) VALUES ('Science', 'SCI-10', ?, 100, 35)", [classId]);
-    await connection.query("INSERT IGNORE INTO subjects (name, code, class_id, max_marks, pass_marks) VALUES ('English', 'ENG-10', ?, 100, 35)", [classId]);
+    // 8. Subjects per Class
+    const subjectList = ['Mathematics', 'Physics', 'Chemistry', 'English', 'Computer Science', 'Social Studies', 'Biology'];
+    const subjectIdsByClass = {};
 
-    let [subjRows] = await connection.query("SELECT id, name FROM subjects WHERE class_id = ?", [classId]);
-    const mathId = subjRows.find(s => s.name === 'Mathematics')?.id;
-    const sciId = subjRows.find(s => s.name === 'Science')?.id;
-    const engId = subjRows.find(s => s.name === 'English')?.id;
-
-    // 10. Teacher assignments (Teacher 1 is Class Teacher of Section A)
-    if (mathId && sciId && engId) {
-      await connection.query(`
-        INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher) 
-        VALUES (?, ?, ?, ?, 1)
-        ON DUPLICATE KEY UPDATE is_class_teacher=1
-      `, [tch1Id, sectionId, mathId, sessionId]);
-
-      await connection.query(`
-        INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher) 
-        VALUES (?, ?, ?, ?, 0)
-        ON DUPLICATE KEY UPDATE is_class_teacher=0
-      `, [tch2Id, sectionId, sciId, sessionId]);
-
-      await connection.query(`
-        INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher) 
-        VALUES (?, ?, ?, ?, 0)
-        ON DUPLICATE KEY UPDATE is_class_teacher=0
-      `, [tch3Id, sectionId, engId, sessionId]);
+    for (const [clsName, cId] of Object.entries(classIds)) {
+      subjectIdsByClass[clsName] = {};
+      for (const subjName of subjectList) {
+        const code = `${subjName.substring(0, 4).toUpperCase()}-${cId}`;
+        await connection.query("INSERT IGNORE INTO subjects (name, code, class_id, max_marks, pass_marks) VALUES (?, ?, ?, 100, 35)", [subjName, code, cId]);
+        const [[subRow]] = await connection.query("SELECT id FROM subjects WHERE class_id = ? AND name = ?", [cId, subjName]);
+        if (subRow) subjectIdsByClass[clsName][subjName] = subRow.id;
+      }
     }
 
-    // 11. Exam Weightage (20% + 20% + 60% = 100%)
-    await connection.query(`
-      INSERT INTO exam_weightage (session_id, class_id, half_year, internal_1_weight, internal_2_weight, semester_weight)
-      VALUES (?, 0, 'H1', 20.00, 20.00, 60.00)
-      ON DUPLICATE KEY UPDATE internal_1_weight=20.00, internal_2_weight=20.00, semester_weight=60.00
-    `, [sessionId]);
+    // Assign Subject Teachers (is_class_teacher = 0)
+    const phyTeacherId = teacherUserIdsByEmail['teacher.phy@thomson.edu']; // Dr. Vikram Sarabhai
+    const chemTeacherId = teacherUserIdsByEmail['teacher.chem@thomson.edu']; // Priyanka Sen
+    const engTeacherId = teacherUserIdsByEmail['teacher.eng@thomson.edu']; // David Miller
 
-    // 12. Notices (Global & Work notices)
-    let dStr = new Date().toISOString().split('T')[0];
-    await connection.query(`
-      INSERT INTO notices (title, content, notice_type, type, published_by, is_published, publish_date) 
-      VALUES ('Welcome to Academic Year 2026-2027', 'Official Thomson ERP is now live for all students, teachers, cashiers, and administrators.', 'general', 'global', ?, 1, ?)
-    `, [saId, dStr]);
+    const targetClassesForSubjectTeachers = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
+    for (const clsName of targetClassesForSubjectTeachers) {
+      const secId = sectionIds[clsName] ? sectionIds[clsName]['Section A'] : null;
+      if (secId) {
+        // Physics Subject Teacher
+        if (phyTeacherId && subjectIdsByClass[clsName]['Physics']) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
+            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
+          `, [phyTeacherId, secId, subjectIdsByClass[clsName]['Physics'], sessionId]);
+        }
+        // Chemistry Subject Teacher
+        if (chemTeacherId && subjectIdsByClass[clsName]['Chemistry']) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
+            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
+          `, [chemTeacherId, secId, subjectIdsByClass[clsName]['Chemistry'], sessionId]);
+        }
+        // English Subject Teacher
+        if (engTeacherId && subjectIdsByClass[clsName]['English']) {
+          await connection.query(`
+            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
+            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
+          `, [engTeacherId, secId, subjectIdsByClass[clsName]['English'], sessionId]);
+        }
+      }
+    }
 
-    await connection.query(`
-      INSERT INTO notices (title, content, notice_type, type, target_role, target_section_id, published_by, is_published, publish_date) 
-      VALUES ('Class 10 Science Assignment Notice', 'Complete Chapters 1 to 3 revision questions before Friday.', 'academic', 'work', 'student', ?, ?, 1, ?)
-    `, [sectionId, tch1Id, dStr]);
+    // 10. Attendance Records (Past 10 Days)
+    for (let dayOffset = 0; dayOffset < 10; dayOffset++) {
+      const d = new Date();
+      d.setDate(d.getDate() - dayOffset);
+      const dateStr = d.toISOString().split('T')[0];
 
-    // 13. Transport Route & Stops
+      for (const st of studentDbIds) {
+        const status = (st.id + dayOffset) % 7 === 0 ? 'absent' : (st.id + dayOffset) % 5 === 0 ? 'late' : 'present';
+        await connection.query(`
+          INSERT INTO attendance (student_id, section_id, date, status, marked_by) 
+          VALUES (?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE status=VALUES(status)
+        `, [st.id, st.sectionId, dateStr, status, teacherUserIds[0]]);
+      }
+    }
+
+    // 11. Timetable Schedule (7 Periods Mon-Sat with Recess between Period 3 & 4)
+    const class10SecA = sectionIds['Class 10'] ? sectionIds['Class 10']['Section A'] : null;
+    const class10Math = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Mathematics'] : null;
+    const class10Phy = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Physics'] : null;
+    const class10Chem = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Chemistry'] : null;
+    const class10Eng = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['English'] : null;
+    const class10CS = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Computer Science'] : null;
+    const class10SST = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Social Studies'] : null;
+    const class10Bio = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Biology'] : null;
+
+    if (class10SecA && class10Math && class10Phy && class10Chem && class10Eng && class10CS && class10SST && class10Bio) {
+      const periods7 = [
+        { period: 1, start: '08:30:00', end: '09:15:00', sub: class10Math, teacher: teacherUserIds[10] || teacherUserIds[0] },
+        { period: 2, start: '09:15:00', end: '10:00:00', sub: class10Phy, teacher: phyTeacherId || teacherUserIds[0] },
+        { period: 3, start: '10:00:00', end: '10:45:00', sub: class10Chem, teacher: chemTeacherId || teacherUserIds[0] },
+        // RECESS BREAK: 10:45 AM - 11:15 AM
+        { period: 4, start: '11:15:00', end: '12:00:00', sub: class10Eng, teacher: engTeacherId || teacherUserIds[0] },
+        { period: 5, start: '12:00:00', end: '12:45:00', sub: class10CS, teacher: teacherUserIds[10] || teacherUserIds[0] },
+        { period: 6, start: '12:45:00', end: '13:30:00', sub: class10SST, teacher: teacherUserIds[10] || teacherUserIds[0] },
+        { period: 7, start: '13:30:00', end: '14:15:00', sub: class10Bio, teacher: teacherUserIds[10] || teacherUserIds[0] },
+      ];
+
+      for (let day = 1; day <= 6; day++) {
+        for (const p of periods7) {
+          await connection.query(`
+            INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE start_time=VALUES(start_time), end_time=VALUES(end_time), subject_id=VALUES(subject_id)
+          `, [class10SecA, p.sub, p.teacher, day, p.period, p.start, p.end, sessionId]);
+        }
+      }
+    }
+
+    // 12. Notices (Global & Targeted Notices)
+    await connection.query('TRUNCATE TABLE notices');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const noticesList = [
+      { title: 'Welcome to Academic Year 2026-2027', content: 'Official Thomson ERP is live for all students, faculty, cashiers, and administrators.', type: 'global', ntype: 'general', role: null },
+      { title: 'Mid-Term Board Examination Schedule', content: 'Mid-term board exams for Class 9th to 12th start next week. Admit cards will be issued from office.', type: 'global', ntype: 'exam', role: null },
+      { title: 'Parent-Teacher Meeting (PTM)', content: 'Mandatory PTM scheduled for term evaluation and academic performance review.', type: 'global', ntype: 'general', role: null }
+    ];
+
+    for (const n of noticesList) {
+      await connection.query(`
+        INSERT INTO notices (title, content, notice_type, type, target_role, target_section_id, published_by, is_published, publish_date) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+      `, [n.title, n.content, n.ntype, n.type, n.role, null, saId, todayStr]);
+    }
+
+    // 13. Transport Routes, Vehicles, Stops & Student Assignments
     await connection.query(`
-      INSERT INTO transport_routes (route_no, name, bus_no, driver_name, driver_phone, busstaff_user_id) 
-      VALUES ('R-101', 'North Express Route', 'KA-01-EQ-9900', 'Ramesh Yadav', '9876543210', ?)
+      INSERT INTO transport_routes (route_no, name, bus_no, driver_name, driver_phone) 
+      VALUES ('R-101', 'North Express Route', 'KA-01-EQ-9900', 'Ramesh Yadav', '9876543210')
       ON DUPLICATE KEY UPDATE bus_no=VALUES(bus_no)
-    `, [busStaffId]);
+    `);
 
-    let [routeRows] = await connection.query("SELECT id FROM transport_routes WHERE route_no = 'R-101'");
-    const routeId = routeRows[0]?.id;
+    await connection.query(`
+      INSERT INTO transport_routes (route_no, name, bus_no, driver_name, driver_phone) 
+      VALUES ('R-102', 'South City Shuttle', 'KA-01-EQ-4422', 'Suresh Verma', '9876543211')
+      ON DUPLICATE KEY UPDATE bus_no=VALUES(bus_no)
+    `);
 
-    if (routeId) {
+    let [[rRow]] = await connection.query("SELECT id FROM transport_routes WHERE route_no = 'R-101'");
+    if (rRow) {
       await connection.query(`
-        INSERT INTO transport_stops (route_id, stop_name, stop_order, pickup_time, drop_time, monthly_fare) 
+        INSERT IGNORE INTO transport_stops (route_id, stop_name, stop_order, pickup_time, drop_time, monthly_fare) 
         VALUES (?, 'Central Circle Stop', 1, '07:30:00', '15:30:00', 1800.00)
-      `, [routeId]);
+      `, [rRow.id]);
 
-      let [stopRows] = await connection.query("SELECT id FROM transport_stops WHERE route_id = ?", [routeId]);
-      const stopId = stopRows[0]?.id;
-
-      if (stopId && studentDbIds[0]) {
+      let [[sStopRow]] = await connection.query("SELECT id FROM transport_stops WHERE route_id = ?", [rRow.id]);
+      if (sStopRow && studentDbIds[0]) {
         await connection.query(`
           INSERT INTO student_transport (student_id, route_id, stop_id, session_id, pickup_type) 
           VALUES (?, ?, ?, ?, 'both')
           ON DUPLICATE KEY UPDATE pickup_type='both'
-        `, [studentDbIds[0], routeId, stopId, sessionId]);
+        `, [studentDbIds[0].id, rRow.id, sStopRow.id, sessionId]);
       }
     }
 
-    // 14. Attendance Register (Last 5 days)
-    for (let i = 0; i < 5; i++) {
-      let d = new Date();
-      d.setDate(d.getDate() - i);
-      let dateStr = d.toISOString().split('T')[0];
-      for (const sId of studentDbIds) {
-        await connection.query(`
-          INSERT INTO attendance (student_id, section_id, date, status, marked_by) 
-          VALUES (?, ?, ?, 'present', ?)
-          ON DUPLICATE KEY UPDATE status='present'
-        `, [sId, sectionId, dateStr, tch1Id]);
-      }
-    }
-
-    // 15. Timetable Schedule (Periods 1 & 2 for Mon-Fri)
-    for (let day = 1; day <= 5; day++) {
-      await connection.query(`
-        INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-        VALUES (?, ?, ?, ?, 1, '09:00:00', '09:45:00', ?)
-        ON DUPLICATE KEY UPDATE start_time='09:00:00'
-      `, [sectionId, mathId, tch1Id, day, sessionId]);
-
-      await connection.query(`
-        INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-        VALUES (?, ?, ?, ?, 2, '09:45:00', '10:30:00', ?)
-        ON DUPLICATE KEY UPDATE start_time='09:45:00'
-      `, [sectionId, sciId, tch2Id, day, sessionId]);
-    }
-
-    // 16. Fee Structure & Fee Records
+    // 14. Fee Categories, Structures, and Records
     await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Tuition Fee', 'Quarterly Tuition Fee')");
-    let [fcRows] = await connection.query("SELECT id FROM fee_categories WHERE name='Tuition Fee'");
-    const feeCatId = fcRows[0]?.id;
+    await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Exam Fee', 'Term Examination Fee')");
 
-    if (feeCatId) {
-      await connection.query(`
-        INSERT INTO fee_structures (session_id, class_id, category_id, amount, due_date) 
-        VALUES (?, ?, ?, 7500.00, ?)
-        ON DUPLICATE KEY UPDATE amount=7500.00
-      `, [sessionId, classId, feeCatId, dStr]);
+    let [[fcRow]] = await connection.query("SELECT id FROM fee_categories WHERE name='Tuition Fee'");
+    if (fcRow) {
+      for (const cId of Object.values(classIds)) {
+        await connection.query(`
+          INSERT INTO fee_structures (session_id, class_id, category_id, amount, due_date) 
+          VALUES (?, ?, ?, 7500.00, ?)
+          ON DUPLICATE KEY UPDATE amount=7500.00
+        `, [sessionId, cId, fcRow.id, todayStr]);
+      }
 
-      for (const sId of studentDbIds) {
-        const isPaid = sId % 2 === 1;
+      for (const st of studentDbIds) {
+        const isPaid = st.id % 2 === 1;
+        const paidAmount = isPaid ? 7500.00 : (st.id % 3 === 0 ? 3750.00 : 0.00);
+        const status = paidAmount === 7500.00 ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'PENDING');
+
         await connection.query(`
           INSERT INTO fee_records (student_id, session_id, category_id, total_amount, paid_amount, due_date, status) 
           VALUES (?, ?, ?, 7500.00, ?, ?, ?)
           ON DUPLICATE KEY UPDATE paid_amount=VALUES(paid_amount), status=VALUES(status)
-        `, [sId, sessionId, feeCatId, isPaid ? 7500.00 : 0.00, dStr, isPaid ? 'PAID' : 'PENDING']);
+        `, [st.id, sessionId, fcRow.id, paidAmount, todayStr, status]);
       }
     }
 
-    // 17. Exams & Marks
+    // 15. Examinations & Marks
     await connection.query(`
       INSERT INTO exams (name, session_id, class_id, exam_type, half_year, start_date, end_date, status) 
-      VALUES ('Internal Assessment 1', ?, ?, 'internal_1', 'H1', ?, ?, 'completed')
+      VALUES ('Mid-Term Board Examination', ?, ?, 'semester', 'H1', ?, ?, 'completed')
       ON DUPLICATE KEY UPDATE status='completed'
-    `, [sessionId, classId, dStr, dStr]);
+    `, [sessionId, classIds['Class 10'], todayStr, todayStr]);
 
-    let [exRows] = await connection.query("SELECT id FROM exams WHERE name='Internal Assessment 1'");
-    const examId = exRows[0]?.id;
-
-    if (examId && mathId && sciId) {
-      for (const sId of studentDbIds) {
+    let [[exRow]] = await connection.query("SELECT id FROM exams WHERE name='Mid-Term Board Examination'");
+    if (exRow && class10Math && class10Phy) {
+      for (const st of studentDbIds.filter(s => s.cls === 'Class 10')) {
         await connection.query(`
           INSERT INTO marks (exam_id, student_id, subject_id, marks_obtained, max_marks, grade, entered_by) 
-          VALUES (?, ?, ?, 88.50, 100.00, 'A', ?)
-          ON DUPLICATE KEY UPDATE marks_obtained=88.50
-        `, [examId, sId, mathId, tch1Id]);
+          VALUES (?, ?, ?, 92.50, 100.00, 'A+', ?)
+          ON DUPLICATE KEY UPDATE marks_obtained=92.50
+        `, [exRow.id, st.id, class10Math, teacherUserIds[0]]);
 
         await connection.query(`
           INSERT INTO marks (exam_id, student_id, subject_id, marks_obtained, max_marks, grade, entered_by) 
-          VALUES (?, ?, ?, 79.00, 100.00, 'B', ?)
-          ON DUPLICATE KEY UPDATE marks_obtained=79.00
-        `, [examId, sId, sciId, tch2Id]);
+          VALUES (?, ?, ?, 84.00, 100.00, 'A', ?)
+          ON DUPLICATE KEY UPDATE marks_obtained=84.00
+        `, [exRow.id, st.id, class10Phy, teacherUserIds[1]]);
       }
     }
 
-    // 18. Homework
-    if (mathId) {
-      await connection.query(`
-        INSERT INTO homework (section_id, subject_id, title, description, assigned_by, assigned_date, due_date, session_id) 
-        VALUES (?, ?, 'Quadratic Equations Practice Set', 'Solve Exercise 4.1 to 4.3 in notebook.', ?, ?, ?, ?)
-      `, [sectionId, mathId, tch1Id, dStr, dStr, sessionId]);
+    // 16. Homework Assignments
+    try {
+      await connection.query("ALTER TABLE homework ADD COLUMN classroom_url VARCHAR(500) DEFAULT NULL");
+    } catch (e) {
+      // Column may already exist
+    }
+
+    if (class10Math) {
+      const [[existingHw1]] = await connection.query(
+        "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
+        [class10SecA, class10Math, 'Quadratic Equations Worksheet']
+      );
+      if (!existingHw1) {
+        await connection.query(`
+          INSERT INTO homework (section_id, subject_id, title, description, classroom_url, assigned_by, assigned_date, due_date, session_id) 
+          VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njky', ?, ?, ?, ?)
+        `, [class10SecA, class10Math, teacherUserIds[0], todayStr, todayStr, sessionId]);
+      }
+    }
+
+    if (class10Phy) {
+      const [[existingHw2]] = await connection.query(
+        "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
+        [class10SecA, class10Phy, 'Ray Diagrams & Refraction Worksheet']
+      );
+      if (!existingHw2) {
+        await connection.query(`
+          INSERT INTO homework (section_id, subject_id, title, description, classroom_url, assigned_by, assigned_date, due_date, session_id) 
+          VALUES (?, ?, 'Ray Diagrams & Refraction Worksheet', 'Draw ray diagrams for concave and convex mirrors.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njkz', ?, ?, ?, ?)
+        `, [class10SecA, class10Phy, teacherUserIds[1], todayStr, todayStr, sessionId]);
+      }
     }
 
     console.log('\n======================================================');
-    console.log(' SUCCESS: Comprehensive Demo Seed Completed!');
+    console.log(' SUCCESS: Extended Demo Database Seed Completed!');
     console.log('======================================================');
-    console.log('Demo Login Credentials (Default Password: password123)');
+    console.log('Demo Login Credentials (Default Password: Thomson2026!)');
     console.log('------------------------------------------------------');
-    console.log('1. Super Admin:  superadmin@erp.com  / password123');
-    console.log('2. Admin:        admin1@erp.com      / password123');
-    console.log('3. Cashier:      cashier1@erp.com    / password123');
-    console.log('4. Teacher:      teacher1@erp.com    / password123');
-    console.log('5. Bus Staff:    busstaff1@erp.com   / password123');
-    console.log('6. Student:      student1@erp.com    / password123');
+    console.log('1. Super Admin:  superadmin@thomson.edu  / Thomson2026!');
+    console.log('2. Admin:        admin@thomson.edu       / Thomson2026!');
+    console.log('3. Cashier:      cashier@thomson.edu     / Thomson2026!');
+    console.log('4. Teacher:      teacher@thomson.edu     / Thomson2026!');
+    console.log('5. Student:      student@thomson.edu     / Thomson2026!');
     console.log('======================================================\n');
 
-    process.exit(0);
+    process.exitCode = 0;
   } catch (err) {
     console.error('Seed Error:', err);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    if (connection) await connection.end();
   }
 }
 

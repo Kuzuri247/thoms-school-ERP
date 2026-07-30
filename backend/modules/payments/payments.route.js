@@ -2,7 +2,7 @@ const router = require('express').Router();
 const webhookRouter = require('express').Router();
 const { verifyToken } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/rbac');
-const { paymentOrderLimiter } = require('../../middleware/rateLimiter');
+const { paymentOrderLimiter } = require('../../middleware/ratelimiter');
 const svc = require('./payments.service');
 const { ROLES } = require('../../config/constants');
 

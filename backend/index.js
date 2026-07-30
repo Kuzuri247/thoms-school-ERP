@@ -8,11 +8,28 @@ const rawBody = require('./middleware/rawBody');
 
 const app = express();
 
+const pool = require('./config/db');
+
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map((url) => url.trim())
+  : ['http://localhost:5173'];
+
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins,
   credentials: true,
 }));
+
+// Startup validation for database connection
+pool.getConnection()
+  .then((conn) => {
+    console.log('Database connection pool verified successfully.');
+    conn.release();
+  })
+  .catch((err) => {
+    console.error('FATAL: Database connection failed during startup:', err.message);
+  });
+
 app.use(cookieParser());
 app.use(morgan('combined'));
 
@@ -36,10 +53,17 @@ app.use('/api/timetable', require('./modules/academics/timetable.route'));
 app.use('/api/teacher', require('./modules/academics/teacher.route'));
 app.use('/api/transport', require('./modules/transport/transport.routes'));
 app.use('/api/reports', require('./modules/reports/reports.route'));
+app.use('/api/global-reports', require('./modules/reports/globalReports.routes'));
+app.use('/api/staff', require('./modules/staff/teacherAssignment.routes'));
 app.use('/api/notices', require('./modules/notices/notices.route'));
 
-app.get('/', (req, res) => {
-  res.json({ success: true, message: 'Thomson School ERP API' });
+app.get('/', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ success: true, message: 'Thomson School ERP API', db: 'connected' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Database connection failed', error: err.message });
+  }
 });
 
 app.use(errorHandler);

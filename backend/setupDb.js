@@ -27,11 +27,11 @@ async function setup() {
         // Check if super admin exists
         const [rows] = await connection.query(`SELECT * FROM users WHERE role = 'super_admin'`);
         if (rows.length === 0) {
-            const hashedPassword = await bcrypt.hash('superadmin123', 8);
+            const hashedPassword = await bcrypt.hash('Thomson2026!', 8);
             await connection.query(`
-                INSERT INTO users (email, password, role) VALUES ('superadmin@erp.com', ?, 'super_admin');
+                INSERT INTO users (email, password, role) VALUES ('superadmin@thomson.edu', ?, 'super_admin');
             `, [hashedPassword]);
-            console.log('Super admin created: superadmin@erp.com / superadmin123');
+            console.log('Super admin created: superadmin@thomson.edu / Thomson2026!');
         } else {
             console.log('Super admin already exists.');
         }

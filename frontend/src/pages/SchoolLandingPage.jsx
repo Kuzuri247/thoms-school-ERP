@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   GraduationCap,
   Bell,
@@ -15,11 +15,11 @@ import {
   Mail,
   MapPin,
   Calendar,
-  LogIn
-} from 'lucide-react';
-import useAuthStore from '../store/authStore';
+  LogIn,
+} from "lucide-react";
+import useAuthStore from "../store/authStore";
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const SchoolLandingPage = () => {
   const navigate = useNavigate();
@@ -34,10 +34,10 @@ const SchoolLandingPage = () => {
   const fetchPublicNotices = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/notices`);
+      const res = await axios.get(`${API_BASE}/notices/public`);
       setNotices(res.data?.data || []);
     } catch (err) {
-      console.error('Failed to load public notices:', err);
+      console.error("Failed to load public notices:", err);
     } finally {
       setLoading(false);
     }
@@ -67,18 +67,27 @@ const SchoolLandingPage = () => {
           </div>
 
           <nav className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-300">
-            <a href="#home" className="hover:text-white transition-colors">Home</a>
-            <a href="#notices" className="hover:text-white transition-colors flex items-center gap-1">
+            <a href="#home" className="hover:text-white transition-colors">
+              Home
+            </a>
+            <a
+              href="#notices"
+              className="hover:text-white transition-colors flex items-center gap-1"
+            >
               <Bell className="w-3.5 h-3.5 text-amber-400" /> Notice Board
             </a>
-            <a href="#academics" className="hover:text-white transition-colors">Academics</a>
-            <a href="#contact" className="hover:text-white transition-colors">Contact</a>
+            <a href="#academics" className="hover:text-white transition-colors">
+              Academics
+            </a>
+            <a href="#contact" className="hover:text-white transition-colors">
+              Contact
+            </a>
           </nav>
 
           <div className="flex items-center gap-3">
             {user ? (
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate("/dashboard")}
                 className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
               >
                 Go to Portal <ArrowRight className="w-4 h-4" />
@@ -96,7 +105,10 @@ const SchoolLandingPage = () => {
       </header>
 
       {/* Hero Section */}
-      <section id="home" className="relative pt-20 pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8">
+      <section
+        id="home"
+        className="relative pt-20 pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8"
+      >
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-bold animate-in fade-in">
           <Sparkles className="w-4 h-4 text-amber-400" />
           <span>Welcome to Thomson Public School • Admissions 2026 Open</span>
@@ -110,7 +122,9 @@ const SchoolLandingPage = () => {
         </h1>
 
         <p className="max-w-2xl mx-auto text-slate-400 text-sm sm:text-base font-medium leading-relaxed">
-          Thomson School provides a holistic education empowering students with academic rigor, ethical values, modern STEM innovation, and vibrant sports programs.
+          Thomson School provides a holistic education empowering students with
+          academic rigor, ethical values, modern STEM innovation, and vibrant
+          sports programs.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -130,13 +144,18 @@ const SchoolLandingPage = () => {
       </section>
 
       {/* Announcements & Notice Board Section */}
-      <section id="notices" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+      <section
+        id="notices"
+        className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8"
+      >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-800 pb-6 gap-4">
           <div>
             <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
               <Bell className="w-4 h-4" /> Official Notice Board
             </div>
-            <h2 className="text-3xl font-extrabold text-white tracking-tight">Public Announcements & Updates</h2>
+            <h2 className="text-3xl font-extrabold text-white tracking-tight">
+              Public Announcements & Updates
+            </h2>
           </div>
           <span className="text-xs font-bold text-slate-400 bg-slate-900 border border-slate-800 px-3.5 py-1.5 rounded-full">
             {notices.length} Published Notices
@@ -157,11 +176,13 @@ const SchoolLandingPage = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="px-3 py-1 rounded-full font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                      {notice.notice_type || 'General'}
+                      {notice.notice_type || "General"}
                     </span>
                     <span className="text-slate-500 font-medium flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" />
-                      {notice.publish_date ? new Date(notice.publish_date).toLocaleDateString() : 'Today'}
+                      {notice.publish_date
+                        ? new Date(notice.publish_date).toLocaleDateString()
+                        : "Today"}
                     </span>
                   </div>
                   <h3 className="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors">
@@ -178,10 +199,17 @@ const SchoolLandingPage = () => {
       </section>
 
       {/* School Features & Pillars Section */}
-      <section id="academics" className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12">
+      <section
+        id="academics"
+        className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12"
+      >
         <div className="text-center space-y-3">
-          <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Why Choose Thomson</span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Comprehensive Educational Ecosystem</h2>
+          <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+            Why Choose Thomson
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+            Comprehensive Educational Ecosystem
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -189,9 +217,12 @@ const SchoolLandingPage = () => {
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
               <BookOpen className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white">Academic Excellence</h3>
+            <h3 className="text-lg font-bold text-white">
+              Academic Excellence
+            </h3>
             <p className="text-xs text-slate-400 font-medium leading-relaxed">
-              Curriculum designed to foster critical thinking, STEM mastery, and global communication skills.
+              Curriculum designed to foster critical thinking, STEM mastery, and
+              global communication skills.
             </p>
           </div>
 
@@ -199,9 +230,12 @@ const SchoolLandingPage = () => {
             <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
               <Award className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white">Sports & Activities</h3>
+            <h3 className="text-lg font-bold text-white">
+              Sports & Activities
+            </h3>
             <p className="text-xs text-slate-400 font-medium leading-relaxed">
-              State-of-the-art sports facilities, athletics, arts, and leadership programs.
+              State-of-the-art sports facilities, athletics, arts, and
+              leadership programs.
             </p>
           </div>
 
@@ -209,9 +243,12 @@ const SchoolLandingPage = () => {
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
               <Bus className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white">Safe Transport Network</h3>
+            <h3 className="text-lg font-bold text-white">
+              Safe Transport Network
+            </h3>
             <p className="text-xs text-slate-400 font-medium leading-relaxed">
-              GPS-enabled school buses with verified drivers covering all major transit routes.
+              GPS-enabled school buses with verified drivers covering all major
+              transit routes.
             </p>
           </div>
 
@@ -219,42 +256,67 @@ const SchoolLandingPage = () => {
             <div className="w-12 h-12 rounded-2xl bg-pink-500/10 text-pink-400 flex items-center justify-center">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-bold text-white">Integrated ERP Portal</h3>
+            <h3 className="text-lg font-bold text-white">
+              Integrated ERP Portal
+            </h3>
             <p className="text-xs text-slate-400 font-medium leading-relaxed">
-              Real-time portal access for students, parents, teachers, and administration.
+              Real-time portal access for students, parents, teachers, and
+              administration.
             </p>
           </div>
         </div>
       </section>
 
       {/* Footer Section */}
-      <footer id="contact" className="border-t border-slate-800/80 pt-12 pb-8 bg-slate-950 text-slate-400 text-xs">
+      <footer
+        id="contact"
+        className="border-t border-slate-800/80 pt-12 pb-8 bg-slate-950 text-slate-400 text-xs"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <GraduationCap className="w-6 h-6 text-indigo-400" />
-              <span className="text-base font-extrabold text-white">Thomson Public School</span>
+              <span className="text-base font-extrabold text-white">
+                Thomson Public School
+              </span>
             </div>
-            <p className="text-slate-500 font-medium">Empowering minds, building character, and shaping future leaders.</p>
+            <p className="text-slate-500 font-medium">
+              Empowering minds, building character, and shaping future leaders.
+            </p>
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-extrabold text-white uppercase tracking-wider">Contact Administration</h4>
-            <p className="flex items-center gap-2"><MapPin className="w-4 h-4 text-indigo-400" /> 100 Thomson Campus Road, Educational Zone</p>
-            <p className="flex items-center gap-2"><Phone className="w-4 h-4 text-indigo-400" /> +91 (080) 2345-6789</p>
-            <p className="flex items-center gap-2"><Mail className="w-4 h-4 text-indigo-400" /> admissions@thoms.edu</p>
+            <h4 className="font-extrabold text-white uppercase tracking-wider">
+              Contact Administration
+            </h4>
+            <p className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-indigo-400" /> 100 Thomson Campus
+              Road, Educational Zone
+            </p>
+            <p className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-indigo-400" /> +91 (080) 2345-6789
+            </p>
+            <p className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-indigo-400" /> admissions@thoms.edu
+            </p>
           </div>
 
           <div className="space-y-2">
-            <h4 className="font-extrabold text-white uppercase tracking-wider">Portal Quick Link</h4>
-            <Link to="/login" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-500 transition">
+            <h4 className="font-extrabold text-white uppercase tracking-wider">
+              Portal Quick Link
+            </h4>
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-500 transition"
+            >
               Sign In to ERP Portal <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-900 pt-6 text-center text-slate-600 font-medium">
-          © {new Date().getFullYear()} Thomson Public School. All rights reserved. Powered by Thomson ERP System.
+          © {new Date().getFullYear()} Thomson Public School. All rights
+          reserved. Powered by Thomson ERP System.
         </div>
       </footer>
     </div>

@@ -8,7 +8,6 @@ export const ROLES = Object.freeze({
   ADMIN: 'admin',
   CASHIER: 'cashier',
   TEACHER: 'teacher',
-  BUSSTAFF: 'busstaff',
   STUDENT: 'student',
 });
 
@@ -17,7 +16,6 @@ const LEGACY_ROLE_MAP = Object.freeze({
   fee_collector: ROLES.CASHIER,
   fees_collector: ROLES.CASHIER,
   accountant: ROLES.CASHIER,
-  bus_staff: ROLES.BUSSTAFF,
 });
 
 /**
@@ -82,21 +80,22 @@ export const isTeacher = (user) => {
 };
 
 /**
- * Bus Staff check.
- * @param {Object} [user]
- * @returns {boolean}
- */
-export const isBusStaff = (user) => {
-  return normalizeRole(user?.role) === ROLES.BUSSTAFF;
-};
-
-/**
  * Student check.
  * @param {Object} [user]
  * @returns {boolean}
  */
 export const isStudent = (user) => {
   return normalizeRole(user?.role) === ROLES.STUDENT;
+};
+
+/**
+ * Staff check (Admin, Super Admin, Teacher).
+ * @param {Object} [user]
+ * @returns {boolean}
+ */
+export const isStaff = (user) => {
+  const norm = normalizeRole(user?.role);
+  return norm === ROLES.ADMIN || norm === ROLES.SUPER_ADMIN || norm === ROLES.TEACHER;
 };
 
 /**
@@ -141,8 +140,6 @@ export const getRoleHomePath = (user) => {
       return '/student/dashboard';
     case ROLES.CASHIER:
       return '/finance/dashboard';
-    case ROLES.BUSSTAFF:
-      return '/dashboard';
     default:
       return '/unauthorized';
   }
@@ -166,8 +163,6 @@ export const getRoleBadgeStyle = (role) => {
       return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
     case ROLES.CASHIER:
       return 'bg-blue-50 text-blue-700 border-blue-200/80';
-    case ROLES.BUSSTAFF:
-      return 'bg-sky-50 text-sky-700 border-sky-200/80';
     default:
       return 'bg-slate-100 text-slate-700 border-slate-200';
   }

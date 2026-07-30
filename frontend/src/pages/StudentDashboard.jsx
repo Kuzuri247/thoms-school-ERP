@@ -15,7 +15,8 @@ import {
   Bus,
   Key,
   Lock,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ExternalLink
 } from 'lucide-react';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -35,6 +36,7 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
   const [loading, setLoading] = useState(true);
 
   // Security password state
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState(null);
@@ -74,13 +76,20 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
     setMessage(null);
     setError(null);
 
+    if (!currentPassword) {
+      return setError('Please enter your current password');
+    }
+    if (newPassword.length < 8) {
+      return setError('New password must be at least 8 characters');
+    }
     if (newPassword !== confirmPassword) {
       return setError('Passwords do not match');
     }
 
     try {
-      const response = await api.put('/auth/change-password', { currentPassword: '', newPassword });
+      const response = await api.put('/auth/change-password', { currentPassword, newPassword });
       setMessage(response.data.message || 'Password updated successfully!');
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
@@ -197,7 +206,7 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                <BookText className="w-5 h-5 text-indigo-600" /> My Academic Work & Coursework
+                <BookText className="w-5 h-5 text-indigo-600" /> My Academic Work & Homework
               </h2>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 Assignments given by your class teacher and subject teachers.
@@ -223,18 +232,61 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
             ))}
 
             {/* Assigned Homework Items */}
-            {workItems.map((item) => (
-              <div key={`hw-${item.homework_id || item.id}`} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-600">{item.subject_name || 'Subject Work'}</span>
-                  <span className="text-[11px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    Due: {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'N/A'}
-                  </span>
+            {workItems.map((item) => {
+              const isCompleted = item.status === 'completed';
+              return (
+                <div key={`hw-${item.homework_id || item.id}`} className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
+                      {item.subject_name || 'Subject Work'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Due: {item.due_date ? new Date(item.due_date).toLocaleDateString() : 'N/A'}
+                      </span>
+                      {item.classroom_url && (
+                        <a
+                          href={item.classroom_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-extrabold rounded-lg transition"
+                          title="Open Google Classroom to submit assignment"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Google Classroom</span>
+                        </a>
+                      )}
+                      <button
+                        onClick={async () => {
+                          const newStatus = isCompleted ? 'pending' : 'completed';
+                          try {
+                            await api.put('/homework/status', { homework_id: item.homework_id || item.id, status: newStatus });
+                            setWorkItems(prev => prev.map(w => (w.homework_id || w.id) === (item.homework_id || item.id) ? { ...w, status: newStatus } : w));
+                          } catch (err) {
+                            alert('Failed to update status');
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                          isCompleted
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        {isCompleted ? 'Done' : 'Mark Done'}
+                      </button>
+                    </div>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
+                  {item.description && <p className="text-xs text-slate-600 font-medium">{item.description}</p>}
+                  {item.classroom_url && (
+                    <p className="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                      💡 <span>Submit work on Google Classroom first, then click <strong>Mark Done</strong>.</span>
+                    </p>
+                  )}
                 </div>
-                <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
-                {item.description && <p className="text-xs text-slate-600 font-medium">{item.description}</p>}
-              </div>
-            ))}
+              );
+            })}
 
             {workItems.length === 0 && workNotices.length === 0 && (
               <p className="text-xs text-slate-400 font-medium py-4 text-center">No pending work or coursework assigned at this time.</p>
@@ -243,39 +295,81 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
         </div>
       )}
 
-      {/* --- Timetable Section --- */}
+      {/* --- Timetable Section (7 Periods with Recess after Period 3) --- */}
       {(currentTab === 'home' || currentTab === 'timetable') && (
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-indigo-600" /> Class Schedule & Timetable
-            </h2>
+            <div>
+              <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-600" /> Class Schedule & Timetable (7 Periods)
+              </h2>
+              <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                Standard 7-period daily schedule with Recess Break after 3rd Period.
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {daysOfWeek.map((day, dayIdx) => {
               const dayClasses = timetable.filter((t) => Number(t.day_of_week) === dayIdx + 1);
+
+              // 7 Standard slots
+              const defaultSlots = [
+                { p: 1, label: '08:30 - 09:15' },
+                { p: 2, label: '09:15 - 10:00' },
+                { p: 3, label: '10:00 - 10:45' },
+                // RECESS BREAK
+                { p: 4, label: '11:15 - 12:00' },
+                { p: 5, label: '12:00 - 12:45' },
+                { p: 6, label: '12:45 - 01:30' },
+                { p: 7, label: '01:30 - 02:15' },
+              ];
+
               return (
                 <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
-                  <h4 className="font-extrabold text-xs text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1">
-                    {day}
-                  </h4>
-                  {dayClasses.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No scheduled periods</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {dayClasses.map((item, idx) => (
-                        <div key={idx} className="p-2.5 bg-white rounded-xl border border-slate-100 flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-900">
-                            P{item.period_no}: {item.subject_name}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-500">
-                            {item.start_time} - {item.end_time}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                    <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                      {day}
+                    </h4>
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                      7 Periods
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    {defaultSlots.map((slot) => {
+                      const item = dayClasses.find((t) => Number(t.period_no) === slot.p);
+
+                      return (
+                        <React.Fragment key={`slot-${slot.p}`}>
+                          <div className="p-2 bg-white rounded-xl border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <span className="text-xs font-bold text-slate-900 block">
+                                P{slot.p}: {item ? item.subject_name : 'Study Period'}
+                              </span>
+                              {item?.teacher_name && (
+                                <span className="text-[10px] text-slate-500 font-semibold block">
+                                  {item.teacher_name}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                              {item ? `${item.start_time?.slice(0, 5)} - ${item.end_time?.slice(0, 5)}` : slot.label}
+                            </span>
+                          </div>
+
+                          {/* RECESS BREAK Banner after Period 3 */}
+                          {slot.p === 3 && (
+                            <div className="py-1.5 px-3 bg-amber-50 border border-amber-200/80 rounded-xl text-center shadow-2xs">
+                              <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">
+                                ☕ Recess Break (10:45 AM - 11:15 AM)
+                              </span>
+                            </div>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
