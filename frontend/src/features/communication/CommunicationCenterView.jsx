@@ -111,10 +111,13 @@ const CommunicationCenterView = () => {
 
     try {
       setIsSubmitting(true);
+      const customList = composeData.recipientGroup === 'Custom Phone List' && composeData.customRecipients ? composeData.customRecipients : undefined;
+      const countFromCustom = customList ? customList.split(',').filter(p => p.trim()).length : undefined;
+
       await api.post('/communication/send', {
-        recipient_group: composeData.recipientGroup === 'Custom Phone List' && composeData.customRecipients
-          ? `Custom (${composeData.customRecipients})`
-          : composeData.recipientGroup,
+        recipient_group: composeData.recipientGroup,
+        custom_recipients: customList,
+        recipient_count: countFromCustom,
         subject: composeData.subject.trim(),
         message_body: composeData.messageBody.trim(),
         is_scheduled: composeData.isScheduled,
@@ -445,7 +448,7 @@ const CommunicationCenterView = () => {
                         </span>
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {l.recipient_group || l.recipientGroup} <span className="text-[10px] font-semibold text-slate-400">({l.recipient_count || l.recipientCount || 0} recipients)</span>
+                        {l.recipient_group || l.recipientGroup} <span className="text-[10px] font-semibold text-slate-400">({l.recipient_count != null ? `${l.recipient_count} recipients` : 'unknown count'})</span>
                       </td>
                       <td className="py-3 px-4 text-slate-700 font-medium">
                         {l.subject || '(No Subject Header)'}

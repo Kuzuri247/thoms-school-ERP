@@ -22,9 +22,9 @@ CREATE TABLE IF NOT EXISTS `communication_logs` (
   `message_body` TEXT NOT NULL,
   `sender_id` INT DEFAULT NULL,
   `sender_name` VARCHAR(255) NOT NULL,
-  `scheduled_time` VARCHAR(100) DEFAULT 'Instant',
-  `status` ENUM('Sent', 'Delivered', 'Scheduled') DEFAULT 'Delivered',
-  `recipient_count` INT DEFAULT 0,
+  `scheduled_time` DATETIME DEFAULT NULL,
+  `status` ENUM('Sent', 'Delivered', 'Scheduled') DEFAULT 'Sent',
+  `recipient_count` INT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
   INDEX `idx_comm_log_channel` (`channel`)
@@ -36,7 +36,7 @@ SELECT 'Upcoming Examination Schedule & Guidelines', 'Exams', 'WhatsApp', 'Impor
 WHERE NOT EXISTS (SELECT 1 FROM `communication_templates` WHERE `title` = 'Upcoming Examination Schedule & Guidelines');
 
 INSERT INTO `communication_templates` (`title`, `category`, `channel`, `subject`, `body`)
-SELECT 'Official School Holiday Notice', 'Announcements', 'WhatsApp', 'Official Declaration of School Holiday', 'Dear Parents & Students, Please be informed that Thomson School will remain CLOSED on {Date} on account of {Reason}. Regular classes and school transport services will resume on {Next_Working_Day}.'
+SELECT 'Official School Holiday Notice', 'Announcements', 'WhatsApp', 'Official Declaration of School Holiday', 'Dear Parents & Students, Please be informed that St. Thomas International School will remain CLOSED on {Date} on account of {Reason}. Regular classes and school transport services will resume on {Next_Working_Day}.'
 WHERE NOT EXISTS (SELECT 1 FROM `communication_templates` WHERE `title` = 'Official School Holiday Notice');
 
 INSERT INTO `communication_templates` (`title`, `category`, `channel`, `subject`, `body`)

@@ -48,7 +48,6 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [loadingClasses, setLoadingClasses] = useState(false);
 
   const [successMsg, setSuccessMsg] = useState("");
-  const [localUsers, setLocalUsers] = useState([]);
 
   const navigate = useNavigate();
   const {
@@ -113,7 +112,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
             : selectedRole === "cashier"
               ? "Accounts"
               : "Administration"),
-        password: password || "123456",
+        password: password || undefined,
         is_class_teacher:
           selectedRole === "teacher"
             ? teacherAssignmentType === "class_teacher"
@@ -122,20 +121,12 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
         subject_name: selectedRole === "teacher" ? subjectName : null,
       };
 
-      const res = await api.post("/admin/users", payload);
+      if (createUserMutation?.mutateAsync) {
+        await createUserMutation.mutateAsync(payload);
+      } else {
+        await api.post("/admin/users", payload);
+      }
 
-      const newStaffObj = res?.data?.data || {
-        id: res?.data?.id || Date.now(),
-        full_name: fullName,
-        email:
-          email || `${fullName.toLowerCase().replace(/\s+/g, ".")}@thomson.edu`,
-        role: selectedRole,
-        department: payload.department,
-        phone: phone || "",
-        status: "Active",
-      };
-
-      setLocalUsers((prev) => [newStaffObj, ...prev]);
       setSuccessMsg(
         `New ${selectedRole.replace("_", " ")} "${fullName}" provisioned successfully!`,
       );
@@ -148,14 +139,11 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     }
   };
 
-  const displayUsers = [
-    ...localUsers,
-    ...(Array.isArray(usersResponse)
-      ? usersResponse
-      : Array.isArray(usersResponse?.data)
-        ? usersResponse.data
-        : []),
-  ];
+  const displayUsers = Array.isArray(usersResponse)
+    ? usersResponse
+    : Array.isArray(usersResponse?.data)
+      ? usersResponse.data
+      : [];
 
   const filteredUsers = displayUsers.filter((u) => {
     if (u.role === "student") return false;
@@ -470,7 +458,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                         value={fullName}
                         onChange={(e) =>
                           setFullName(
-                            e.target.value.replace(/[^a-zA-Z\s]/g, ""),
+                            e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                           )
                         }
                         className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
@@ -554,15 +542,20 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                           <label
-                            onClick={() =>
-                              setTeacherAssignmentType("class_teacher")
-                            }
                             className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition ${
                               teacherAssignmentType === "class_teacher"
                                 ? "bg-white border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs"
                                 : "bg-slate-50 border-slate-200 text-slate-600"
                             }`}
                           >
+                            <input
+                              type="radio"
+                              name="teacherAssignmentType"
+                              value="class_teacher"
+                              checked={teacherAssignmentType === "class_teacher"}
+                              onChange={() => setTeacherAssignmentType("class_teacher")}
+                              className="sr-only"
+                            />
                             <span className="font-extrabold text-xs text-indigo-900">
                               Class Teacher (Homeroom)
                             </span>
@@ -572,15 +565,20 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                           </label>
 
                           <label
-                            onClick={() =>
-                              setTeacherAssignmentType("subject_teacher")
-                            }
                             className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition ${
                               teacherAssignmentType === "subject_teacher"
                                 ? "bg-white border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs"
                                 : "bg-slate-50 border-slate-200 text-slate-600"
                             }`}
                           >
+                            <input
+                              type="radio"
+                              name="teacherAssignmentType"
+                              value="subject_teacher"
+                              checked={teacherAssignmentType === "subject_teacher"}
+                              onChange={() => setTeacherAssignmentType("subject_teacher")}
+                              className="sr-only"
+                            />
                             <span className="font-extrabold text-xs text-slate-900">
                               Subject Teacher Only
                             </span>
@@ -653,7 +651,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     </label>
                     <input
                       type="password"
-                      placeholder="Leave blank for default (123456)"
+                      placeholder="Leave blank to auto-generate secure temporary password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"

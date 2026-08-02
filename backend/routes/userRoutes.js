@@ -6,42 +6,40 @@ const { verifyToken } = require("../middleware/auth");
 const { authorize } = require("../middleware/rbac");
 const { ROLES } = require("../config/constants");
 
+// Shared identity resolution helper (users.id -> students.id -> staff_profiles.id)
+const resolveUserRecord = async (paramId, fallbackUserId) => {
+  let pid = paramId;
+  if (!pid || pid === "undefined" || pid === "null" || pid === "me") {
+    pid = fallbackUserId;
+  }
+  let [users] = await pool.query(
+    "SELECT id, email, full_name, role, phone, class, section, status, created_at FROM users WHERE id = ?",
+    [pid],
+  );
+  if (users.length === 0) {
+    const [stuByDbId] = await pool.query(
+      "SELECT u.id, u.email, u.full_name, u.role, u.phone, u.class, u.section, u.status, u.created_at FROM students s JOIN users u ON s.user_id = u.id WHERE s.id = ?",
+      [pid],
+    );
+    if (stuByDbId.length > 0) {
+      users = stuByDbId;
+    } else {
+      const [staffByDbId] = await pool.query(
+        "SELECT u.id, u.email, u.full_name, u.role, u.phone, u.class, u.section, u.status, u.created_at FROM staff_profiles sp JOIN users u ON sp.user_id = u.id WHERE sp.id = ?",
+        [pid],
+      );
+      if (staffByDbId.length > 0) {
+        users = staffByDbId;
+      }
+    }
+  }
+  return users;
+};
+
 // GET /api/users/:id/profile - Fetch comprehensive user profile
 router.get("/:id/profile", verifyToken, async (req, res) => {
   try {
-    let paramId = req.params.id;
-    if (
-      !paramId ||
-      paramId === "undefined" ||
-      paramId === "null" ||
-      paramId === "me"
-    ) {
-      paramId = req.user?.id;
-    }
-
-    // 1. Resolve user record (by users.id, students.id, or staff_profiles.id)
-    let [users] = await pool.query(
-      "SELECT id, email, full_name, role, phone, class, section, status, created_at FROM users WHERE id = ?",
-      [paramId],
-    );
-
-    if (users.length === 0) {
-      const [stuByDbId] = await pool.query(
-        "SELECT u.id, u.email, u.full_name, u.role, u.phone, u.class, u.section, u.status, u.created_at FROM students s JOIN users u ON s.user_id = u.id WHERE s.id = ?",
-        [paramId],
-      );
-      if (stuByDbId.length > 0) {
-        users = stuByDbId;
-      } else {
-        const [staffByDbId] = await pool.query(
-          "SELECT u.id, u.email, u.full_name, u.role, u.phone, u.class, u.section, u.status, u.created_at FROM staff_profiles sp JOIN users u ON sp.user_id = u.id WHERE sp.id = ?",
-          [paramId],
-        );
-        if (staffByDbId.length > 0) {
-          users = staffByDbId;
-        }
-      }
-    }
+    const users = await resolveUserRecord(req.params.id, req.user?.id);
 
     if (users.length === 0) {
       return res
@@ -56,8 +54,9 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
     const isTeacher = req.user?.role === ROLES.TEACHER;
     const isTargetStudent = user.role === ROLES.STUDENT;
 
-    // Access check: allow if self, admin, or teacher
-    if (!isSelf && !isAdmin && !isTeacher) {
+    // Access check: allow if self, admin, or teacher viewing a student profile
+    const isTeacherAllowed = isTeacher && isTargetStudent;
+    if (!isSelf && !isAdmin && !isTeacherAllowed) {
       return res.status(403).json({
         success: false,
         message: "Access denied: Cannot view this user profile",
@@ -161,36 +160,14 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
 // PUT /api/users/:id/profile - Update user profile details in DB
 router.put("/:id/profile", verifyToken, async (req, res) => {
   try {
-    let paramId = req.params.id;
-    if (
-      !paramId ||
-      paramId === "undefined" ||
-      paramId === "null" ||
-      paramId === "me"
-    ) {
-      paramId = req.user?.id;
+    const resolvedUsers = await resolveUserRecord(req.params.id, req.user?.id);
+    if (resolvedUsers.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
-    let targetUserId = paramId;
-    const [uCheck] = await pool.query("SELECT id FROM users WHERE id = ?", [
-      paramId,
-    ]);
-    if (uCheck.length === 0) {
-      const [stuCheck] = await pool.query(
-        "SELECT user_id FROM students WHERE id = ?",
-        [paramId],
-      );
-      if (stuCheck.length > 0) targetUserId = stuCheck[0].user_id;
-      else {
-        const [staffCheck] = await pool.query(
-          "SELECT user_id FROM staff_profiles WHERE id = ?",
-          [paramId],
-        );
-        if (staffCheck.length > 0) targetUserId = staffCheck[0].user_id;
-      }
-    }
-
-    const userId = targetUserId;
+    const userId = resolvedUsers[0].id;
     const isSelf = Number(req.user?.id) === Number(userId);
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user?.role);
 
@@ -365,56 +342,68 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
         const admNo = `STU-${String(userId).padStart(4, "0")}`;
         const rollNo = `R-${String(userId).padStart(3, "0")}`;
 
-        const [stuResult] = await pool.query(
-          `INSERT INTO students (user_id, admission_no, roll_no, first_name, last_name, gender, blood_group, religion, nationality, address, city, state, pincode, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            userId,
-            admNo,
-            rollNo,
-            fname,
-            lname,
-            gender || "male",
-            blood_group || null,
-            religion || null,
-            nationality || "Indian",
-            address || null,
-            city || null,
-            state || null,
-            pincode || null,
-            "Active",
-          ],
-        );
-        const newStudentId = stuResult.insertId;
+        const conn = await pool.getConnection();
+        try {
+          await conn.beginTransaction();
 
-        if (father_name) {
-          await pool.query(
-            `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'father', ?, ?, ?)`,
+          const [stuResult] = await conn.query(
+            `INSERT INTO students (user_id, admission_no, roll_no, first_name, last_name, gender, blood_group, religion, nationality, address, city, state, pincode, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              newStudentId,
-              father_name,
-              father_phone || null,
-              father_occupation || null,
+              userId,
+              admNo,
+              rollNo,
+              fname,
+              lname,
+              gender || "Male",
+              blood_group || null,
+              religion || null,
+              nationality || "Indian",
+              address || null,
+              city || null,
+              state || null,
+              pincode || null,
+              "Active",
             ],
           );
-        }
-        if (mother_name) {
-          await pool.query(
-            `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'mother', ?, ?, ?)`,
-            [
-              newStudentId,
-              mother_name,
-              mother_phone || null,
-              mother_occupation || null,
-            ],
-          );
-        }
-        if (guardian_name) {
-          const rel = guardian_relation || "guardian";
-          await pool.query(
-            `INSERT INTO guardians (student_id, relation, full_name, phone) VALUES (?, ?, ?, ?)`,
-            [newStudentId, rel, guardian_name, guardian_phone || null],
-          );
+          const newStudentId = stuResult.insertId;
+
+          if (father_name) {
+            await conn.query(
+              `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'father', ?, ?, ?)`,
+              [
+                newStudentId,
+                father_name,
+                father_phone || null,
+                father_occupation || null,
+              ],
+            );
+          }
+          if (mother_name) {
+            await conn.query(
+              `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'mother', ?, ?, ?)`,
+              [
+                newStudentId,
+                mother_name,
+                mother_phone || null,
+                mother_occupation || null,
+              ],
+            );
+          }
+          if (guardian_name) {
+            const rel = guardian_relation || "guardian";
+            await conn.query(
+              `INSERT INTO guardians (student_id, relation, full_name, phone) VALUES (?, ?, ?, ?)`,
+              [newStudentId, rel, guardian_name, guardian_phone || null],
+            );
+          }
+
+          await conn.commit();
+        } catch (trxErr) {
+          await conn.rollback();
+          throw trxErr;
+        } finally {
+          conn.release();
         }
       }
     } else {

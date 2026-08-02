@@ -46,8 +46,11 @@ const {
 
 app.use("/api/payments/webhook", rawBody, webhookRouter);
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use("/api/homework", express.json({ limit: "10mb" }));
+app.use("/api/elearning", express.json({ limit: "10mb" }));
+
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
 app.use("/uploads", express.static("uploads"));
 

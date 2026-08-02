@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const { verifyToken, isSuperAdmin } = require('../middleware/auth');
 const { authorize } = require('../middleware/rbac');
 const { ROLES } = require('../config/constants');
@@ -9,19 +10,23 @@ const pool = require('../config/db');
 // Create user (Admin and Super Admin)
 router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     let { email, password, role, class_name, section, full_name, phone, gender, department, designation, status, is_class_teacher, class_id, subject_name } = req.body;
+    const conn = await pool.getConnection();
     try {
+        await conn.beginTransaction();
+
         if (req.user.role === ROLES.ADMIN && role === ROLES.SUPER_ADMIN) {
+            await conn.rollback();
             return res.status(403).json({ success: false, message: 'Admins cannot assign elevated super_admin role' });
         }
-        if (!password) {
-            password = '123456';
-        }
-        const hashedPassword = await bcrypt.hash(password, 8);
+
+        const isTempPassword = !password || !password.trim();
+        const rawPassword = isTempPassword ? crypto.randomBytes(6).toString('hex') : password.trim();
+        const hashedPassword = await bcrypt.hash(rawPassword, 8);
 
         const randNum = Math.floor(1000 + Math.random() * 9000);
-        const finalEmail = email && email.trim() ? email.trim() : `${(full_name || 'user').toLowerCase().replace(/[^a-z]/g, '')}${randNum}@thomson.edu`;
+        const finalEmail = email && email.trim() ? email.trim() : `${(full_name || 'user').toLowerCase().replace(/[^a-z]/g, '')}${randNum}@stthomas.edu`;
 
-        const [result] = await pool.query(
+        const [result] = await conn.query(
             'INSERT INTO users (email, password, role, class, section, full_name, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [finalEmail, hashedPassword, role || 'teacher', class_name || null, section || null, full_name || null, phone || null, gender || 'Male', status || 'Active']
         );
@@ -32,7 +37,7 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
             const fname = full_name ? full_name.split(' ')[0] : 'Staff';
             const lname = full_name ? full_name.split(' ').slice(1).join(' ') : '';
             const empCode = `TS-EMP-${String(newUserId).padStart(3, '0')}`;
-            await pool.query(
+            await conn.query(
                 `INSERT INTO staff_profiles (user_id, employee_code, first_name, last_name, department, designation, status)
                  VALUES (?, ?, ?, ?, ?, ?, ?)
                  ON DUPLICATE KEY UPDATE department = VALUES(department), designation = VALUES(designation)`,
@@ -43,46 +48,50 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
         // If teacher role with class_id assignment
         if (role === 'teacher' && class_id) {
             // 1. Resolve section_id
-            const [secRows] = await pool.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [class_id]);
+            const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [class_id]);
             let targetSectionId;
             if (secRows.length > 0) {
                 targetSectionId = secRows[0].id;
             } else {
-                const [newSec] = await pool.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [class_id, 'A']);
+                const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [class_id, 'A']);
                 targetSectionId = newSec.insertId;
             }
 
             // 2. Resolve subject_id if subject_name provided
             let subjectId = null;
             if (subject_name && subject_name.trim()) {
-                const [subRows] = await pool.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [subject_name.trim()]);
+                const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [subject_name.trim()]);
                 if (subRows.length > 0) {
                     subjectId = subRows[0].id;
                 } else {
-                    const [newSub] = await pool.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [subject_name.trim(), subject_name.trim().slice(0, 4).toUpperCase()]);
+                    const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [subject_name.trim(), subject_name.trim().slice(0, 4).toUpperCase()]);
                     subjectId = newSub.insertId;
                 }
             }
 
             const { assignClassTeacher, assignSubjectTeacher } = require('../modules/staff/teacherAssignment.service');
-            const sessionId = 1;
+            const [[activeSession]] = await conn.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+            const sessionId = activeSession?.id || 1;
 
             if (is_class_teacher) {
                 // Switch any existing class teacher to subject teacher & assign new teacher as Class Teacher
-                await assignClassTeacher(newUserId, targetSectionId, sessionId);
+                await assignClassTeacher(newUserId, targetSectionId, sessionId, conn);
                 if (subjectId) {
-                    await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId);
+                    await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
                 }
             } else {
                 // Assign as Subject Teacher only
-                await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId);
+                await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
             }
         }
+
+        await conn.commit();
 
         res.status(201).json({
           success: true,
           message: 'User created successfully',
           id: newUserId,
+          temp_password: isTempPassword ? rawPassword : undefined,
           data: {
             id: newUserId,
             full_name,
@@ -94,8 +103,11 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
           }
         });
     } catch (error) {
+        await conn.rollback();
         console.error('Error creating user:', error);
         res.status(500).json({ success: false, message: error.message });
+    } finally {
+        conn.release();
     }
 });
 
@@ -335,17 +347,17 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
 
         const fullName = `${first_name.trim()} ${last_name ? last_name.trim() : ''}`.trim();
         const randNum = Math.floor(1000 + Math.random() * 9000);
-        const stuEmail = email && email.trim() ? email.trim() : `${first_name.toLowerCase().replace(/[^a-z]/g, '')}${randNum}@student.thomson.edu`;
+        const stuEmail = email && email.trim() ? email.trim() : `${first_name.toLowerCase().replace(/[^a-z]/g, '')}${randNum}@student.stthomas.edu`;
 
         // Check duplicate email
         const [existing] = await conn.query('SELECT id FROM users WHERE email = ?', [stuEmail]);
         let finalEmail = stuEmail;
         if (existing.length > 0) {
-            finalEmail = `${first_name.toLowerCase().replace(/[^a-z]/g, '')}${Date.now()}@student.thomson.edu`;
+            finalEmail = `${first_name.toLowerCase().replace(/[^a-z]/g, '')}${Date.now()}@student.stthomas.edu`;
         }
 
-        // Hash default password '123456'
-        const hashedPassword = await bcrypt.hash('123456', 8);
+        const tempPassword = crypto.randomBytes(6).toString('hex');
+        const hashedPassword = await bcrypt.hash(tempPassword, 8);
 
         // 1. Insert into users table
         const [userResult] = await conn.query(

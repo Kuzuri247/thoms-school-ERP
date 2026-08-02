@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { extractYouTubeId } from '../utils/youtube';
 import useAuthStore from '../store/authStore';
 import api from '../api/axios';
 import {
@@ -498,16 +499,10 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
               );
             }
 
-            const extractId = (url) => {
-              if (!url) return null;
-              const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-              return m ? m[1] : null;
-            };
-
             return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {filtered.map((item) => {
-                  const ytId = item.youtube_video_id || extractId(item.youtube_url);
+                  const ytId = item.youtube_video_id || extractYouTubeId(item.youtube_url);
                   return (
                     <div key={item.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 space-y-3 flex flex-col justify-between hover:border-slate-300 transition shadow-2xs">
                       <div className="space-y-2">

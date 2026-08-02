@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { extractYouTubeId } from "../utils/youtube";
 import useAuthStore from "../store/authStore";
 import api from "../api/axios";
 import {
@@ -80,10 +81,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
 
-  // Exam Marks state
-  const [selectedExam, setSelectedExam] = useState("1"); // Exam ID 1 (Mid Term)
-  const [marksData, setMarksData] = useState({}); // { student_id: mark }
-  const [savingMarks, setSavingMarks] = useState(false);
   const [message, setMessage] = useState("");
 
   // Teacher Homework State
@@ -310,11 +307,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   };
 
-  const extractYTId = (url) => {
-    if (!url) return null;
-    const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    return m ? m[1] : null;
-  };
+
 
   const handleDeleteHomework = async (id) => {
     if (!window.confirm("Are you sure you want to delete this homework?")) return;
@@ -396,41 +389,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   };
 
-  const handleSaveMarks = async () => {
-    if (!selectedClass?.subject_id) {
-      alert("Subject ID is missing for this class.");
-      return;
-    }
-    try {
-      setSavingMarks(true);
-      const entries = Object.entries(marksData)
-        .filter(([_, val]) => val !== "" && val !== null && val !== undefined)
-        .map(([student_id, val]) => {
-          const clamped = Math.max(0, Math.min(100, Number(val) || 0));
-          return {
-            student_id: Number(student_id),
-            marks_obtained: clamped,
-            max_marks: 100,
-          };
-        });
 
-      await api.post(
-        `/marks/exam/${selectedExam}/subject/${selectedClass.subject_id}/bulk`,
-        {
-          exam_id: Number(selectedExam),
-          subject_id: Number(selectedClass.subject_id),
-          entries,
-        },
-      );
-
-      setMessage("Exam marks saved successfully!");
-      setTimeout(() => setMessage(""), 3000);
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to save marks");
-    } finally {
-      setSavingMarks(false);
-    }
-  };
 
   const totalStudentsCount = students.length;
   const presentStudentsList = students.filter(
@@ -458,6 +417,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     if (r.date) calendarDataMap[r.date] = r;
   });
 
+  const visibleClasses = activeTab === "attendance" ? classes.filter((c) => c.is_class_teacher) : classes;
+
   return (
     <div className="space-y-6 pb-12">
       {message && (
@@ -471,20 +432,20 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
           <h3 className="font-extrabold text-slate-800 text-base uppercase tracking-wider px-1 flex items-center justify-between">
             <span>My Assigned Classes</span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-              {(activeTab === "attendance" ? classes.filter(c => c.is_class_teacher) : classes).length}
+              {visibleClasses.length}
             </span>
           </h3>
-          {(activeTab === "attendance" ? classes.filter(c => c.is_class_teacher) : classes).length === 0 ? (
+          {visibleClasses.length === 0 ? (
             <div className="p-4 bg-white rounded-2xl border border-slate-200 text-xs text-slate-400 font-medium">
               {activeTab === "attendance"
                 ? "No homeroom class assigned to your account. Attendance registration is reserved for Class Teachers."
                 : "No assigned classes found."}
             </div>
           ) : (
-            (activeTab === "attendance" ? classes.filter(c => c.is_class_teacher) : classes).map((cls) => (
-              <div
-                key={cls.section_id || cls.id || cls.name}
-                onClick={() => setSelectedClass(cls)}
+                visibleClasses.map((cls) => (
+                  <div
+                    key={cls.section_id || cls.id || cls.name}
+                    onClick={() => setSelectedClass(cls)}
                 className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                   selectedClass?.name === cls.name
                     ? "bg-teal-50 border-teal-300 shadow-xs ring-2 ring-teal-500/20"
@@ -1155,12 +1116,12 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                       />
                     </div>
 
-                    {extractYTId(newYoutubeUrl) && (
+                    {extractYouTubeId(newYoutubeUrl) && (
                       <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
                         <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block">Live Video Preview</span>
                         <div className="aspect-video w-full max-w-sm rounded-lg overflow-hidden border border-slate-200">
                           <iframe
-                            src={`https://www.youtube.com/embed/${extractYTId(newYoutubeUrl)}`}
+                            src={`https://www.youtube.com/embed/${extractYouTubeId(newYoutubeUrl)}`}
                             title="Preview"
                             className="w-full h-full"
                             allowFullScreen
@@ -1204,7 +1165,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {elearningMaterials.map((mat) => {
-                          const ytId = mat.youtube_video_id || extractYTId(mat.youtube_url);
+                          const ytId = mat.youtube_video_id || extractYouTubeId(mat.youtube_url);
                           return (
                             <div key={mat.id} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 flex flex-col justify-between">
                               <div className="space-y-2">

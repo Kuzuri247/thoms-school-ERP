@@ -154,21 +154,6 @@ const AdminClassDirectoryView = () => {
     setTimeout(() => setFormSuccess(""), 3000);
   };
 
-  // Handle profile image file upload
-  const handleProfilePicUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("File size exceeds 5MB limit. Please choose a smaller image.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setStudentForm((prev) => ({ ...prev, profile_pic: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   // Add Student Handler
   const handleAddStudentFrontend = async (e) => {
@@ -653,7 +638,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          first_name: e.target.value.replace(/[^a-zA-Z\s]/g, ""),
+                          first_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
@@ -669,7 +654,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          last_name: e.target.value.replace(/[^a-zA-Z\s]/g, ""),
+                          last_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
@@ -779,7 +764,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          father_name: e.target.value.replace(/[^a-zA-Z\s]/g, ""),
+                          father_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
@@ -826,7 +811,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          mother_name: e.target.value.replace(/[^a-zA-Z\s]/g, ""),
+                          mother_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
@@ -873,7 +858,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          guardian_name: e.target.value.replace(/[^a-zA-Z\s]/g, ""),
+                          guardian_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
