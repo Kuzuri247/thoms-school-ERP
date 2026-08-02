@@ -16,7 +16,9 @@ import {
   Key,
   Lock,
   FileSpreadsheet,
-  ExternalLink
+  ExternalLink,
+  Tv,
+  Search,
 } from 'lucide-react';
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -33,6 +35,8 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
   const [timetable, setTimetable] = useState([]);
   const [fees, setFees] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState(null);
+  const [elearningItems, setElearningItems] = useState([]);
+  const [elearningSearch, setElearningSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Security password state
@@ -49,17 +53,19 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
   const fetchStudentData = async () => {
     try {
       setLoading(true);
-      const [workRes, noticesRes, feeRes, attRes] = await Promise.all([
+      const [workRes, noticesRes, feeRes, attRes, elearnRes] = await Promise.all([
         api.get('/homework/student/my-work').catch(() => ({ data: { data: [] } })),
         api.get('/notices/student-work').catch(() => ({ data: { data: [] } })),
         api.get('/payments/records/my-fees').catch(() => ({ data: { data: [] } })),
         api.get('/attendance/student/my-summary').catch(() => ({ data: { data: null } })),
+        api.get('/elearning/student/my-learning').catch(() => ({ data: { data: [] } })),
       ]);
 
       setWorkItems(workRes.data?.data || []);
       setWorkNotices(noticesRes.data?.data || []);
       setFees(feeRes.data?.data || []);
       setAttendanceSummary(attRes.data?.data || null);
+      setElearningItems(elearnRes.data?.data || []);
 
       // Fetch parameterless student timetable
       const ttRes = await api.get('/timetable/student/my-timetable').catch(() => ({ data: { data: [] } }));
@@ -442,6 +448,110 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* --- E Learning Video Topics Section --- */}
+      {currentTab === 'elearning' && (
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-6 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                <Tv className="w-5 h-5 text-indigo-600" /> E Learning Video Portal
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-1">
+                Watch video tutorials & topic explanations shared by your subject teachers.
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search topics or titles..."
+                value={elearningSearch}
+                onChange={(e) => setElearningSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          {(() => {
+            const filtered = elearningItems.filter((item) => {
+              const q = elearningSearch.toLowerCase();
+              return (
+                (item.title || '').toLowerCase().includes(q) ||
+                (item.description || '').toLowerCase().includes(q) ||
+                (item.teacher_name || '').toLowerCase().includes(q)
+              );
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="py-12 text-center text-slate-400 space-y-2">
+                  <Tv className="w-12 h-12 text-slate-200 mx-auto" />
+                  <p className="text-xs font-bold text-slate-600">No E Learning video topics found</p>
+                  <p className="text-[11px] text-slate-400">
+                    {elearningSearch ? 'No videos match your search query.' : 'Your teachers have not shared any E Learning video topics for your section yet.'}
+                  </p>
+                </div>
+              );
+            }
+
+            const extractId = (url) => {
+              if (!url) return null;
+              const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+              return m ? m[1] : null;
+            };
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filtered.map((item) => {
+                  const ytId = item.youtube_video_id || extractId(item.youtube_url);
+                  return (
+                    <div key={item.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 space-y-3 flex flex-col justify-between hover:border-slate-300 transition shadow-2xs">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-100/70 px-2.5 py-0.5 rounded-full border border-indigo-200 uppercase">
+                            Teacher: {item.teacher_name || 'Subject Teacher'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-semibold">
+                            {new Date(item.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-extrabold text-slate-900 leading-tight">{item.title}</h3>
+                        {item.description && (
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed bg-white p-2.5 rounded-xl border border-slate-100">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {ytId ? (
+                        <div className="aspect-video w-full rounded-2xl overflow-hidden border border-slate-200 mt-2 shadow-xs bg-black">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${ytId}`}
+                            title={item.title}
+                            className="w-full h-full"
+                            allowFullScreen
+                          />
+                        </div>
+                      ) : (
+                        <a
+                          href={item.youtube_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline mt-2"
+                        >
+                          <ExternalLink className="w-4 h-4" /> Watch Video on YouTube
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

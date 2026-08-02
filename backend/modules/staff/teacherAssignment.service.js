@@ -8,28 +8,36 @@ const pool = require('../../config/db');
  *  - A teacher can only be class teacher of one section per session.
  */
 const assignClassTeacher = async (teacherUserId, sectionId, sessionId) => {
-  const [[existingForSection]] = await pool.query(
-    'SELECT id FROM teacher_assignments WHERE section_id = ? AND session_id = ? AND is_class_teacher = 1',
+  // If this section already has a class teacher, demote them to Subject Teacher (is_class_teacher = 0)
+  await pool.query(
+    'UPDATE teacher_assignments SET is_class_teacher = 0 WHERE section_id = ? AND session_id = ? AND is_class_teacher = 1',
     [sectionId, sessionId]
   );
-  if (existingForSection) {
-    throw Object.assign(new Error('This section already has a class teacher for this session'), { status: 409 });
-  }
 
-  const [[alreadyClassTeacherElsewhere]] = await pool.query(
-    'SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND session_id = ? AND is_class_teacher = 1',
+  // If this teacher is class teacher elsewhere, demote their previous class teacher role to subject teacher
+  await pool.query(
+    'UPDATE teacher_assignments SET is_class_teacher = 0 WHERE teacher_user_id = ? AND session_id = ? AND is_class_teacher = 1',
     [teacherUserId, sessionId]
   );
-  if (alreadyClassTeacherElsewhere) {
-    throw Object.assign(new Error('Teacher is already class teacher of another section this session'), { status: 409 });
-  }
 
-  await pool.query(
-    `INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher)
-     VALUES (?, ?, ?, 1)
-     ON DUPLICATE KEY UPDATE is_class_teacher = 1`,
+  // Now assign the new teacher as the primary Class Teacher for this section
+  const [existingAssignment] = await pool.query(
+    'SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND section_id = ? AND session_id = ?',
     [teacherUserId, sectionId, sessionId]
   );
+
+  if (existingAssignment.length > 0) {
+    await pool.query(
+      'UPDATE teacher_assignments SET is_class_teacher = 1 WHERE id = ?',
+      [existingAssignment[0].id]
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher)
+       VALUES (?, ?, ?, 1)`,
+      [teacherUserId, sectionId, sessionId]
+    );
+  }
 };
 
 /**

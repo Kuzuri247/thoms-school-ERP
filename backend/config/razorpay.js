@@ -1,12 +1,18 @@
-const Razorpay = require('razorpay');
+const Razorpay = require("razorpay");
+require("dotenv").config();
+
+const key_id = process.env.RAZORPAY_KEY_ID || "rzp_test_placeholder";
+const key_secret = process.env.RAZORPAY_KEY_SECRET || "placeholder_secret";
 
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-  throw new Error('Razorpay credentials missing from environment');
+  console.warn(
+    "[Razorpay] Warning: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET missing in environment. Using development placeholder credentials."
+  );
 }
 
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
+  key_id,
+  key_secret,
 });
 
 module.exports = razorpay;

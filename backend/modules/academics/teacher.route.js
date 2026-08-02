@@ -18,15 +18,33 @@ router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherConte
       WHERE ta.teacher_user_id = ?
     `, [req.user.id]);
 
-    const classes = rows.map(r => ({
-      id: r.class_id,
-      section_id: r.section_id,
-      name: `${r.class_name} - ${r.section_name}`,
-      subject_id: r.subject_id,
-      subject: r.subject_name || 'General',
-      role: r.is_class_teacher ? 'Class Teacher' : 'Subject Teacher',
-      is_class_teacher: Boolean(r.is_class_teacher)
-    }));
+    const sectionMap = new Map();
+
+    for (const r of rows) {
+      const existing = sectionMap.get(r.section_id);
+      if (!existing) {
+        sectionMap.set(r.section_id, {
+          id: r.class_id,
+          section_id: r.section_id,
+          name: `${r.class_name} - ${r.section_name}`,
+          subject_id: r.subject_id,
+          subject: r.subject_name || 'General',
+          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : `Subject Teacher (${r.subject_name || 'General'})`,
+          is_class_teacher: Boolean(r.is_class_teacher)
+        });
+      } else {
+        if (r.is_class_teacher) {
+          existing.is_class_teacher = true;
+          existing.role = 'Class Teacher (Homeroom)';
+        }
+        if (r.subject_name && (!existing.subject || existing.subject === 'General')) {
+          existing.subject_id = r.subject_id;
+          existing.subject = r.subject_name;
+        }
+      }
+    }
+
+    const classes = Array.from(sectionMap.values());
 
     res.json({ success: true, data: classes, teacherContext: req.teacherContext });
   } catch (err) {

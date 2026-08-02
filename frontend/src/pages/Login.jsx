@@ -81,14 +81,14 @@ const Login = () => {
       <div className="relative max-w-md w-full space-y-6 bg-white p-8 rounded-2xl border border-slate-200/90 shadow-md">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center mx-auto shadow-xs border border-slate-800">
-            <GraduationCap className="w-7 h-7" />
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-md border border-slate-200 p-1">
+            <img src="/st_thomas_logo.png" alt="St. Thomas International School Emblem" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Thomson ERP
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+            St. Thomas International School
           </h1>
-          <p className="text-xs text-slate-500 font-normal">
-            Unified Role-Based School Portal
+          <p className="text-xs text-slate-500 font-medium">
+            Center of Excellence • Official ERP Portal
           </p>
         </div>
 

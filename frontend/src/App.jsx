@@ -73,7 +73,6 @@ function App() {
             <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
             <Route path="/admin/notices" element={<Noticeboard />} />
             <Route path="/admin/homework" element={<AdminHomeworkView />} />
-            <Route path="/admin/settings" element={<SystemSettingsView />} />
             <Route path="/communication/center" element={<CommunicationCenterView />} />
             <Route path="/transport/management" element={<TransportManagementView />} />
           </Route>
@@ -82,9 +81,9 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['teacher', 'admin', 'super_admin']} />}>
             <Route path="/teacher/dashboard" element={<TeacherDashboard activeTab="overview" />} />
             <Route path="/teacher/attendance" element={<TeacherDashboard activeTab="attendance" />} />
-            <Route path="/teacher/academics" element={<TeacherDashboard activeTab="exams" />} />
             <Route path="/teacher/timetable" element={<TeacherDashboard activeTab="timetable" />} />
             <Route path="/teacher/homework" element={<TeacherDashboard activeTab="homework" />} />
+            <Route path="/teacher/elearning" element={<TeacherDashboard activeTab="elearning" />} />
           </Route>
 
           {/* Student Portal Routes (Strictly Student, Admin, Super Admin) */}
@@ -93,6 +92,7 @@ function App() {
             <Route path="/student/work" element={<StudentDashboard activeTab="work" />} />
             <Route path="/student/timetable" element={<StudentDashboard activeTab="timetable" />} />
             <Route path="/student/fees" element={<StudentDashboard activeTab="fees" />} />
+            <Route path="/student/elearning" element={<StudentDashboard activeTab="elearning" />} />
           </Route>
 
           {/* Finance & Fees Terminal Routes */}
