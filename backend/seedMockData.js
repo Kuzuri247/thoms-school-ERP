@@ -3,14 +3,21 @@ const bcrypt = require('bcrypt');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+const rawHost = process.env.DB_HOST || 'localhost';
+const cleanHost = rawHost.replace(/^(mysql:\/\/|https?:\/\/)/, '').split('/')[0].split(':')[0];
+const useSSL = process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' || cleanHost.includes('aivencloud.com');
+
 async function seed() {
   let connection;
   try {
     connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
+      host: cleanHost,
+      port: parseInt(process.env.DB_PORT || '28388'),
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'school_erp'
+      database: process.env.DB_NAME || 'defaultdb',
+      ssl: useSSL ? { rejectUnauthorized: false } : undefined,
+      connectTimeout: 20000,
     });
 
     console.log('Connected to MySQL Database. Starting comprehensive extended demo seed...');

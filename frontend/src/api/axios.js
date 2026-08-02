@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const cleanBaseUrl = rawApiUrl.replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: cleanBaseUrl,
   withCredentials: true,
 });
 
@@ -32,7 +35,7 @@ api.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       try {
-        const refreshUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/refresh';
+        const refreshUrl = `${cleanBaseUrl}/auth/refresh`;
         const res = await axios.post(refreshUrl, {}, { withCredentials: true });
         const newToken = res.data?.accessToken || res.data?.data?.accessToken;
         if (newToken) {
