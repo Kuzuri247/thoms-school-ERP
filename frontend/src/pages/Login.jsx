@@ -36,25 +36,11 @@ const Login = () => {
       if (res.success) {
         redirectUserByRole(res.user?.role || acc.targetRole);
       } else {
-        const demoUser = {
-          id: 'demo-' + acc.targetRole,
-          full_name: 'Demo ' + acc.role,
-          email: acc.email,
-          role: acc.targetRole,
-        };
-        setAuth(demoUser, 'demo-token');
-        redirectUserByRole(acc.targetRole);
+        setError(res.error || 'Quick fill login failed. Please verify user setup.');
       }
     } catch (err) {
       setLoading(false);
-      const demoUser = {
-        id: 'demo-' + acc.targetRole,
-        full_name: 'Demo ' + acc.role,
-        email: acc.email,
-        role: acc.targetRole,
-      };
-      setAuth(demoUser, 'demo-token');
-      redirectUserByRole(acc.targetRole);
+      setError(err.message || 'An unexpected error occurred during quick fill login.');
     }
   };
 
