@@ -7,13 +7,20 @@ const cleanHost = rawHost.replace(/^(mysql:\/\/|https?:\/\/)/, '').split('/')[0]
 
 const useSSL = process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED' || cleanHost.includes('aivencloud.com');
 
+const sslConfig = useSSL
+  ? {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
+      ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}),
+    }
+  : undefined;
+
 const pool = mysql.createPool({
   host: cleanHost,
   port: parseInt(process.env.DB_PORT || '28388'),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: useSSL ? { rejectUnauthorized: true } : undefined,
+  ssl: sslConfig,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
