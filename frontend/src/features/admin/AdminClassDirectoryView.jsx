@@ -51,7 +51,6 @@ const AdminClassDirectoryView = () => {
     dob: "",
     profile_pic: "",
     address: "",
-    previous_school: "",
     father_name: "",
     father_phone: "",
     father_occupation: "",
@@ -155,96 +154,65 @@ const AdminClassDirectoryView = () => {
     setTimeout(() => setFormSuccess(""), 3000);
   };
 
-  // Handle profile image file upload
-  const handleProfilePicUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("File size exceeds 5MB limit. Please choose a smaller image.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setStudentForm((prev) => ({ ...prev, profile_pic: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   // Add Student Handler
-  const handleAddStudentFrontend = (e) => {
+  const handleAddStudentFrontend = async (e) => {
     e.preventDefault();
     if (!studentForm.first_name.trim()) return;
 
     const chosenClassId = studentForm.class_id || selectedClass?.class_id;
-    const targetClass =
-      classesData.find((c) => String(c.class_id) === String(chosenClassId)) ||
-      selectedClass;
 
-    const validUserId = students.length > 0 && students[0].user_id ? students[0].user_id : 1;
+    try {
+      const res = await api.post("/admin/students", {
+        ...studentForm,
+        class_id: chosenClassId,
+      });
 
-    const newStu = {
-      student_id: Date.now(),
-      user_id: validUserId,
-      class_id: chosenClassId,
-      admission_no:
-        studentForm.admission_no ||
-        `TS-2026-${Math.floor(100 + Math.random() * 900)}`,
-      roll_no: studentForm.roll_no || `${students.length + 101}`,
-      first_name: studentForm.first_name,
-      last_name: studentForm.last_name,
-      email:
-        studentForm.email ||
-        `${studentForm.first_name.toLowerCase()}@student.thomson.edu`,
-      phone: studentForm.phone || "+91 99999 88888",
-      profile_pic: studentForm.profile_pic || "",
-      address: studentForm.address || "",
-      previous_school: studentForm.previous_school || "",
-      father_name: studentForm.father_name || "",
-      father_phone: studentForm.father_phone || "",
-      father_occupation: studentForm.father_occupation || "",
-      mother_name: studentForm.mother_name || "",
-      mother_phone: studentForm.mother_phone || "",
-      mother_occupation: studentForm.mother_occupation || "",
-      guardian_name: studentForm.guardian_name || studentForm.father_name || "",
-      guardian_phone: studentForm.guardian_phone || studentForm.father_phone || "",
-      guardian_relation: studentForm.guardian_relation || "Parent",
-    };
+      const newStuData = res.data?.data;
+      if (newStuData) {
+        const targetClass =
+          classesData.find((c) => String(c.class_id) === String(chosenClassId)) ||
+          selectedClass;
 
-    if (targetClass && targetClass.class_id !== selectedClass?.class_id) {
-      setSelectedClass(targetClass);
-      sessionStorage.setItem("selectedClassId", String(targetClass.class_id));
+        if (targetClass && targetClass.class_id !== selectedClass?.class_id) {
+          setSelectedClass(targetClass);
+          sessionStorage.setItem("selectedClassId", String(targetClass.class_id));
+        }
+
+        setStudents((prev) => [newStuData, ...prev]);
+      }
+
+      setShowAddStudentModal(false);
+
+      // Reset Form
+      setStudentForm({
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        admission_no: "",
+        roll_no: "",
+        gender: "Male",
+        dob: "",
+        profile_pic: "",
+        address: "",
+        father_name: "",
+        father_phone: "",
+        father_occupation: "",
+        mother_name: "",
+        mother_phone: "",
+        mother_occupation: "",
+        guardian_name: "",
+        guardian_phone: "",
+        guardian_relation: "",
+      });
+
+      setFormSuccess("Student added successfully to database!");
+      setTimeout(() => setFormSuccess(""), 3500);
+    } catch (err) {
+      console.error("Failed to add student:", err);
+      alert(err.response?.data?.message || "Failed to add student to database.");
     }
-
-    setStudents((prev) => [newStu, ...prev]);
-    setShowAddStudentModal(false);
-
-    // Reset Form
-    setStudentForm({
-      first_name: "",
-      last_name: "",
-      email: "",
-      phone: "",
-      admission_no: "",
-      roll_no: "",
-      gender: "Male",
-      dob: "",
-      profile_pic: "",
-      address: "",
-      previous_school: "",
-      father_name: "",
-      father_phone: "",
-      father_occupation: "",
-      mother_name: "",
-      mother_phone: "",
-      mother_occupation: "",
-      guardian_name: "",
-      guardian_phone: "",
-      guardian_relation: "",
-    });
-
-    setFormSuccess("Student added locally to roster!");
-    setTimeout(() => setFormSuccess(""), 3000);
   };
 
   const goToProfile = (s) => {
@@ -285,31 +253,21 @@ const AdminClassDirectoryView = () => {
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           {(user?.role === "super_admin" || user?.role === "admin") && (
-            <>
-              <button
-                onClick={() => setShowAddClassModal(true)}
-                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                Add Class Standard
-              </button>
-
-              <button
-                onClick={() => {
-                  const initialClassId =
-                    selectedClass?.class_id || classesData[0]?.class_id || "";
-                  setStudentForm((prev) => ({
-                    ...prev,
-                    class_id: initialClassId,
-                  }));
-                  setShowAddStudentModal(true);
-                }}
-                className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
-              >
-                <UserPlus className="w-4 h-4" />
-                Add Student
-              </button>
-            </>
+            <button
+              onClick={() => {
+                const initialClassId =
+                  selectedClass?.class_id || classesData[0]?.class_id || "";
+                setStudentForm((prev) => ({
+                  ...prev,
+                  class_id: initialClassId,
+                }));
+                setShowAddStudentModal(true);
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add Student
+            </button>
           )}
         </div>
       </div>
@@ -646,62 +604,6 @@ const AdminClassDirectoryView = () => {
                   1. Basic & Academic Information
                 </h4>
 
-                {/* Profile Photo Upload Widget */}
-                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
-                  <div className="relative w-16 h-16 rounded-2xl bg-white border border-slate-300 shadow-xs overflow-hidden flex-shrink-0 flex items-center justify-center">
-                    {studentForm.profile_pic ? (
-                      <img
-                        src={studentForm.profile_pic}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <User className="w-8 h-8 text-slate-400" />
-                    )}
-                    <div className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[8px] py-0.5 text-center font-bold tracking-wider uppercase">
-                      PHOTO
-                    </div>
-                  </div>
-
-                  <div className="flex-1 space-y-1 text-center sm:text-left">
-                    <label className="block text-xs font-bold text-slate-900">
-                      Student Profile Photo
-                    </label>
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      Upload student photo file from your computer or enter
-                      image URL.
-                    </p>
-
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                      <label className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer flex items-center gap-1.5">
-                        <Upload className="w-3.5 h-3.5" />
-                        Browse & Upload Photo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleProfilePicUpload}
-                          className="hidden"
-                        />
-                      </label>
-
-                      {studentForm.profile_pic && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setStudentForm((prev) => ({
-                              ...prev,
-                              profile_pic: "",
-                            }))
-                          }
-                          className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                        >
-                          Remove Photo
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="sm:col-span-2">
                     <label className="block mb-1">
@@ -736,7 +638,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          first_name: e.target.value,
+                          first_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
@@ -752,7 +654,7 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          last_name: e.target.value,
+                          last_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
@@ -775,18 +677,19 @@ const AdminClassDirectoryView = () => {
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">Contact Phone</label>
+                    <label className="block mb-1">Contact Phone (10 Digits)</label>
                     <input
-                      type="text"
-                      placeholder="e.g. +91 98765 43210"
+                      type="tel"
+                      maxLength={10}
+                      placeholder="e.g. 9876543210"
                       value={studentForm.phone}
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          phone: e.target.value,
+                          phone: e.target.value.replace(/\D/g, "").slice(0, 10),
                         })
                       }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-mono"
                     />
                   </div>
                   <div>
@@ -805,7 +708,7 @@ const AdminClassDirectoryView = () => {
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">Roll No</label>
+                    <label className="block mb-1">Roll No (Digits Only)</label>
                     <input
                       type="text"
                       placeholder="e.g. 103"
@@ -813,10 +716,10 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          roll_no: e.target.value,
+                          roll_no: e.target.value.replace(/\D/g, ""),
                         })
                       }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-mono"
                     />
                   </div>
                 </div>
@@ -827,37 +730,7 @@ const AdminClassDirectoryView = () => {
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 border-b border-indigo-50 pb-1">
                   2. Residential & Previous School Details
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block mb-1">Profile Picture URL</label>
-                    <input
-                      type="text"
-                      placeholder="https://..."
-                      value={studentForm.profile_pic}
-                      onChange={(e) =>
-                        setStudentForm({
-                          ...studentForm,
-                          profile_pic: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block mb-1">Previous School Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. St. Convent Academy"
-                      value={studentForm.previous_school}
-                      onChange={(e) =>
-                        setStudentForm({
-                          ...studentForm,
-                          previous_school: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
-                    />
-                  </div>
+                <div>
                   <div className="sm:col-span-2">
                     <label className="block mb-1">Full Permanent Address</label>
                     <textarea
@@ -891,25 +764,26 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          father_name: e.target.value,
+                          father_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">Father Phone</label>
+                    <label className="block mb-1">Father Phone (10 Digits)</label>
                     <input
-                      type="text"
-                      placeholder="+91..."
+                      type="tel"
+                      maxLength={10}
+                      placeholder="e.g. 9876543210"
                       value={studentForm.father_phone}
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          father_phone: e.target.value,
+                          father_phone: e.target.value.replace(/\D/g, "").slice(0, 10),
                         })
                       }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-mono"
                     />
                   </div>
                   <div>
@@ -937,25 +811,26 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          mother_name: e.target.value,
+                          mother_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">Mother Phone</label>
+                    <label className="block mb-1">Mother Phone (10 Digits)</label>
                     <input
-                      type="text"
-                      placeholder="+91..."
+                      type="tel"
+                      maxLength={10}
+                      placeholder="e.g. 9876543210"
                       value={studentForm.mother_phone}
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          mother_phone: e.target.value,
+                          mother_phone: e.target.value.replace(/\D/g, "").slice(0, 10),
                         })
                       }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-mono"
                     />
                   </div>
                   <div>
@@ -983,25 +858,26 @@ const AdminClassDirectoryView = () => {
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          guardian_name: e.target.value,
+                          guardian_name: e.target.value.replace(/[^\p{L}\p{M}\s'\.-]/gu, ""),
                         })
                       }
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">Guardian Phone</label>
+                    <label className="block mb-1">Guardian Phone (10 Digits)</label>
                     <input
-                      type="text"
-                      placeholder="+91..."
+                      type="tel"
+                      maxLength={10}
+                      placeholder="e.g. 9876543210"
                       value={studentForm.guardian_phone}
                       onChange={(e) =>
                         setStudentForm({
                           ...studentForm,
-                          guardian_phone: e.target.value,
+                          guardian_phone: e.target.value.replace(/\D/g, "").slice(0, 10),
                         })
                       }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-mono"
                     />
                   </div>
                   <div>

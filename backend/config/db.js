@@ -1,5 +1,5 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+const mysql = require("mysql2/promise");
+require("dotenv").config();
 
 const rawHost = process.env.DB_HOST || 'localhost';
 // Automatically sanitize DB_HOST in case mysql:// or port is included in env var
@@ -12,8 +12,8 @@ const pool = mysql.createPool({
   port: parseInt(process.env.DB_PORT || '28388'),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'defaultdb',
-  ssl: useSSL ? { rejectUnauthorized: false } : undefined,
+  database: process.env.DB_NAME,
+  ssl: useSSL ? { rejectUnauthorized: true } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

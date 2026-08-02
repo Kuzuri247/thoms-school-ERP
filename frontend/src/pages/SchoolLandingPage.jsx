@@ -53,15 +53,15 @@ const SchoolLandingPage = () => {
       <header className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 border border-indigo-400/20">
-              <GraduationCap className="w-7 h-7" />
+            <div className="w-11 h-11 bg-white rounded-2xl flex items-center justify-center p-0.5 shadow-lg border border-slate-700 overflow-hidden">
+              <img src="/st_thomas_logo.png" alt="St. Thomas International School Emblem" className="w-full h-full object-contain" />
             </div>
             <div>
-              <span className="text-xl font-extrabold text-white tracking-tight block leading-none">
-                Thomson School
+              <span className="text-lg sm:text-xl font-extrabold text-white tracking-tight block leading-none">
+                St. Thomas International School
               </span>
               <span className="text-[11px] text-indigo-400 font-semibold tracking-wider uppercase">
-                Excellence in Education
+                Center of Excellence
               </span>
             </div>
           </div>
@@ -111,7 +111,7 @@ const SchoolLandingPage = () => {
       >
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-bold animate-in fade-in">
           <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>Welcome to Thomson Public School • Admissions 2026 Open</span>
+          <span>Welcome to St. Thomas International School • Admissions 2026 Open</span>
         </div>
 
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.1]">
@@ -122,7 +122,7 @@ const SchoolLandingPage = () => {
         </h1>
 
         <p className="max-w-2xl mx-auto text-slate-400 text-sm sm:text-base font-medium leading-relaxed">
-          Thomson School provides a holistic education empowering students with
+          St. Thomas International School provides a holistic education empowering students with
           academic rigor, ethical values, modern STEM innovation, and vibrant
           sports programs.
         </p>

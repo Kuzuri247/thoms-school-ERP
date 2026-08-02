@@ -7,37 +7,59 @@ const pool = require('../../config/db');
  *  - A section can only have one class teacher per session.
  *  - A teacher can only be class teacher of one section per session.
  */
-const assignClassTeacher = async (teacherUserId, sectionId, sessionId) => {
-  const [[existingForSection]] = await pool.query(
-    'SELECT id FROM teacher_assignments WHERE section_id = ? AND session_id = ? AND is_class_teacher = 1',
-    [sectionId, sessionId]
-  );
-  if (existingForSection) {
-    throw Object.assign(new Error('This section already has a class teacher for this session'), { status: 409 });
-  }
+const assignClassTeacher = async (teacherUserId, sectionId, sessionId, externalConn = null) => {
+  const conn = externalConn || (await pool.getConnection());
+  const isSelfManaged = !externalConn;
+  try {
+    if (isSelfManaged) await conn.beginTransaction();
 
-  const [[alreadyClassTeacherElsewhere]] = await pool.query(
-    'SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND session_id = ? AND is_class_teacher = 1',
-    [teacherUserId, sessionId]
-  );
-  if (alreadyClassTeacherElsewhere) {
-    throw Object.assign(new Error('Teacher is already class teacher of another section this session'), { status: 409 });
-  }
+    // If this section already has a class teacher, demote them to Subject Teacher (is_class_teacher = 0)
+    await conn.query(
+      'UPDATE teacher_assignments SET is_class_teacher = 0 WHERE section_id = ? AND session_id = ? AND is_class_teacher = 1',
+      [sectionId, sessionId]
+    );
 
-  await pool.query(
-    `INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher)
-     VALUES (?, ?, ?, 1)
-     ON DUPLICATE KEY UPDATE is_class_teacher = 1`,
-    [teacherUserId, sectionId, sessionId]
-  );
+    // If this teacher is class teacher elsewhere, demote their previous class teacher role to subject teacher
+    await conn.query(
+      'UPDATE teacher_assignments SET is_class_teacher = 0 WHERE teacher_user_id = ? AND session_id = ? AND is_class_teacher = 1',
+      [teacherUserId, sessionId]
+    );
+
+    // Now assign the new teacher as the primary Class Teacher for this section
+    const [existingAssignment] = await conn.query(
+      'SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND section_id = ? AND session_id = ?',
+      [teacherUserId, sectionId, sessionId]
+    );
+
+    if (existingAssignment.length > 0) {
+      await conn.query(
+        'UPDATE teacher_assignments SET is_class_teacher = 1 WHERE id = ?',
+        [existingAssignment[0].id]
+      );
+    } else {
+      await conn.query(
+        `INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher)
+         VALUES (?, ?, ?, 1)`,
+        [teacherUserId, sectionId, sessionId]
+      );
+    }
+
+    if (isSelfManaged) await conn.commit();
+  } catch (err) {
+    if (isSelfManaged) await conn.rollback();
+    throw err;
+  } finally {
+    if (isSelfManaged) conn.release();
+  }
 };
 
 /**
  * Assign a teacher as SUBJECT TEACHER for a section/subject.
  * No restriction — a teacher can teach multiple sections/subjects.
  */
-const assignSubjectTeacher = async (teacherUserId, sectionId, subjectId, sessionId) => {
-  await pool.query(
+const assignSubjectTeacher = async (teacherUserId, sectionId, subjectId, sessionId, externalConn = null) => {
+  const conn = externalConn || pool;
+  await conn.query(
     `INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
      VALUES (?, ?, ?, ?, 0)
      ON DUPLICATE KEY UPDATE subject_id = VALUES(subject_id)`,

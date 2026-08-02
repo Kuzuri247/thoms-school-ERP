@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { extractYouTubeId } from "../utils/youtube";
 import useAuthStore from "../store/authStore";
 import api from "../api/axios";
 import {
@@ -17,6 +18,9 @@ import {
   Plus,
   Trash2,
   ExternalLink,
+  Tv,
+  Video,
+  Play,
 } from "lucide-react";
 
 const daysOfWeek = [
@@ -77,10 +81,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
 
-  // Exam Marks state
-  const [selectedExam, setSelectedExam] = useState("1"); // Exam ID 1 (Mid Term)
-  const [marksData, setMarksData] = useState({}); // { student_id: mark }
-  const [savingMarks, setSavingMarks] = useState(false);
   const [message, setMessage] = useState("");
 
   // Teacher Homework State
@@ -93,10 +93,20 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [postingHw, setPostingHw] = useState(false);
   const [hwMessage, setHwMessage] = useState("");
 
+  // Teacher E-Learning State
+  const [elearningMaterials, setElearningMaterials] = useState([]);
+  const [loadingElearning, setLoadingElearning] = useState(false);
+  const [newVideoTitle, setNewVideoTitle] = useState("");
+  const [newVideoDesc, setNewVideoDesc] = useState("");
+  const [newYoutubeUrl, setNewYoutubeUrl] = useState("");
+  const [postingVideo, setPostingVideo] = useState(false);
+  const [elearningMessage, setElearningMessage] = useState("");
+
   useEffect(() => {
     fetchTeacherClasses();
     fetchTeacherTimetable();
     fetchTeacherHomeworks();
+    fetchTeacherElearning();
   }, []);
 
   useEffect(() => {
@@ -240,6 +250,65 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   };
 
+  const fetchTeacherElearning = async () => {
+    try {
+      setLoadingElearning(true);
+      const res = await api.get("/elearning/teacher");
+      setElearningMaterials(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch E Learning materials:", err);
+    } finally {
+      setLoadingElearning(false);
+    }
+  };
+
+  const handlePostElearning = async (e) => {
+    e.preventDefault();
+    setElearningMessage("");
+    if (!selectedClass?.section_id) {
+      alert("Please select an assigned target class section.");
+      return;
+    }
+    if (!newVideoTitle.trim() || !newYoutubeUrl.trim()) {
+      alert("Title and YouTube Video link are required.");
+      return;
+    }
+
+    try {
+      setPostingVideo(true);
+      await api.post("/elearning", {
+        section_id: selectedClass.section_id,
+        title: newVideoTitle.trim(),
+        description: newVideoDesc.trim(),
+        youtube_url: newYoutubeUrl.trim(),
+      });
+      setElearningMessage("E Learning video shared successfully!");
+      setNewVideoTitle("");
+      setNewVideoDesc("");
+      setNewYoutubeUrl("");
+      setTimeout(() => setElearningMessage(""), 4000);
+      fetchTeacherElearning();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to share E Learning video.");
+    } finally {
+      setPostingVideo(false);
+    }
+  };
+
+  const handleDeleteElearning = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this E Learning video?")) return;
+    try {
+      await api.delete(`/elearning/${id}`);
+      setElearningMaterials((prev) => prev.filter((item) => item.id !== id));
+      setElearningMessage("Video deleted successfully.");
+      setTimeout(() => setElearningMessage(""), 4000);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete video.");
+    }
+  };
+
+
+
   const handleDeleteHomework = async (id) => {
     if (!window.confirm("Are you sure you want to delete this homework?")) return;
     try {
@@ -320,41 +389,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   };
 
-  const handleSaveMarks = async () => {
-    if (!selectedClass?.subject_id) {
-      alert("Subject ID is missing for this class.");
-      return;
-    }
-    try {
-      setSavingMarks(true);
-      const entries = Object.entries(marksData)
-        .filter(([_, val]) => val !== "" && val !== null && val !== undefined)
-        .map(([student_id, val]) => {
-          const clamped = Math.max(0, Math.min(100, Number(val) || 0));
-          return {
-            student_id: Number(student_id),
-            marks_obtained: clamped,
-            max_marks: 100,
-          };
-        });
 
-      await api.post(
-        `/marks/exam/${selectedExam}/subject/${selectedClass.subject_id}/bulk`,
-        {
-          exam_id: Number(selectedExam),
-          subject_id: Number(selectedClass.subject_id),
-          entries,
-        },
-      );
-
-      setMessage("Exam marks saved successfully!");
-      setTimeout(() => setMessage(""), 3000);
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to save marks");
-    } finally {
-      setSavingMarks(false);
-    }
-  };
 
   const totalStudentsCount = students.length;
   const presentStudentsList = students.filter(
@@ -382,6 +417,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     if (r.date) calendarDataMap[r.date] = r;
   });
 
+  const visibleClasses = activeTab === "attendance" ? classes.filter((c) => c.is_class_teacher) : classes;
+
   return (
     <div className="space-y-6 pb-12">
       {message && (
@@ -392,33 +429,42 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1 space-y-4">
-          <h3 className="font-extrabold text-slate-800 text-base uppercase tracking-wider px-1">
-            My Assigned Classes
+          <h3 className="font-extrabold text-slate-800 text-base uppercase tracking-wider px-1 flex items-center justify-between">
+            <span>My Assigned Classes</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              {visibleClasses.length}
+            </span>
           </h3>
-          {classes.length === 0 ? (
+          {visibleClasses.length === 0 ? (
             <div className="p-4 bg-white rounded-2xl border border-slate-200 text-xs text-slate-400 font-medium">
-              No assigned classes found.
+              {activeTab === "attendance"
+                ? "No homeroom class assigned to your account. Attendance registration is reserved for Class Teachers."
+                : "No assigned classes found."}
             </div>
           ) : (
-            classes.map((cls) => (
-              <div
-                key={cls.section_id || cls.id || cls.name}
-                onClick={() => setSelectedClass(cls)}
+                visibleClasses.map((cls) => (
+                  <div
+                    key={cls.section_id || cls.id || cls.name}
+                    onClick={() => setSelectedClass(cls)}
                 className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                   selectedClass?.name === cls.name
                     ? "bg-teal-50 border-teal-300 shadow-xs ring-2 ring-teal-500/20"
                     : "bg-white border-slate-100 hover:border-slate-200"
                 }`}
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-1">
                   <h4
                     className={`font-black text-sm ${selectedClass?.name === cls.name ? "text-teal-900" : "text-slate-800"}`}
                   >
                     {cls.name}
                   </h4>
-                  {cls.is_class_teacher && (
+                  {cls.is_class_teacher ? (
                     <span className="text-[9px] font-extrabold bg-teal-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Homeroom
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Subject Teacher
                     </span>
                   )}
                 </div>
@@ -432,8 +478,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   >
                     Subject: {cls.subject}
                   </span>
-                  <span className="text-slate-400 text-[11px]">
-                    Role: {cls.role}
+                  <span className="text-slate-500 text-[11px] font-bold">
+                    Role: {cls.is_class_teacher ? "Class Teacher (Homeroom)" : `Subject Teacher (${cls.subject})`}
                   </span>
                 </div>
               </div>
@@ -748,63 +794,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                 </div>
               )}
 
-              {activeTab === "exams" && (
-                <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-900">
-                        Spreadsheet Exam Marks Entry
-                      </h2>
-                    </div>
-                    <button
-                      onClick={handleSaveMarks}
-                      disabled={savingMarks}
-                      className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
-                    >
-                      <Save className="w-4 h-4" />
-                      {savingMarks ? "Saving Marks..." : "Save Marks Spreadsheet"}
-                    </button>
-                  </div>
 
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200">
-                        <tr>
-                          <th className="py-3 px-4">Roll</th>
-                          <th className="py-3 px-4">Student Name</th>
-                          <th className="py-3 px-4 text-right">Marks (0-100)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 bg-white">
-                        {students.map((s) => (
-                          <tr key={s.id} className="hover:bg-slate-50/60">
-                            <td className="py-3 px-4 font-mono font-bold text-slate-700">{s.roll}</td>
-                            <td className="py-3 px-4 font-bold text-slate-900">{s.name}</td>
-                            <td className="py-3 px-4 text-right">
-                          <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={marksData[s.id] ?? ""}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val === "") {
-                                    setMarksData({ ...marksData, [s.id]: "" });
-                                  } else {
-                                    const num = Math.max(0, Math.min(100, Number(val)));
-                                    setMarksData({ ...marksData, [s.id]: num });
-                                  }
-                                }}
-                                className="w-24 px-3 py-1.5 text-right font-extrabold text-xs text-teal-700 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-teal-500 outline-none"
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
 
               {activeTab === "timetable" && (
                 <div className="space-y-6 animate-in fade-in duration-200">
@@ -1046,6 +1036,177 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 <span className="font-bold text-teal-700">
                                   {hw.completed_count || 0}/{hw.total_students || 0} Done ({pct}%)
                                 </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "elearning" && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <Tv className="w-5 h-5 text-indigo-600" /> E Learning Video Portal
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-500 mt-1">
+                        Share YouTube learning video topics directly with students in your assigned classes.
+                      </p>
+                    </div>
+                  </div>
+
+                  {elearningMessage && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-600" /> {elearningMessage}
+                    </div>
+                  )}
+
+                  {/* Share Video Form */}
+                  <form onSubmit={handlePostElearning} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-indigo-600" /> Share New E Learning Video Topic
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Target Assigned Class</label>
+                        <select
+                          value={selectedClass?.section_id || ""}
+                          onChange={(e) => {
+                            const found = classes.find((c) => String(c.section_id) === String(e.target.value));
+                            if (found) setSelectedClass(found);
+                          }}
+                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        >
+                          <option value="">-- Select Class --</option>
+                          {classes.map((cls) => (
+                            <option key={cls.section_id || cls.name} value={cls.section_id}>
+                              {cls.name} ({cls.subject})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">Topic / Video Title *</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g., Photosynthesis Mechanism & Light Reactions"
+                          value={newVideoTitle}
+                          onChange={(e) => setNewVideoTitle(e.target.value)}
+                          className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">YouTube Link / URL *</label>
+                      <input
+                        type="url"
+                        required
+                        placeholder="e.g. https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+                        value={newYoutubeUrl}
+                        onChange={(e) => setNewYoutubeUrl(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    {extractYouTubeId(newYoutubeUrl) && (
+                      <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
+                        <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block">Live Video Preview</span>
+                        <div className="aspect-video w-full max-w-sm rounded-lg overflow-hidden border border-slate-200">
+                          <iframe
+                            src={`https://www.youtube.com/embed/${extractYouTubeId(newYoutubeUrl)}`}
+                            title="Preview"
+                            className="w-full h-full"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Topic Notes / Instructions (Optional)</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Watch lines 02:15 to 08:30 carefully for tomorrow's discussion..."
+                        value={newVideoDesc}
+                        onChange={(e) => setNewVideoDesc(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500 resize-none"
+                      />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={postingVideo}
+                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Video className="w-4 h-4" /> {postingVideo ? "Sharing..." : "Publish E Learning Video"}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* List of Posted Videos */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
+                      My Shared E Learning Topics ({elearningMaterials.length})
+                    </h3>
+
+                    {loadingElearning ? (
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">Loading shared video topics...</p>
+                    ) : elearningMaterials.length === 0 ? (
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">You have not shared any E Learning video topics yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {elearningMaterials.map((mat) => {
+                          const ytId = mat.youtube_video_id || extractYouTubeId(mat.youtube_url);
+                          return (
+                            <div key={mat.id} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 flex flex-col justify-between">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">
+                                    {mat.class_name} {mat.section_name}
+                                  </span>
+                                  <button
+                                    onClick={() => handleDeleteElearning(mat.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                                    title="Delete Video Topic"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <h4 className="text-sm font-extrabold text-slate-900 leading-tight">{mat.title}</h4>
+                                {mat.description && <p className="text-xs text-slate-600 font-medium line-clamp-2">{mat.description}</p>}
+                              </div>
+
+                              {ytId ? (
+                                <div className="aspect-video w-full rounded-xl overflow-hidden border border-slate-200 mt-2">
+                                  <iframe
+                                    src={`https://www.youtube.com/embed/${ytId}`}
+                                    title={mat.title}
+                                    className="w-full h-full"
+                                    allowFullScreen
+                                  />
+                                </div>
+                              ) : (
+                                <a
+                                  href={mat.youtube_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline mt-2"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" /> Watch on YouTube
+                                </a>
+                              )}
+
+                              <div className="text-[10px] text-slate-400 font-semibold pt-2 border-t border-slate-100">
+                                Posted on: {new Date(mat.created_at).toLocaleDateString()}
                               </div>
                             </div>
                           );

@@ -13,11 +13,11 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
 
   const demoAccounts = [
-    { role: 'Super Admin', email: 'superadmin@thomson.edu', pass: 'Thomson2026!', targetRole: 'super_admin', icon: Crown, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-    { role: 'Admin', email: 'admin@thomson.edu', pass: 'Thomson2026!', targetRole: 'admin', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
-    { role: 'Teacher', email: 'teacher@thomson.edu', pass: 'Thomson2026!', targetRole: 'teacher', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
-    { role: 'Student', email: 'student@thomson.edu', pass: 'Thomson2026!', targetRole: 'student', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    { role: 'Cashier', email: 'cashier@thomson.edu', pass: 'Thomson2026!', targetRole: 'cashier', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
+    { role: 'Super Admin', email: 'superadmin@stthomas.edu', pass: 'Thomson2026!', targetRole: 'super_admin', icon: Crown, color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    { role: 'Admin', email: 'admin@stthomas.edu', pass: 'Thomson2026!', targetRole: 'admin', icon: Shield, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    { role: 'Teacher', email: 'teacher@stthomas.edu', pass: 'Thomson2026!', targetRole: 'teacher', icon: GraduationCap, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    { role: 'Student', email: 'student@stthomas.edu', pass: 'Thomson2026!', targetRole: 'student', icon: User, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    { role: 'Cashier', email: 'cashier@stthomas.edu', pass: 'Thomson2026!', targetRole: 'cashier', icon: CreditCard, color: 'bg-blue-50 text-blue-700 border-blue-200' },
   ];
 
   const redirectUserByRole = (userRole) => {
@@ -81,14 +81,14 @@ const Login = () => {
       <div className="relative max-w-md w-full space-y-6 bg-white p-8 rounded-2xl border border-slate-200/90 shadow-md">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center mx-auto shadow-xs border border-slate-800">
-            <GraduationCap className="w-7 h-7" />
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-md border border-slate-200 p-1">
+            <img src="/st_thomas_logo.png" alt="St. Thomas International School Emblem" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Thomson ERP
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+            St. Thomas International School
           </h1>
-          <p className="text-xs text-slate-500 font-normal">
-            Unified Role-Based School Portal
+          <p className="text-xs text-slate-500 font-medium">
+            Center of Excellence • Official ERP Portal
           </p>
         </div>
 
@@ -139,7 +139,7 @@ const Login = () => {
                   type="email"
                   required
                   className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-800 font-medium text-sm transition-all"
-                  placeholder="user@thoms.edu"
+                  placeholder="user@stthomas.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />

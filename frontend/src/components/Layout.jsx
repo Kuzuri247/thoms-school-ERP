@@ -29,6 +29,7 @@ import {
   Trash2,
   AlertCircle,
   User,
+  Tv,
 } from "lucide-react";
 import useAuthStore from "../store/authStore";
 import {
@@ -68,20 +69,32 @@ const Layout = () => {
         .then((res) => {
           if (res.data?.data && Array.isArray(res.data.data)) {
             setNotifications((prev) => {
-              const prevMap = new Map(prev.map((item) => [String(item.id), item]));
+              const prevMap = new Map(
+                prev.map((item) => [String(item.id), item]),
+              );
               return res.data.data
                 .map((n, idx) => {
                   const idStr = String(n.id || `notice-${idx}`);
                   const prevItem = prevMap.get(idStr);
                   const isReadLocally = readNoticeIds.has(idStr);
-                  const isRead = isReadLocally || (n.is_read !== undefined ? Boolean(n.is_read) : (prevItem ? !prevItem.unread : idx >= 3));
+                  const isRead =
+                    isReadLocally ||
+                    (n.is_read !== undefined
+                      ? Boolean(n.is_read)
+                      : prevItem
+                        ? !prevItem.unread
+                        : idx >= 3);
 
                   return {
                     id: n.id || `notice-${idx}`,
                     title: n.title,
                     category:
-                      n.notice_type === "exam" ? "Academic Calendar" : "Notice Board",
-                    time: n.publish_date ? n.publish_date.split("T")[0] : "Recent",
+                      n.notice_type === "exam"
+                        ? "Academic Calendar"
+                        : "Notice Board",
+                    time: n.publish_date
+                      ? n.publish_date.split("T")[0]
+                      : "Recent",
                     unread: !isRead,
                     type: n.notice_type === "exam" ? "calendar" : "notice",
                   };
@@ -158,13 +171,14 @@ const Layout = () => {
     setReadNoticeIds((prev) => new Set(prev).add(String(n.id)));
     setNotifications(
       notifications.map((item) =>
-        item.id === n.id ? { ...item, unread: false } : item
-      )
+        item.id === n.id ? { ...item, unread: false } : item,
+      ),
     );
     setShowNotificationDropdown(false);
-    const targetDate = (n.time && n.time.match(/^\d{4}-\d{2}-\d{2}$/)) 
-      ? n.time 
-      : new Date().toISOString().split("T")[0];
+    const targetDate =
+      n.time && n.time.match(/^\d{4}-\d{2}-\d{2}$/)
+        ? n.time
+        : new Date().toISOString().split("T")[0];
 
     navigate("/academic/calendar", {
       state: {
@@ -205,7 +219,8 @@ const Layout = () => {
       }
     } catch (err) {
       setAdminMsgError(
-        err.response?.data?.message || "Failed to broadcast notice. Please try again."
+        err.response?.data?.message ||
+          "Failed to broadcast notice. Please try again.",
       );
     }
   };
@@ -266,15 +281,19 @@ const Layout = () => {
             </button>
 
             <Link to={roleHomePath()} className="flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-200">
-                <GraduationCap className="w-6 h-6" />
+              <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-xs group-hover:scale-105 transition-transform duration-200">
+                <img
+                  src="/st_thomas_logo.png"
+                  alt="St. Thomas International School Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
-                <span className="text-base font-extrabold text-slate-900 tracking-tight block leading-none group-hover:text-indigo-600 transition-colors">
-                  Thomson ERP
+                <span className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight block leading-none group-hover:text-indigo-600 transition-colors">
+                  St. Thomas International School
                 </span>
                 <span className="text-[10px] text-slate-500 font-semibold tracking-wide">
-                  School Management System
+                  Center of Excellence • ERP
                 </span>
               </div>
             </Link>
@@ -329,7 +348,7 @@ const Layout = () => {
                           }}
                           className="px-2.5 py-1 bg-indigo-600 text-white font-bold text-[10px] rounded-lg hover:bg-indigo-700 transition flex items-center gap-1 cursor-pointer shadow-xs"
                         >
-                          <Megaphone className="w-3 h-3" /> Post 
+                          <Megaphone className="w-3 h-3" /> Post
                         </button>
                       )}
                     </div>
@@ -563,10 +582,7 @@ const Layout = () => {
               </Link>
             )}
 
-            <Link
-              to="/profile"
-              className={navLinkClass("/profile")}
-            >
+            <Link to="/profile" className={navLinkClass("/profile")}>
               <User className="w-4 h-4" /> My Profile & Security
             </Link>
 
@@ -576,29 +592,8 @@ const Layout = () => {
             >
               <Calendar className="w-4 h-4" /> Academic Calendar
             </Link>
-
-            {/* <Link
-              to="/academic/examinations"
-              className={navLinkClass("/academic/examinations")}
-            >
-              <Award className="w-4 h-4" /> Examination Section
-            </Link> */}
-
-            {/* Admin & Super Admin Exclusive Links */}
             {(isSuperAdmin || isAdmin) && (
               <>
-                <Link
-                  to="/communication/center"
-                  className={navLinkClass("/communication/center")}
-                >
-                  <Send className="w-4 h-4" /> Communication Desk
-                </Link>
-                <Link
-                  to="/transport/management"
-                  className={navLinkClass("/transport/management")}
-                >
-                  <Bus className="w-4 h-4" /> Transport & Bus Fleet
-                </Link>
                 <Link
                   to="/admin/users"
                   className={navLinkClass("/admin/users")}
@@ -612,16 +607,22 @@ const Layout = () => {
                   <Building2 className="w-4 h-4" /> Student section
                 </Link>
                 <Link
+                  to="/admin/homework"
+                  className={navLinkClass("/admin/homework")}
+                >
+                  <BookText className="w-4 h-4" /> Homework Repository
+                </Link>
+                <Link
                   to="/admin/notices"
                   className={navLinkClass("/admin/notices")}
                 >
                   <Megaphone className="w-4 h-4" /> Notice Board
                 </Link>
                 <Link
-                  to="/admin/homework"
-                  className={navLinkClass("/admin/homework")}
+                  to="/communication/center"
+                  className={navLinkClass("/communication/center")}
                 >
-                  <BookText className="w-4 h-4" /> Homework Repository
+                  <Send className="w-4 h-4" /> Communication Desk
                 </Link>
                 <Link
                   to="/finance/dashboard"
@@ -630,17 +631,17 @@ const Layout = () => {
                   <CreditCard className="w-4 h-4" /> Fees Desk Overview
                 </Link>
                 <Link
+                  to="/transport/management"
+                  className={navLinkClass("/transport/management")}
+                >
+                  <Bus className="w-4 h-4" /> Transport & Bus Fleet
+                </Link>
+                <Link
                   to="/finance/reports"
                   className={navLinkClass("/finance/reports")}
                 >
                   <FileSpreadsheet className="w-4 h-4" /> Financial Audits &
                   Reports
-                </Link>
-                <Link
-                  to="/admin/settings"
-                  className={navLinkClass("/admin/settings")}
-                >
-                  <Settings className="w-4 h-4" /> System Settings
                 </Link>
               </>
             )}
@@ -652,16 +653,16 @@ const Layout = () => {
                   Teacher Suite
                 </div>
                 <Link
-                  to="/teacher/dashboard"
-                  className={navLinkClass("/teacher/dashboard")}
-                >
-                  <LayoutDashboard className="w-4 h-4" /> Class Workstation
-                </Link>
-                <Link
                   to="/teacher/attendance"
                   className={navLinkClass("/teacher/attendance")}
                 >
                   <CalendarCheck className="w-4 h-4" /> Attendance Register
+                </Link>
+                <Link
+                  to="/teacher/dashboard"
+                  className={navLinkClass("/teacher/dashboard")}
+                >
+                  <LayoutDashboard className="w-4 h-4" /> Class Workstation
                 </Link>
                 <Link
                   to="/teacher/homework"
@@ -676,10 +677,10 @@ const Layout = () => {
                   <Clock className="w-4 h-4" /> Class Schedule
                 </Link>
                 <Link
-                  to="/teacher/academics"
-                  className={navLinkClass("/teacher/academics")}
+                  to="/teacher/elearning"
+                  className={navLinkClass("/teacher/elearning")}
                 >
-                  <Award className="w-4 h-4" /> Marks & Grading
+                  <Tv className="w-4 h-4" /> E-Learning
                 </Link>
               </>
             )}
@@ -700,13 +701,19 @@ const Layout = () => {
                   to="/student/work"
                   className={navLinkClass("/student/work")}
                 >
-                  <BookText className="w-4 h-4" /> My Work
+                  <BookText className="w-4 h-4" /> My Homework
                 </Link>
                 <Link
                   to="/student/timetable"
                   className={navLinkClass("/student/timetable")}
                 >
                   <Clock className="w-4 h-4" /> My Timetable
+                </Link>
+                <Link
+                  to="/student/elearning"
+                  className={navLinkClass("/student/elearning")}
+                >
+                  <Tv className="w-4 h-4" /> E-Learning
                 </Link>
                 <Link
                   to="/student/fees"
