@@ -13,7 +13,7 @@ const useSSL = process.env.DB_SSL === 'true' || process.env.DB_SSL === 'REQUIRED
 
 const sslConfig = useSSL
   ? {
-      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true',
       ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}),
     }
   : undefined;
