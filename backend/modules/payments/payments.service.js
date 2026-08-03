@@ -1,57 +1,89 @@
-const crypto = require('crypto');
-const pool = require('../../config/db');
-const razorpay = require('../../config/razorpay');
-const { generateReceiptPDF } = require('./receipt.service');
+const crypto = require("crypto");
+const pool = require("../../config/db");
+const razorpay = require("../../config/razorpay");
+const { generateReceiptPDF } = require("./receipt.service");
 
 const createOrder = async (feeRecordId, createdByUserId) => {
   const [[feeRecord]] = await pool.query(
     'SELECT * FROM fee_records WHERE id = ? AND status NOT IN ("PAID","WAIVED")',
-    [feeRecordId]
+    [feeRecordId],
   );
-  if (!feeRecord) throw Object.assign(new Error('Fee record not found or already paid'), { status: 404 });
+  if (!feeRecord)
+    throw Object.assign(new Error("Fee record not found or already paid"), {
+      status: 404,
+    });
 
-  const dueAmount = parseFloat(feeRecord.total_amount) - parseFloat(feeRecord.paid_amount) - parseFloat(feeRecord.discount_amount);
-  if (dueAmount <= 0) throw Object.assign(new Error('No outstanding balance'), { status: 400 });
+  const dueAmount =
+    parseFloat(feeRecord.total_amount) -
+    parseFloat(feeRecord.paid_amount) -
+    parseFloat(feeRecord.discount_amount);
+  if (dueAmount <= 0)
+    throw Object.assign(new Error("No outstanding balance"), { status: 400 });
 
   const amountPaise = Math.round(dueAmount * 100);
   const receipt = `rcpt_${feeRecordId}_${Date.now()}`;
 
   const rzpOrder = await razorpay.orders.create({
     amount: amountPaise,
-    currency: 'INR',
+    currency: "INR",
     receipt,
-    notes: { fee_record_id: String(feeRecordId), student_id: String(feeRecord.student_id) },
+    notes: {
+      fee_record_id: String(feeRecordId),
+      student_id: String(feeRecord.student_id),
+    },
   });
 
   await pool.query(
     `INSERT INTO razorpay_orders
        (razorpay_order_id, fee_record_id, student_id, amount_paise, currency, receipt, status, created_by)
      VALUES (?, ?, ?, ?, 'INR', ?, 'created', ?)`,
-    [rzpOrder.id, feeRecordId, feeRecord.student_id, amountPaise, receipt, createdByUserId]
+    [
+      rzpOrder.id,
+      feeRecordId,
+      feeRecord.student_id,
+      amountPaise,
+      receipt,
+      createdByUserId,
+    ],
   );
+
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  if (!keyId) {
+    throw Object.assign(new Error("Razorpay Key ID is not configured"), { status: 500 });
+  }
 
   return {
     orderId: rzpOrder.id,
     amount: amountPaise,
-    currency: 'INR',
-    keyId: process.env.RAZORPAY_KEY_ID,
+    currency: "INR",
+    keyId,
     receipt,
   };
 };
 
-const verifyPayment = async ({ razorpay_order_id, razorpay_payment_id, razorpay_signature }) => {
+const verifyPayment = async ({
+  razorpay_order_id,
+  razorpay_payment_id,
+  razorpay_signature,
+}) => {
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) {
+    throw Object.assign(new Error("Razorpay Secret is not configured"), { status: 500 });
+  }
   const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .createHmac("sha256", secret)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    .digest('hex');
+    .digest("hex");
 
   if (expectedSignature !== razorpay_signature) {
-    throw Object.assign(new Error('Payment signature verification failed'), { status: 400 });
+    throw Object.assign(new Error("Payment signature verification failed"), {
+      status: 400,
+    });
   }
 
   await pool.query(
     'UPDATE razorpay_orders SET status = "attempted" WHERE razorpay_order_id = ?',
-    [razorpay_order_id]
+    [razorpay_order_id],
   );
 
   return { verified: true };
@@ -59,12 +91,14 @@ const verifyPayment = async ({ razorpay_order_id, razorpay_payment_id, razorpay_
 
 const handleWebhook = async (rawBody, signature) => {
   const expectedSig = crypto
-    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+    .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
     .update(rawBody)
-    .digest('hex');
+    .digest("hex");
 
   if (expectedSig !== signature) {
-    throw Object.assign(new Error('Webhook signature invalid'), { status: 400 });
+    throw Object.assign(new Error("Webhook signature invalid"), {
+      status: 400,
+    });
   }
 
   const payload = JSON.parse(rawBody);
@@ -73,24 +107,24 @@ const handleWebhook = async (rawBody, signature) => {
 
   try {
     await pool.query(
-      'INSERT INTO webhook_events (event_id, event_type) VALUES (?, ?)',
-      [eventId, eventType]
+      "INSERT INTO webhook_events (event_id, event_type) VALUES (?, ?)",
+      [eventId, eventType],
     );
   } catch (dupErr) {
-    if (dupErr.code === 'ER_DUP_ENTRY') return { skipped: true };
+    if (dupErr.code === "ER_DUP_ENTRY") return { skipped: true };
     throw dupErr;
   }
 
   await pool.query(
     'INSERT INTO audit_logs (action, entity_type, new_data) VALUES (?, "webhook", ?)',
-    [`webhook_${eventType}`, JSON.stringify(payload)]
+    [`webhook_${eventType}`, JSON.stringify(payload)],
   );
 
-  if (eventType === 'payment.captured') {
+  if (eventType === "payment.captured") {
     await _onPaymentCaptured(payload.payload.payment.entity);
-  } else if (eventType === 'payment.failed') {
+  } else if (eventType === "payment.failed") {
     await _onPaymentFailed(payload.payload.payment.entity);
-  } else if (eventType === 'refund.processed') {
+  } else if (eventType === "refund.processed") {
     await _onRefundProcessed(payload.payload.refund.entity);
   }
 
@@ -107,19 +141,29 @@ const _onPaymentCaptured = async (payment) => {
          (razorpay_payment_id, razorpay_order_id, amount_paise, currency, method, status, captured_at, raw_payload)
        VALUES (?, ?, ?, ?, ?, 'captured', NOW(), ?)
        ON DUPLICATE KEY UPDATE status = 'captured', captured_at = NOW()`,
-      [payment.id, payment.order_id, payment.amount, payment.currency, payment.method, JSON.stringify(payment)]
+      [
+        payment.id,
+        payment.order_id,
+        payment.amount,
+        payment.currency,
+        payment.method,
+        JSON.stringify(payment),
+      ],
     );
 
     await conn.query(
       'UPDATE razorpay_orders SET status = "paid" WHERE razorpay_order_id = ?',
-      [payment.order_id]
+      [payment.order_id],
     );
 
     const [[order]] = await conn.query(
-      'SELECT fee_record_id, amount_paise FROM razorpay_orders WHERE razorpay_order_id = ?',
-      [payment.order_id]
+      "SELECT fee_record_id, amount_paise FROM razorpay_orders WHERE razorpay_order_id = ?",
+      [payment.order_id],
     );
-    if (!order) { await conn.rollback(); return; }
+    if (!order) {
+      await conn.rollback();
+      return;
+    }
 
     await conn.query(
       `UPDATE fee_records
@@ -131,19 +175,25 @@ const _onPaymentCaptured = async (payment) => {
            END,
            updated_at = NOW()
        WHERE id = ?`,
-      [payment.amount / 100, payment.amount / 100, payment.amount / 100, order.fee_record_id]
+      [
+        payment.amount / 100,
+        payment.amount / 100,
+        payment.amount / 100,
+        order.fee_record_id,
+      ],
     );
 
     const receiptNo = `RCP-${Date.now()}`;
     await conn.query(
-      'INSERT INTO receipts (receipt_no, razorpay_payment_id, fee_record_id, student_id) SELECT ?, ?, fee_record_id, student_id FROM razorpay_orders WHERE razorpay_order_id = ?',
-      [receiptNo, payment.id, payment.order_id]
+      "INSERT INTO receipts (receipt_no, razorpay_payment_id, fee_record_id, student_id) SELECT ?, ?, fee_record_id, student_id FROM razorpay_orders WHERE razorpay_order_id = ?",
+      [receiptNo, payment.id, payment.order_id],
     );
 
     await conn.commit();
 
-    setImmediate(() => generateReceiptPDF(receiptNo, payment.id).catch(console.error));
-
+    setImmediate(() =>
+      generateReceiptPDF(receiptNo, payment.id).catch(console.error),
+    );
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -155,27 +205,30 @@ const _onPaymentCaptured = async (payment) => {
 const _onPaymentFailed = async (payment) => {
   await pool.query(
     'UPDATE razorpay_orders SET status = "failed" WHERE razorpay_order_id = ?',
-    [payment.order_id]
+    [payment.order_id],
   );
 };
 
 const _onRefundProcessed = async (refund) => {
   await pool.query(
     'UPDATE refunds SET status = "processed", processed_at = NOW() WHERE razorpay_refund_id = ?',
-    [refund.id]
+    [refund.id],
   );
   await pool.query(
     'UPDATE razorpay_payments SET status = "refunded" WHERE razorpay_payment_id = ?',
-    [refund.payment_id]
+    [refund.payment_id],
   );
 };
 
 const initiateRefund = async (paymentId, reason, initiatedBy) => {
   const [[payment]] = await pool.query(
     'SELECT * FROM razorpay_payments WHERE razorpay_payment_id = ? AND status = "captured"',
-    [paymentId]
+    [paymentId],
   );
-  if (!payment) throw Object.assign(new Error('Payment not found or not refundable'), { status: 404 });
+  if (!payment)
+    throw Object.assign(new Error("Payment not found or not refundable"), {
+      status: 404,
+    });
 
   const refund = await razorpay.payments.refund(paymentId, {
     amount: payment.amount_paise,
@@ -184,69 +237,88 @@ const initiateRefund = async (paymentId, reason, initiatedBy) => {
 
   await pool.query(
     'INSERT INTO refunds (razorpay_refund_id, razorpay_payment_id, amount_paise, status, reason, initiated_by) VALUES (?, ?, ?, "pending", ?, ?)',
-    [refund.id, paymentId, refund.amount, reason, initiatedBy]
+    [refund.id, paymentId, refund.amount, reason, initiatedBy],
   );
 
   return refund;
 };
 
-const collectCashPayment = async ({ studentId, feeRecordId, amount, paymentMode = 'Cash', feeType = 'Tuition Fee' }, collectedByUserId) => {
+const collectCashPayment = async (
+  {
+    studentId,
+    feeRecordId,
+    amount,
+    paymentMode = "Cash",
+    feeType = "Tuition Fee",
+  },
+  collectedByUserId,
+) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
 
     let [[student]] = await conn.query(
       'SELECT s.id, s.user_id, CONCAT(s.first_name, " ", s.last_name) AS full_name FROM students s WHERE s.id = ? OR s.admission_no = ? OR s.roll_no = ? LIMIT 1',
-      [studentId, studentId, studentId]
+      [studentId, studentId, studentId],
     );
 
     let resolvedFeeRecord = null;
 
     if (feeRecordId) {
-      const [[fr]] = await conn.query('SELECT * FROM fee_records WHERE id = ?', [feeRecordId]);
+      const [[fr]] = await conn.query(
+        "SELECT * FROM fee_records WHERE id = ?",
+        [feeRecordId],
+      );
       resolvedFeeRecord = fr;
     } else if (student) {
       const [[fr]] = await conn.query(
         'SELECT * FROM fee_records WHERE student_id = ? AND status IN ("PENDING", "PARTIAL", "OVERDUE") ORDER BY due_date ASC LIMIT 1',
-        [student.id]
+        [student.id],
       );
       resolvedFeeRecord = fr;
     }
 
     if (!resolvedFeeRecord && student) {
-      const [[activeSession]] = await conn.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+      const [[activeSession]] = await conn.query(
+        "SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1",
+      );
       const sessionId = activeSession?.id || 1;
       const [newFrRes] = await conn.query(
         `INSERT INTO fee_records (student_id, session_id, total_amount, paid_amount, status, notes)
          VALUES (?, ?, ?, 0, 'PENDING', ?)`,
-        [student.id, sessionId, amount, feeType]
+        [student.id, sessionId, amount, feeType],
       );
-      const [[createdFr]] = await conn.query('SELECT * FROM fee_records WHERE id = ?', [newFrRes.insertId]);
+      const [[createdFr]] = await conn.query(
+        "SELECT * FROM fee_records WHERE id = ?",
+        [newFrRes.insertId],
+      );
       resolvedFeeRecord = createdFr;
     }
 
     if (!resolvedFeeRecord) {
-      throw Object.assign(new Error('Fee record or student not found'), { status: 404 });
+      throw Object.assign(new Error("Fee record or student not found"), {
+        status: 404,
+      });
     }
 
     const payAmount = parseFloat(amount);
     if (isNaN(payAmount) || payAmount <= 0) {
-      throw Object.assign(new Error('Invalid payment amount'), { status: 400 });
+      throw Object.assign(new Error("Invalid payment amount"), { status: 400 });
     }
 
     const newPaidAmount = parseFloat(resolvedFeeRecord.paid_amount) + payAmount;
     const totalAmount = parseFloat(resolvedFeeRecord.total_amount);
     const discountAmount = parseFloat(resolvedFeeRecord.discount_amount || 0);
 
-    const newStatus = (newPaidAmount + discountAmount) >= totalAmount ? 'PAID' : 'PARTIAL';
+    const newStatus =
+      newPaidAmount + discountAmount >= totalAmount ? "PAID" : "PARTIAL";
 
     await conn.query(
       `UPDATE fee_records SET paid_amount = ?, status = ?, updated_at = NOW() WHERE id = ?`,
-      [newPaidAmount, newStatus, resolvedFeeRecord.id]
+      [newPaidAmount, newStatus, resolvedFeeRecord.id],
     );
 
-    const crypto = require('crypto');
-    const nonce = crypto.randomBytes(4).toString('hex');
+    const nonce = crypto.randomBytes(4).toString("hex");
     const orderId = `cash_ord_${Date.now()}_${nonce}`;
     const paymentId = `cash_pay_${Date.now()}_${nonce}`;
     const amountPaise = Math.round(payAmount * 100);
@@ -254,20 +326,32 @@ const collectCashPayment = async ({ studentId, feeRecordId, amount, paymentMode 
     await conn.query(
       `INSERT INTO razorpay_orders (razorpay_order_id, fee_record_id, student_id, amount_paise, currency, receipt, status, created_by)
        VALUES (?, ?, ?, ?, 'INR', ?, 'paid', ?)`,
-      [orderId, resolvedFeeRecord.id, resolvedFeeRecord.student_id, amountPaise, `cash_${Date.now()}_${nonce}`, collectedByUserId]
+      [
+        orderId,
+        resolvedFeeRecord.id,
+        resolvedFeeRecord.student_id,
+        amountPaise,
+        `cash_${Date.now()}_${nonce}`,
+        collectedByUserId,
+      ],
     );
 
     await conn.query(
       `INSERT INTO razorpay_payments (razorpay_payment_id, razorpay_order_id, amount_paise, currency, method, status, captured_at)
        VALUES (?, ?, ?, 'INR', ?, 'captured', NOW())`,
-      [paymentId, orderId, amountPaise, paymentMode]
+      [paymentId, orderId, amountPaise, paymentMode],
     );
 
     const receiptNo = `REC-${Date.now().toString().slice(-6)}${Math.floor(1000 + Math.random() * 9000)}`;
     await conn.query(
       `INSERT INTO receipts (receipt_no, razorpay_payment_id, fee_record_id, student_id)
        VALUES (?, ?, ?, ?)`,
-      [receiptNo, paymentId, resolvedFeeRecord.id, resolvedFeeRecord.student_id]
+      [
+        receiptNo,
+        paymentId,
+        resolvedFeeRecord.id,
+        resolvedFeeRecord.student_id,
+      ],
     );
 
     await conn.commit();
@@ -334,4 +418,12 @@ const getStudentFeeRecords = async (userId, targetStudentId = null) => {
   return rows;
 };
 
-module.exports = { createOrder, verifyPayment, handleWebhook, initiateRefund, collectCashPayment, getPendingDues, getStudentFeeRecords };
+module.exports = {
+  createOrder,
+  verifyPayment,
+  handleWebhook,
+  initiateRefund,
+  collectCashPayment,
+  getPendingDues,
+  getStudentFeeRecords,
+};

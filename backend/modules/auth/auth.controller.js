@@ -31,7 +31,7 @@ exports.logout = async (req, res) => {
 exports.me = async (req, res) => {
   const pool = require('../../config/db');
   const [rows] = await pool.query(
-    'SELECT id, email, full_name, role, status, last_login FROM users WHERE id = ?',
+    'SELECT id, email, full_name, role, gender, status, last_login FROM users WHERE id = ?',
     [req.user.id]
   );
   const user = rows[0] || null;

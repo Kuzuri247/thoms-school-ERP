@@ -3,7 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetUserProfile } from "./useUsers";
 import useAuthStore from "../../store/authStore";
-import { getRoleBadgeStyle, isStaff as checkIsStaff } from "../../utils/roleUtils";
+import {
+  getRoleBadgeStyle,
+  isStaff as checkIsStaff,
+} from "../../utils/roleUtils";
 import { validatePassword } from "../../utils/validationUtils";
 import {
   ArrowLeft,
@@ -62,7 +65,6 @@ const UserProfileView = () => {
     city: "",
     state: "",
     pincode: "",
-    previous_school: "",
     father_name: "",
     father_phone: "",
     father_occupation: "",
@@ -91,7 +93,10 @@ const UserProfileView = () => {
     if (apiProfile) {
       setProfile(apiProfile);
       populateFormFields(apiProfile);
-    } else if (authUser && (!paramId || String(paramId) === String(authUser.id))) {
+    } else if (
+      authUser &&
+      (!paramId || String(paramId) === String(authUser.id))
+    ) {
       setProfile(authUser);
       populateFormFields(authUser);
     } else if (error) {
@@ -111,7 +116,8 @@ const UserProfileView = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editProfileModalOpen, changePasswordModalOpen]);
 
-  const format10Digits = (val) => (val ? String(val).replace(/\D/g, "").slice(0, 10) : "");
+  const format10Digits = (val) =>
+    val ? String(val).replace(/\D/g, "").slice(0, 10) : "";
 
   const normalizeDate = (val) => {
     if (!val) return "";
@@ -129,7 +135,10 @@ const UserProfileView = () => {
   const populateFormFields = (p) => {
     if (!p) return;
     setForm({
-      full_name: p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim() || "",
+      full_name:
+        p.full_name ||
+        `${p.first_name || ""} ${p.last_name || ""}`.trim() ||
+        "",
       email: p.email || "",
       phone: format10Digits(p.phone),
       employee_code: p.employee_code || "",
@@ -137,8 +146,12 @@ const UserProfileView = () => {
       department: p.department || "",
       qualification: p.qualification || "",
       joining_date: normalizeDate(p.joining_date),
-      emergency_contact: format10Digits(p.emergency_contact || p.emergency_phone || p.phone),
-      gender: p.gender || "male",
+      emergency_contact: format10Digits(
+        p.emergency_contact || p.emergency_phone || p.phone,
+      ),
+      gender: p.gender
+        ? p.gender.charAt(0).toUpperCase() + p.gender.slice(1).toLowerCase()
+        : "Male",
       date_of_birth: normalizeDate(p.date_of_birth),
       address: p.address || "",
       blood_group: p.blood_group || "",
@@ -147,7 +160,6 @@ const UserProfileView = () => {
       city: p.city || "",
       state: p.state || "",
       pincode: p.pincode || "",
-      previous_school: p.previous_school || "",
       father_name: p.father_name || "",
       father_phone: format10Digits(p.father_phone),
       father_occupation: p.father_occupation || "",
@@ -173,7 +185,9 @@ const UserProfileView = () => {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500">
         <User className="w-16 h-16 text-slate-300 mb-4" />
         <h2 className="text-xl font-bold text-slate-700">Profile Not Found</h2>
-        <p className="text-sm mt-2">The requested user profile does not exist or you lack permission.</p>
+        <p className="text-sm mt-2">
+          The requested user profile does not exist or you lack permission.
+        </p>
         <button
           onClick={() => navigate(-1)}
           className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 font-bold rounded-lg text-sm cursor-pointer"
@@ -184,7 +198,8 @@ const UserProfileView = () => {
     );
   }
 
-  const isStudent = profile.profile_type === "student" || profile.role === "student";
+  const isStudent =
+    profile.profile_type === "student" || profile.role === "student";
   const isStaffMember = checkIsStaff(profile);
 
   // Handle Save Profile updates to backend DB
@@ -200,7 +215,11 @@ const UserProfileView = () => {
       queryClient.invalidateQueries(["userProfile", String(profile.id)]);
 
       if (authUser && Number(authUser.id) === Number(profile.id)) {
-        setAuthUser({ ...authUser, full_name: form.full_name, email: form.email });
+        setAuthUser({
+          ...authUser,
+          full_name: form.full_name,
+          email: form.email,
+        });
       }
 
       setProfileSuccessMessage("Profile updated successfully!");
@@ -208,7 +227,9 @@ const UserProfileView = () => {
       setEditProfileModalOpen(false);
     } catch (err) {
       console.error("Failed to update profile in backend DB:", err);
-      setProfileError(err.response?.data?.message || "Failed to save profile changes.");
+      setProfileError(
+        err.response?.data?.message || "Failed to save profile changes.",
+      );
     } finally {
       setSubmittingProfile(false);
     }
@@ -228,11 +249,15 @@ const UserProfileView = () => {
       return;
     }
     if (!/[A-Z]/.test(newPassword)) {
-      setPasswordError("New password must contain at least one uppercase letter (A-Z).");
+      setPasswordError(
+        "New password must contain at least one uppercase letter (A-Z).",
+      );
       return;
     }
     if (!/[^A-Za-z0-9]/.test(newPassword)) {
-      setPasswordError("New password must contain at least one special character.");
+      setPasswordError(
+        "New password must contain at least one special character.",
+      );
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -252,14 +277,14 @@ const UserProfileView = () => {
       setNewPassword("");
       setConfirmPassword("");
       setPasswordSuccessMessage(
-        "Password updated successfully! Please log in with your new password on your next login."
+        "Password updated successfully! Please log in with your new password on your next login.",
       );
       setTimeout(() => setPasswordSuccessMessage(""), 5000);
     } catch (err) {
       setPasswordError(
         err.response?.data?.message ||
           err.response?.data?.error ||
-          "Failed to change password. Please verify current password."
+          "Failed to change password. Please verify current password.",
       );
     }
   };
@@ -314,7 +339,8 @@ const UserProfileView = () => {
               User Profile & Identity Record
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              Managing credentials for {profile.full_name || profile.email || "Not provided"}
+              Managing credentials for{" "}
+              {profile.full_name || profile.email || "Not provided"}
             </p>
           </div>
         </div>
@@ -355,12 +381,16 @@ const UserProfileView = () => {
             </div>
 
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 border-4 border-white shadow-lg flex items-center justify-center text-3xl font-extrabold text-indigo-700 mt-2 mb-4">
-              {(profile.full_name || profile.email || "U").charAt(0).toUpperCase()}
+              {(profile.full_name || profile.email || "U")
+                .charAt(0)
+                .toUpperCase()}
             </div>
             <h2 className="text-xl font-bold text-slate-900">
               {profile.full_name || "Not provided"}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">{profile.email || "Not provided"}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {profile.email || "Not provided"}
+            </p>
             <div className="mt-4 flex gap-2 justify-center">
               <span
                 className={`px-3 py-1 rounded-full text-[10px] font-bold border ${
@@ -383,8 +413,12 @@ const UserProfileView = () => {
                 <Mail className="w-4 h-4" />
               </div>
               <div className="truncate">
-                <p className="text-xs text-slate-500 font-medium">Account Email / User ID</p>
-                <p className="font-semibold text-slate-800 truncate">{profile.email || "Not provided"}</p>
+                <p className="text-xs text-slate-500 font-medium">
+                  Account Email / User ID
+                </p>
+                <p className="font-semibold text-slate-800 truncate">
+                  {profile.email || "Not provided"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3 text-sm">
@@ -392,7 +426,9 @@ const UserProfileView = () => {
                 <Phone className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs text-slate-500 font-medium">Primary Contact</p>
+                <p className="text-xs text-slate-500 font-medium">
+                  Primary Contact
+                </p>
                 <p className="font-semibold text-slate-800">
                   {profile.phone || "Not provided"}
                 </p>
@@ -409,7 +445,8 @@ const UserProfileView = () => {
               {/* Professional & Institutional Details */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <Briefcase className="w-5 h-5 text-indigo-500" /> Staff & Institutional Profile
+                  <Briefcase className="w-5 h-5 text-indigo-500" /> Staff &
+                  Institutional Profile
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
                   <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
@@ -432,7 +469,9 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Department</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Department
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Building2 className="w-4 h-4 text-slate-400" />
                       {profile.department || "Not provided"}
@@ -440,7 +479,9 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Highest Qualification</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Highest Qualification
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Award className="w-4 h-4 text-slate-400" />
                       {profile.qualification || "Not provided"}
@@ -448,7 +489,9 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Date of Joining</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Date of Joining
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.joining_date
@@ -458,7 +501,9 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Working Status</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Working Status
+                    </p>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
                       {statusLabel}
                     </span>
@@ -469,7 +514,8 @@ const UserProfileView = () => {
               {/* Personal Information Card for Staff */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <User className="w-5 h-5 text-teal-600" /> Personal & Emergency Details
+                  <User className="w-5 h-5 text-teal-600" /> Personal &
+                  Emergency Details
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
@@ -481,7 +527,9 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Date of Birth</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Date of Birth
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.date_of_birth
@@ -491,15 +539,22 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Emergency Contact</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Emergency Contact
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5 font-mono">
                       <Phone className="w-4 h-4 text-rose-500" />
-                      {profile.emergency_phone || profile.emergency_contact || profile.phone || "Not provided"}
+                      {profile.emergency_phone ||
+                        profile.emergency_contact ||
+                        profile.phone ||
+                        "Not provided"}
                     </p>
                   </div>
 
                   <div className="sm:col-span-3">
-                    <p className="text-slate-500 font-medium mb-1">Residential Address</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Residential Address
+                    </p>
                     <p className="font-bold text-slate-800 flex items-start gap-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
                       {profile.address || "Not provided"}
@@ -517,7 +572,8 @@ const UserProfileView = () => {
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <GraduationCap className="w-5 h-5 text-indigo-600" /> Academic & Enrollment Details
+                    <GraduationCap className="w-5 h-5 text-indigo-600" />{" "}
+                    Academic & Enrollment Details
                   </h3>
                   <span className="text-[11px] font-bold px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
                     Enrolled Student
@@ -554,20 +610,14 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Date of Admission</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Date of Admission
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.admission_date
                         ? new Date(profile.admission_date).toLocaleDateString()
                         : "Not provided"}
-                    </p>
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <p className="text-slate-500 font-medium mb-1">Previous School Attended</p>
-                    <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <Building2 className="w-4 h-4 text-slate-400" />
-                      {profile.previous_school || "Not provided"}
                     </p>
                   </div>
                 </div>
@@ -588,7 +638,9 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Date of Birth</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Date of Birth
+                    </p>
                     <p className="font-bold text-slate-800 flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-400" />
                       {profile.date_of_birth
@@ -598,14 +650,18 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <p className="text-slate-500 font-medium mb-1">Blood Group</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Blood Group
+                    </p>
                     <p className="font-extrabold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full inline-block border border-rose-100">
                       {profile.blood_group || "Not provided"}
                     </p>
                   </div>
 
                   <div className="sm:col-span-3">
-                    <p className="text-slate-500 font-medium mb-1">Residential Address</p>
+                    <p className="text-slate-500 font-medium mb-1">
+                      Residential Address
+                    </p>
                     <p className="font-bold text-slate-800 flex items-start gap-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
                       <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
                       {profile.address || "Not provided"}
@@ -617,7 +673,8 @@ const UserProfileView = () => {
               {/* Parents & Guardian Information Card */}
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <Users className="w-5 h-5 text-purple-600" /> Parents & Guardian Information
+                  <Users className="w-5 h-5 text-purple-600" /> Parents &
+                  Guardian Information
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -632,7 +689,9 @@ const UserProfileView = () => {
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500 font-medium">Contact Phone</p>
+                      <p className="text-slate-500 font-medium">
+                        Contact Phone
+                      </p>
                       <p className="font-bold text-slate-800 font-mono">
                         {profile.father_phone || "Not provided"}
                       </p>
@@ -650,7 +709,9 @@ const UserProfileView = () => {
                       </p>
                     </div>
                     <div>
-                      <p className="text-slate-500 font-medium">Contact Phone</p>
+                      <p className="text-slate-500 font-medium">
+                        Contact Phone
+                      </p>
                       <p className="font-bold text-slate-800 font-mono">
                         {profile.mother_phone || "Not provided"}
                       </p>
@@ -673,8 +734,12 @@ const UserProfileView = () => {
         >
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 id="edit-profile-title" className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-indigo-600" /> Edit Profile & Account Information
+              <h3
+                id="edit-profile-title"
+                className="text-base font-extrabold text-slate-900 flex items-center gap-2"
+              >
+                <Edit3 className="w-5 h-5 text-indigo-600" /> Edit Profile &
+                Account Information
               </h3>
               <button
                 onClick={() => setEditProfileModalOpen(false)}
@@ -690,11 +755,15 @@ const UserProfileView = () => {
               </div>
             )}
 
-            <form onSubmit={handleSaveProfile} className="space-y-4 text-xs font-semibold text-slate-700">
+            <form
+              onSubmit={handleSaveProfile}
+              className="space-y-4 text-xs font-semibold text-slate-700"
+            >
               {/* Account Credentials */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
                 <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-indigo-600" /> Basic Account & Login Credentials
+                  <Lock className="w-4 h-4 text-indigo-600" /> Basic Account &
+                  Login Credentials
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -704,13 +773,17 @@ const UserProfileView = () => {
                       type="text"
                       required
                       value={form.full_name}
-                      onChange={(e) => handleChange("full_name", e.target.value)}
+                      onChange={(e) =>
+                        handleChange("full_name", e.target.value)
+                      }
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                     />
                   </div>
 
                   <div>
-                    <label className="block mb-1">Email Address / User ID *</label>
+                    <label className="block mb-1">
+                      Email Address / User ID *
+                    </label>
                     <input
                       type="email"
                       required
@@ -721,13 +794,20 @@ const UserProfileView = () => {
                   </div>
 
                   <div>
-                    <label className="block mb-1">Primary Phone (10 Digits)</label>
+                    <label className="block mb-1">
+                      Primary Phone (10 Digits)
+                    </label>
                     <input
                       type="tel"
                       maxLength={10}
                       placeholder="10-digit number"
                       value={form.phone}
-                      onChange={(e) => handleChange("phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      onChange={(e) =>
+                        handleChange(
+                          "phone",
+                          e.target.value.replace(/\D/g, "").slice(0, 10),
+                        )
+                      }
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
@@ -738,7 +818,8 @@ const UserProfileView = () => {
               {isStaffMember && (
                 <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100 space-y-3">
                   <h4 className="text-xs font-extrabold text-indigo-900 uppercase tracking-wider flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 text-indigo-600" /> Staff & Institutional Fields
+                    <Briefcase className="w-4 h-4 text-indigo-600" /> Staff &
+                    Institutional Fields
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -747,7 +828,9 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.employee_code}
-                        onChange={(e) => handleChange("employee_code", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("employee_code", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -757,7 +840,9 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.designation}
-                        onChange={(e) => handleChange("designation", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("designation", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -767,17 +852,23 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.department}
-                        onChange={(e) => handleChange("department", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("department", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block mb-1">Highest Qualification</label>
+                      <label className="block mb-1">
+                        Highest Qualification
+                      </label>
                       <input
                         type="text"
                         value={form.qualification}
-                        onChange={(e) => handleChange("qualification", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("qualification", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -785,13 +876,18 @@ const UserProfileView = () => {
                     <div>
                       <label className="block mb-1">Gender</label>
                       <select
-                        value={form.gender}
+                        value={
+                          form.gender
+                            ? form.gender.charAt(0).toUpperCase() +
+                              form.gender.slice(1).toLowerCase()
+                            : "Male"
+                        }
                         onChange={(e) => handleChange("gender", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
                       >
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
                       </select>
                     </div>
 
@@ -800,7 +896,9 @@ const UserProfileView = () => {
                       <input
                         type="date"
                         value={form.date_of_birth}
-                        onChange={(e) => handleChange("date_of_birth", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("date_of_birth", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -810,19 +908,28 @@ const UserProfileView = () => {
                       <input
                         type="date"
                         value={form.joining_date}
-                        onChange={(e) => handleChange("joining_date", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("joining_date", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block mb-1">Emergency Contact Phone (10 Digits)</label>
+                      <label className="block mb-1">
+                        Emergency Contact Phone (10 Digits)
+                      </label>
                       <input
                         type="tel"
                         maxLength={10}
                         placeholder="10-digit emergency contact"
                         value={form.emergency_contact}
-                        onChange={(e) => handleChange("emergency_contact", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        onChange={(e) =>
+                          handleChange(
+                            "emergency_contact",
+                            e.target.value.replace(/\D/g, "").slice(0, 10),
+                          )
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -832,7 +939,9 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.address}
-                        onChange={(e) => handleChange("address", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("address", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -844,7 +953,8 @@ const UserProfileView = () => {
               {isStudent && (
                 <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 space-y-3">
                   <h4 className="text-xs font-extrabold text-emerald-900 uppercase tracking-wider flex items-center gap-2">
-                    <GraduationCap className="w-4 h-4 text-emerald-600" /> Student Profile & Guardian Fields
+                    <GraduationCap className="w-4 h-4 text-emerald-600" />{" "}
+                    Student Profile & Guardian Fields
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -852,7 +962,9 @@ const UserProfileView = () => {
                       <label className="block mb-1">Blood Group</label>
                       <select
                         value={form.blood_group}
-                        onChange={(e) => handleChange("blood_group", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("blood_group", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
                       >
                         <option value="">Select Blood Group</option>
@@ -873,7 +985,9 @@ const UserProfileView = () => {
                         type="text"
                         placeholder="e.g. Hindu / Christian / Muslim"
                         value={form.religion}
-                        onChange={(e) => handleChange("religion", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("religion", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -884,18 +998,9 @@ const UserProfileView = () => {
                         type="text"
                         placeholder="e.g. Indian"
                         value={form.nationality}
-                        onChange={(e) => handleChange("nationality", e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block mb-1">Previous School Attended</label>
-                      <input
-                        type="text"
-                        placeholder="Previous school name"
-                        value={form.previous_school}
-                        onChange={(e) => handleChange("previous_school", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("nationality", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -928,7 +1033,9 @@ const UserProfileView = () => {
                         type="text"
                         placeholder="Pincode"
                         value={form.pincode}
-                        onChange={(e) => handleChange("pincode", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("pincode", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -938,19 +1045,28 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.father_name}
-                        onChange={(e) => handleChange("father_name", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("father_name", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block mb-1">Father's Contact Phone (10 Digits)</label>
+                      <label className="block mb-1">
+                        Father's Contact Phone (10 Digits)
+                      </label>
                       <input
                         type="tel"
                         maxLength={10}
                         placeholder="10-digit father contact"
                         value={form.father_phone}
-                        onChange={(e) => handleChange("father_phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        onChange={(e) =>
+                          handleChange(
+                            "father_phone",
+                            e.target.value.replace(/\D/g, "").slice(0, 10),
+                          )
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -961,7 +1077,9 @@ const UserProfileView = () => {
                         type="text"
                         placeholder="Occupation"
                         value={form.father_occupation}
-                        onChange={(e) => handleChange("father_occupation", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("father_occupation", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -971,19 +1089,28 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.mother_name}
-                        onChange={(e) => handleChange("mother_name", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("mother_name", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block mb-1">Mother's Contact Phone (10 Digits)</label>
+                      <label className="block mb-1">
+                        Mother's Contact Phone (10 Digits)
+                      </label>
                       <input
                         type="tel"
                         maxLength={10}
                         placeholder="10-digit mother contact"
                         value={form.mother_phone}
-                        onChange={(e) => handleChange("mother_phone", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        onChange={(e) =>
+                          handleChange(
+                            "mother_phone",
+                            e.target.value.replace(/\D/g, "").slice(0, 10),
+                          )
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
@@ -994,7 +1121,9 @@ const UserProfileView = () => {
                         type="text"
                         placeholder="Occupation"
                         value={form.mother_occupation}
-                        onChange={(e) => handleChange("mother_occupation", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("mother_occupation", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -1004,7 +1133,9 @@ const UserProfileView = () => {
                       <input
                         type="text"
                         value={form.address}
-                        onChange={(e) => handleChange("address", e.target.value)}
+                        onChange={(e) =>
+                          handleChange("address", e.target.value)
+                        }
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -1025,7 +1156,8 @@ const UserProfileView = () => {
                   disabled={submittingProfile}
                   className="px-5 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-500/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  <Save className="w-4 h-4" /> {submittingProfile ? "Saving..." : "Save All Profile Updates"}
+                  <Save className="w-4 h-4" />{" "}
+                  {submittingProfile ? "Saving..." : "Save All Profile Updates"}
                 </button>
               </div>
             </form>
@@ -1043,8 +1175,12 @@ const UserProfileView = () => {
         >
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 id="change-password-title" className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <Key className="w-4 h-4 text-indigo-600" /> Change Security Password
+              <h3
+                id="change-password-title"
+                className="text-sm font-extrabold text-slate-900 flex items-center gap-2"
+              >
+                <Key className="w-4 h-4 text-indigo-600" /> Change Security
+                Password
               </h3>
               <button
                 onClick={() => setChangePasswordModalOpen(false)}
@@ -1060,7 +1196,10 @@ const UserProfileView = () => {
               </div>
             )}
 
-            <form onSubmit={handleChangePasswordSubmit} className="space-y-3.5 text-xs font-semibold text-slate-700">
+            <form
+              onSubmit={handleChangePasswordSubmit}
+              className="space-y-3.5 text-xs font-semibold text-slate-700"
+            >
               <div>
                 <label className="block mb-1">Current Password *</label>
                 <div className="relative">
@@ -1078,7 +1217,11 @@ const UserProfileView = () => {
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                   >
-                    {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showCurrentPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -1100,7 +1243,11 @@ const UserProfileView = () => {
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
                   >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showNewPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
