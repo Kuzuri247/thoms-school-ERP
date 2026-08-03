@@ -274,10 +274,12 @@ const SchoolLandingPage = () => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="w-6 h-6 text-indigo-400" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center p-0.5 shadow-md border border-slate-700 overflow-hidden">
+                <img src="/st_thomas_logo.png" alt="St. Thomas International School Emblem" className="w-full h-full object-contain" />
+              </div>
               <span className="text-base font-extrabold text-white">
-                Thomson Public School
+                St. Thomas International School
               </span>
             </div>
             <p className="text-slate-500 font-medium">
@@ -290,14 +292,13 @@ const SchoolLandingPage = () => {
               Contact Administration
             </h4>
             <p className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-indigo-400" /> 100 Thomson Campus
-              Road, Educational Zone
+              <MapPin className="w-4 h-4 text-indigo-400" /> St. Thomas Campus Road, Educational Zone
             </p>
             <p className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-indigo-400" /> +91 (080) 2345-6789
             </p>
             <p className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-indigo-400" /> admissions@thoms.edu
+              <Mail className="w-4 h-4 text-indigo-400" /> admissions@stthomas.edu
             </p>
           </div>
 
@@ -315,8 +316,7 @@ const SchoolLandingPage = () => {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-900 pt-6 text-center text-slate-600 font-medium">
-          © {new Date().getFullYear()} Thomson Public School. All rights
-          reserved. Powered by Thomson ERP System.
+          © {new Date().getFullYear()} St. Thomas International School. All rights reserved. Powered by St. Thomas School ERP.
         </div>
       </footer>
     </div>

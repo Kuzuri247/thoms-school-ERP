@@ -1,8 +1,15 @@
 const pool = require('../../config/db');
 
-const getTemplates = async () => {
+const getTemplates = async (limit = 100, offset = 0) => {
+  const parsedLimit = Math.max(1, parseInt(limit) || 100);
+  const parsedOffset = Math.max(0, parseInt(offset) || 0);
   const [rows] = await pool.query(
-    `SELECT * FROM communication_templates WHERE channel = 'WhatsApp' ORDER BY created_at DESC`
+    `SELECT id, title, category, channel, subject, body, created_by, created_at, updated_at
+     FROM communication_templates
+     WHERE channel = 'WhatsApp'
+     ORDER BY created_at DESC
+     LIMIT ? OFFSET ?`,
+    [parsedLimit, parsedOffset]
   );
   return rows;
 };
@@ -24,14 +31,27 @@ const deleteTemplate = async (id) => {
   return res.affectedRows > 0;
 };
 
-const getLogs = async () => {
+const getLogs = async (limit = 100, offset = 0) => {
+  const parsedLimit = Math.max(1, parseInt(limit) || 100);
+  const parsedOffset = Math.max(0, parseInt(offset) || 0);
   const [rows] = await pool.query(
-    `SELECT * FROM communication_logs WHERE channel = 'WhatsApp' ORDER BY created_at DESC`
+    `SELECT id, channel, recipient_group, subject, message_body, sender_id, sender_name, scheduled_time, status, recipient_count, created_at
+     FROM communication_logs
+     WHERE channel = 'WhatsApp'
+     ORDER BY created_at DESC
+     LIMIT ? OFFSET ?`,
+    [parsedLimit, parsedOffset]
   );
   return rows;
 };
 
 const createLog = async ({ recipient_group, subject, message_body, sender_id, sender_name, scheduled_time, status, recipient_count }) => {
+  let formattedScheduledTime = null;
+  if (scheduled_time && typeof scheduled_time === 'string' && scheduled_time.trim()) {
+    const rawStr = scheduled_time.trim().replace('T', ' ');
+    formattedScheduledTime = rawStr.length === 16 ? `${rawStr}:00` : rawStr;
+  }
+
   const [res] = await pool.query(
     `INSERT INTO communication_logs (channel, recipient_group, subject, message_body, sender_id, sender_name, scheduled_time, status, recipient_count)
      VALUES ('WhatsApp', ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -41,9 +61,9 @@ const createLog = async ({ recipient_group, subject, message_body, sender_id, se
       message_body,
       sender_id || null,
       sender_name || 'School Admin',
-      scheduled_time || 'Instant',
-      status || 'Delivered',
-      recipient_count || 0,
+      formattedScheduledTime,
+      status || 'Recorded',
+      recipient_count != null ? recipient_count : null,
     ]
   );
   return res.insertId;

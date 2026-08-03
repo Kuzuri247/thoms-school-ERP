@@ -89,7 +89,7 @@ const SuperAdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes] = await Promise.all([api.get("/admin/stats")]);
+      const statsRes = await api.get("/admin/stats");
       if (statsRes.data?.data) {
         setStats(statsRes.data.data);
       }

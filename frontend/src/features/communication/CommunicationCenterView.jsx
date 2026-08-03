@@ -351,7 +351,7 @@ const CommunicationCenterView = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition flex items-center gap-2 cursor-pointer"
+                  className={`px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs rounded-xl shadow-md shadow-emerald-500/20 transition flex items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <Send className="w-4 h-4" />
                   {isSubmitting ? 'Processing...' : composeData.isScheduled ? 'Schedule WhatsApp' : 'Send WhatsApp Broadcast Now'}
@@ -615,7 +615,7 @@ const CommunicationCenterView = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition shadow-md cursor-pointer"
+                  className={`px-5 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition shadow-md ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   {isSubmitting ? 'Saving...' : 'Save Template to DB'}
                 </button>

@@ -7,14 +7,19 @@ const { authorize } = require('../middleware/rbac');
 const { ROLES } = require('../config/constants');
 const pool = require('../config/db');
 
+const { generateAdmissionNo, generateRollNo } = require('../utils/identifierGenerator');
+
 // Create user (Admin and Super Admin)
 router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
-    let { email, password, role, class_name, section, full_name, phone, gender, department, designation, status, is_class_teacher, class_id, subject_name } = req.body;
-    const conn = await pool.getConnection();
+    let conn;
     try {
+        let { email, password, role, class_name, section, full_name, phone, gender, department, designation, status, is_class_teacher, class_id, subject_name } = req.body;
+        conn = await pool.getConnection();
         await conn.beginTransaction();
 
-        if (req.user.role === ROLES.ADMIN && role === ROLES.SUPER_ADMIN) {
+        const effectiveRole = role || 'teacher';
+
+        if (req.user.role === ROLES.ADMIN && effectiveRole === ROLES.SUPER_ADMIN) {
             await conn.rollback();
             return res.status(403).json({ success: false, message: 'Admins cannot assign elevated super_admin role' });
         }
@@ -28,25 +33,25 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
 
         const [result] = await conn.query(
             'INSERT INTO users (email, password, role, class, section, full_name, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [finalEmail, hashedPassword, role || 'teacher', class_name || null, section || null, full_name || null, phone || null, gender || 'Male', status || 'Active']
+            [finalEmail, hashedPassword, effectiveRole, class_name || null, section || null, full_name || null, phone || null, gender || 'Male', status || 'Active']
         );
         const newUserId = result.insertId;
 
         // If staff role, insert into staff_profiles
-        if (['teacher', 'admin', 'cashier', 'staff'].includes(role)) {
+        if (['teacher', 'admin', 'cashier', 'staff'].includes(effectiveRole)) {
             const fname = full_name ? full_name.split(' ')[0] : 'Staff';
             const lname = full_name ? full_name.split(' ').slice(1).join(' ') : '';
             const empCode = `TS-EMP-${String(newUserId).padStart(3, '0')}`;
             await conn.query(
-                `INSERT INTO staff_profiles (user_id, employee_code, first_name, last_name, department, designation, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE department = VALUES(department), designation = VALUES(designation)`,
-                [newUserId, empCode, fname, lname, department || 'General Staff', designation || role, 'Active']
+                `INSERT INTO staff_profiles (user_id, employee_code, first_name, last_name, gender, department, designation, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE gender = VALUES(gender), department = VALUES(department), designation = VALUES(designation)`,
+                [newUserId, empCode, fname, lname, gender || 'Male', department || 'General Staff', designation || effectiveRole, 'Active']
             );
         }
 
         // If teacher role with class_id assignment
-        if (role === 'teacher' && class_id) {
+        if (effectiveRole === 'teacher' && class_id) {
             // 1. Resolve section_id
             const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [class_id]);
             let targetSectionId;
@@ -79,8 +84,8 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
                 if (subjectId) {
                     await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
                 }
-            } else {
-                // Assign as Subject Teacher only
+            } else if (subjectId) {
+                // Assign as Subject Teacher only when subjectId is present
                 await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
             }
         }
@@ -103,11 +108,14 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
           }
         });
     } catch (error) {
-        await conn.rollback();
+        if (conn) await conn.rollback();
         console.error('Error creating user:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(error.code === 'ER_DUP_ENTRY' ? 409 : 500).json({
+            success: false,
+            message: error.code === 'ER_DUP_ENTRY' ? 'User with this email already exists' : error.message
+        });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 
@@ -133,7 +141,7 @@ router.get('/classes-with-teachers', [verifyToken, authorize(ROLES.ADMIN, ROLES.
 // Get all users (Admin and Super Admin)
 router.get('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT id, email, full_name, role, class as class_name, section, created_at FROM users ORDER BY created_at DESC');
+        const [rows] = await pool.query('SELECT id, email, full_name, role, gender, phone, status, class as class_name, section, created_at FROM users ORDER BY created_at DESC');
         res.status(200).json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -328,10 +336,8 @@ router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, RO
 
 // Create a new student (Admin / Super Admin)
 router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
-    const conn = await pool.getConnection();
+    let conn;
     try {
-        await conn.beginTransaction();
-
         const {
             first_name, last_name, email, phone, gender, dob, address,
             class_id, admission_no, roll_no,
@@ -341,9 +347,15 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         } = req.body;
 
         if (!first_name || !first_name.trim()) {
-            await conn.rollback();
             return res.status(400).json({ success: false, message: 'First name is required' });
         }
+
+        if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            return res.status(400).json({ success: false, message: 'Invalid email address format' });
+        }
+
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
 
         const fullName = `${first_name.trim()} ${last_name ? last_name.trim() : ''}`.trim();
         const randNum = Math.floor(1000 + Math.random() * 9000);
@@ -378,8 +390,11 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
             }
         }
 
-        const finalAdmissionNo = admission_no && admission_no.trim() ? admission_no.trim() : `TS-2026-${String(userId).padStart(4, '0')}`;
-        const finalRollNo = roll_no && roll_no.trim() ? roll_no.trim() : `R-${String(userId).padStart(3, '0')}`;
+        const [[activeSession]] = await conn.query('SELECT name FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+        const sessionYear = activeSession?.name ? parseInt(activeSession.name.split('-')[0]) || new Date().getFullYear() : new Date().getFullYear();
+
+        const finalAdmissionNo = admission_no && admission_no.trim() ? admission_no.trim() : generateAdmissionNo(userId, sessionYear);
+        const finalRollNo = roll_no && roll_no.trim() ? roll_no.trim() : generateRollNo(userId);
 
         // 3. Insert into students table
         const [stuResult] = await conn.query(
@@ -415,6 +430,7 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         res.status(201).json({
             success: true,
             message: 'Student added successfully',
+            temp_password: tempPassword,
             data: {
                 student_id: studentId,
                 user_id: userId,
@@ -430,11 +446,14 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
             }
         });
     } catch (error) {
-        await conn.rollback();
+        if (conn) await conn.rollback();
         console.error('Error adding student:', error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(error.code === 'ER_DUP_ENTRY' ? 409 : 500).json({
+            success: false,
+            message: error.code === 'ER_DUP_ENTRY' ? 'Student with this email or admission number already exists.' : error.message
+        });
     } finally {
-        conn.release();
+        if (conn) conn.release();
     }
 });
 

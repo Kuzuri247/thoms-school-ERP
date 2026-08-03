@@ -16,16 +16,16 @@ const generateTokens = (user) => {
 const login = async (emailOrId, password) => {
   const parsedId = isNaN(parseInt(emailOrId)) ? -1 : parseInt(emailOrId);
   const altEmail = typeof emailOrId === 'string'
-    ? (emailOrId.endsWith('@stthomas.edu')
-        ? emailOrId.replace('@stthomas.edu', '@thomson.edu')
-        : emailOrId.endsWith('@thomson.edu')
-        ? emailOrId.replace('@thomson.edu', '@stthomas.edu')
+    ? (/@stthomas\.edu$/i.test(emailOrId)
+        ? emailOrId.replace(/@stthomas\.edu$/i, '@thomson.edu')
+        : /@thomson\.edu$/i.test(emailOrId)
+        ? emailOrId.replace(/@thomson\.edu$/i, '@stthomas.edu')
         : emailOrId)
     : emailOrId;
 
   const [rows] = await pool.query(
-    "SELECT id, email, full_name, password, role, status FROM users WHERE (email = ? OR email = ? OR id = ?) AND (status = 'active' OR status IS NULL OR status = 'Active')",
-    [emailOrId, altEmail, parsedId]
+    "SELECT id, email, full_name, password, role, status FROM users WHERE (email = ? OR email = ? OR id = ?) AND (status = 'active' OR status IS NULL OR status = 'Active') ORDER BY (email = ?) DESC",
+    [emailOrId, altEmail, parsedId, emailOrId]
   );
   if (!rows.length) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
 

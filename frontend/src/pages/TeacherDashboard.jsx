@@ -118,6 +118,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   }, [selectedClass]);
 
+  useEffect(() => {
+    if (activeTab === "attendance" && classes.length > 0) {
+      const homeroomClasses = classes.filter((c) => c.is_class_teacher);
+      if (homeroomClasses.length > 0 && (!selectedClass || !selectedClass.is_class_teacher)) {
+        setSelectedClass(homeroomClasses[0]);
+      }
+    }
+  }, [activeTab, classes]);
+
   const fetchTeacherClasses = async () => {
     try {
       const res = await api.get("/teacher/classes");
@@ -171,13 +180,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
       setAttendanceRecords(initAtt);
       setAttendanceSubmittedToday(isMarked);
-
-      // Initialize marks
-      const initMarks = {};
-      data.forEach((s) => {
-        initMarks[s.id] = "";
-      });
-      setMarksData(initMarks);
     } catch (err) {
       console.error("Failed to fetch class students:", err);
     }

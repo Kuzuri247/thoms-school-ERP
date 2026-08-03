@@ -38,6 +38,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [phone, setPhone] = useState("");
   const [department, setDepartment] = useState("");
   const [password, setPassword] = useState("");
+  const [gender, setGender] = useState("Male");
 
   // Teacher Specific Form Fields
   const [teacherAssignmentType, setTeacherAssignmentType] =
@@ -48,6 +49,8 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [loadingClasses, setLoadingClasses] = useState(false);
 
   const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
 
   const navigate = useNavigate();
   const {
@@ -61,6 +64,16 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     if (showAddModal) {
       fetchClassesWithTeachers();
     }
+  }, [showAddModal]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showAddModal) {
+        setShowAddModal(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showAddModal]);
 
   const fetchClassesWithTeachers = async () => {
@@ -90,6 +103,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     setPhone("");
     setDepartment("");
     setPassword("");
+    setGender("Male");
     setTeacherAssignmentType("class_teacher");
     setSubjectName("General");
     setShowAddModal(true);
@@ -97,14 +111,23 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!fullName.trim()) return;
+    if (!fullName.trim() || isCreating) return;
+
+    if (selectedRole === "teacher" && (!targetClassId || !String(targetClassId).trim())) {
+      setErrorMsg("Target class selection is required for teacher assignment.");
+      return;
+    }
 
     try {
+      setIsCreating(true);
+      setErrorMsg("");
+
       const payload = {
         email: email.trim(),
         full_name: fullName.trim(),
         role: selectedRole,
         phone: phone.trim(),
+        gender: gender || "Male",
         department:
           department.trim() ||
           (selectedRole === "teacher"
@@ -121,11 +144,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
         subject_name: selectedRole === "teacher" ? subjectName : null,
       };
 
-      if (createUserMutation?.mutateAsync) {
-        await createUserMutation.mutateAsync(payload);
-      } else {
-        await api.post("/admin/users", payload);
-      }
+      await createUserMutation.mutateAsync(payload);
 
       setSuccessMsg(
         `New ${selectedRole.replace("_", " ")} "${fullName}" provisioned successfully!`,
@@ -135,7 +154,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       refetchUsers?.();
       setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to provision staff member.");
+      console.error("Failed to provision staff member:", err);
+      setErrorMsg(err.response?.data?.message || "Failed to provision staff member.");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -242,6 +264,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
           <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
             <tr>
               <th className="px-4 py-3">Staff Name</th>
+              <th className="px-4 py-3">Gender</th>
               <th className="px-4 py-3">Email Address</th>
               <th className="px-4 py-3">Assigned Role & Dept</th>
               <th className="px-4 py-3">Status</th>
@@ -267,6 +290,11 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                       </span>
                     )}
                   </div>
+                </td>
+                <td className="px-4 py-3.5">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200 capitalize">
+                    {u.gender || "Male"}
+                  </span>
                 </td>
                 <td className="px-4 py-3.5 text-slate-600 font-medium">
                   {u.email}
@@ -312,7 +340,11 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
 
       {/* Provision User & Add Staff Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+        >
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 border border-slate-200 animate-in fade-in zoom-in-95 my-8">
             {/* STEP 1: SELECT STAFF ROLE */}
             {selectedRole === null ? (
@@ -495,6 +527,21 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                         className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Gender *
+                      </label>
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white cursor-pointer"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* SPECIALIZED TEACHER PROVISIONING SECTION */}
@@ -658,6 +705,12 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     />
                   </div>
 
+                  {errorMsg && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                      {errorMsg}
+                    </div>
+                  )}
+
                   <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
                     <button
                       type="button"
@@ -668,9 +721,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition shadow-md shadow-indigo-500/20 cursor-pointer"
+                      disabled={isCreating}
+                      className={`px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition shadow-md shadow-indigo-500/20 ${isCreating ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                     >
-                      Save & Provision {selectedRole.toUpperCase()}
+                      {isCreating ? "Provisioning..." : `Save & Provision ${selectedRole.toUpperCase()}`}
                     </button>
                   </div>
                 </form>

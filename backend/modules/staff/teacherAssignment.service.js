@@ -6,6 +6,8 @@ const pool = require('../../config/db');
  * Enforces:
  *  - A section can only have one class teacher per session.
  *  - A teacher can only be class teacher of one section per session.
+ *
+ * NOTE: If externalConn is provided, caller MUST ensure an active transaction is started on externalConn.
  */
 const assignClassTeacher = async (teacherUserId, sectionId, sessionId, externalConn = null) => {
   const conn = externalConn || (await pool.getConnection());

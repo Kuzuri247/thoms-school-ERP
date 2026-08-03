@@ -6,33 +6,18 @@ const { verifyToken } = require("../middleware/auth");
 const { authorize } = require("../middleware/rbac");
 const { ROLES } = require("../config/constants");
 
-// Shared identity resolution helper (users.id -> students.id -> staff_profiles.id)
+const { generateAdmissionNo, generateRollNo } = require("../utils/identifierGenerator");
+
+// Shared identity resolution helper (users.id)
 const resolveUserRecord = async (paramId, fallbackUserId) => {
   let pid = paramId;
   if (!pid || pid === "undefined" || pid === "null" || pid === "me") {
     pid = fallbackUserId;
   }
-  let [users] = await pool.query(
+  const [users] = await pool.query(
     "SELECT id, email, full_name, role, phone, class, section, status, created_at FROM users WHERE id = ?",
     [pid],
   );
-  if (users.length === 0) {
-    const [stuByDbId] = await pool.query(
-      "SELECT u.id, u.email, u.full_name, u.role, u.phone, u.class, u.section, u.status, u.created_at FROM students s JOIN users u ON s.user_id = u.id WHERE s.id = ?",
-      [pid],
-    );
-    if (stuByDbId.length > 0) {
-      users = stuByDbId;
-    } else {
-      const [staffByDbId] = await pool.query(
-        "SELECT u.id, u.email, u.full_name, u.role, u.phone, u.class, u.section, u.status, u.created_at FROM staff_profiles sp JOIN users u ON sp.user_id = u.id WHERE sp.id = ?",
-        [pid],
-      );
-      if (staffByDbId.length > 0) {
-        users = staffByDbId;
-      }
-    }
-  }
   return users;
 };
 
@@ -121,8 +106,9 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
           ...profileData,
           class_name: profileData.class || null,
           profile_type: "student",
-          admission_no: `STU-${String(userId).padStart(4, "0")}`,
-          roll_no: `R-${String(userId).padStart(3, "0")}`,
+          admission_no: null,
+          roll_no: null,
+          profile_incomplete: true,
         };
       }
     } else {
@@ -159,6 +145,7 @@ router.get("/:id/profile", verifyToken, async (req, res) => {
 
 // PUT /api/users/:id/profile - Update user profile details in DB
 router.put("/:id/profile", verifyToken, async (req, res) => {
+  let conn;
   try {
     const resolvedUsers = await resolveUserRecord(req.params.id, req.user?.id);
     if (resolvedUsers.length === 0) {
@@ -209,42 +196,52 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
       guardian_relation,
     } = req.body;
 
-    // Validate email format if provided
-    if (email && typeof email === "string") {
-      const trimmedEmail = email.trim();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(trimmedEmail)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid email format" });
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+      // Validate email format if provided
+      if (email && typeof email === "string") {
+        const trimmedEmail = email.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+          await conn.rollback();
+          conn.release();
+          return res
+            .status(400)
+            .json({ success: false, message: "Invalid email format" });
+        }
+        // Check for existing email belonging to another user
+        const [existingEmail] = await conn.query(
+          "SELECT id FROM users WHERE email = ? AND id != ?",
+          [trimmedEmail, userId],
+        );
+        if (existingEmail.length > 0) {
+          await conn.rollback();
+          conn.release();
+          return res.status(409).json({
+            success: false,
+            message: "Email is already in use by another account.",
+          });
+        }
       }
-      // Check for existing email belonging to another user
-      const [existingEmail] = await pool.query(
-        "SELECT id FROM users WHERE email = ? AND id != ?",
-        [trimmedEmail, userId],
-      );
-      if (existingEmail.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: "Email is already in use by another account.",
-        });
-      }
-    }
 
     // 1. Update Base User Table (Passwords must use /api/auth/change-password)
     const userUpdateQuery =
-      "UPDATE users SET full_name = COALESCE(?, full_name), email = COALESCE(?, email), phone = COALESCE(?, phone) WHERE id = ?";
+      "UPDATE users SET full_name = COALESCE(?, full_name), email = COALESCE(?, email), phone = COALESCE(?, phone), gender = COALESCE(?, gender) WHERE id = ?";
     const userParams = [
       full_name || null,
       email ? email.trim() : null,
       phone || null,
+      gender || null,
       userId,
     ];
 
     try {
-      await pool.query(userUpdateQuery, userParams);
+      await conn.query(userUpdateQuery, userParams);
     } catch (dbErr) {
       if (dbErr.code === "ER_DUP_ENTRY") {
+        await conn.rollback();
+        conn.release();
         return res.status(409).json({
           success: false,
           message: "Email is already in use by another account.",
@@ -254,20 +251,20 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
     }
 
     // 2. Fetch User Role to update corresponding profile tables
-    const [[targetUser]] = await pool.query(
+    const [[targetUser]] = await conn.query(
       "SELECT role FROM users WHERE id = ?",
       [userId],
     );
 
     if (targetUser && targetUser.role === ROLES.STUDENT) {
       // Update Students table
-      const [stuRows] = await pool.query(
+      const [stuRows] = await conn.query(
         "SELECT id FROM students WHERE user_id = ?",
         [userId],
       );
       if (stuRows.length > 0) {
         const studentId = stuRows[0].id;
-        await pool.query(
+        await conn.query(
           `UPDATE students SET
              first_name = COALESCE(?, first_name),
              last_name = COALESCE(?, last_name),
@@ -299,7 +296,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
 
         // Update Guardians Table
         if (father_name) {
-          await pool.query(
+          await conn.query(
             `INSERT INTO guardians (student_id, relation, full_name, phone, occupation)
              VALUES (?, 'father', ?, ?, ?)
              ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone), occupation = VALUES(occupation)`,
@@ -312,7 +309,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
           );
         }
         if (mother_name) {
-          await pool.query(
+          await conn.query(
             `INSERT INTO guardians (student_id, relation, full_name, phone, occupation)
              VALUES (?, 'mother', ?, ?, ?)
              ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone), occupation = VALUES(occupation)`,
@@ -326,7 +323,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
         }
         if (guardian_name) {
           const rel = guardian_relation || "guardian";
-          await pool.query(
+          await conn.query(
             `INSERT INTO guardians (student_id, relation, full_name, phone)
              VALUES (?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), phone = VALUES(phone)`,
@@ -339,76 +336,68 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
         const lname =
           last_name ||
           (full_name ? full_name.split(" ").slice(1).join(" ") : null);
-        const admNo = `STU-${String(userId).padStart(4, "0")}`;
-        const rollNo = `R-${String(userId).padStart(3, "0")}`;
 
-        const conn = await pool.getConnection();
-        try {
-          await conn.beginTransaction();
+        const [[activeSession]] = await conn.query('SELECT name FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+        const sessionYear = activeSession?.name ? parseInt(activeSession.name.split('-')[0]) || new Date().getFullYear() : new Date().getFullYear();
 
-          const [stuResult] = await conn.query(
-            `INSERT INTO students (user_id, admission_no, roll_no, first_name, last_name, gender, blood_group, religion, nationality, address, city, state, pincode, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        const admNo = generateAdmissionNo(userId, sessionYear);
+        const rollNo = generateRollNo(userId);
+
+        const [stuResult] = await conn.query(
+          `INSERT INTO students (user_id, admission_no, roll_no, first_name, last_name, gender, blood_group, religion, nationality, address, city, state, pincode, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            userId,
+            admNo,
+            rollNo,
+            fname,
+            lname,
+            gender || "Male",
+            blood_group || null,
+            religion || null,
+            nationality || "Indian",
+            address || null,
+            city || null,
+            state || null,
+            pincode || null,
+            "Active",
+          ],
+        );
+        const newStudentId = stuResult.insertId;
+
+        if (father_name) {
+          await conn.query(
+            `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'father', ?, ?, ?)`,
             [
-              userId,
-              admNo,
-              rollNo,
-              fname,
-              lname,
-              gender || "Male",
-              blood_group || null,
-              religion || null,
-              nationality || "Indian",
-              address || null,
-              city || null,
-              state || null,
-              pincode || null,
-              "Active",
+              newStudentId,
+              father_name,
+              father_phone || null,
+              father_occupation || null,
             ],
           );
-          const newStudentId = stuResult.insertId;
-
-          if (father_name) {
-            await conn.query(
-              `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'father', ?, ?, ?)`,
-              [
-                newStudentId,
-                father_name,
-                father_phone || null,
-                father_occupation || null,
-              ],
-            );
-          }
-          if (mother_name) {
-            await conn.query(
-              `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'mother', ?, ?, ?)`,
-              [
-                newStudentId,
-                mother_name,
-                mother_phone || null,
-                mother_occupation || null,
-              ],
-            );
-          }
-          if (guardian_name) {
-            const rel = guardian_relation || "guardian";
-            await conn.query(
-              `INSERT INTO guardians (student_id, relation, full_name, phone) VALUES (?, ?, ?, ?)`,
-              [newStudentId, rel, guardian_name, guardian_phone || null],
-            );
-          }
-
-          await conn.commit();
-        } catch (trxErr) {
-          await conn.rollback();
-          throw trxErr;
-        } finally {
-          conn.release();
+        }
+        if (mother_name) {
+          await conn.query(
+            `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'mother', ?, ?, ?)`,
+            [
+              newStudentId,
+              mother_name,
+              mother_phone || null,
+              mother_occupation || null,
+            ],
+          );
+        }
+        if (guardian_name) {
+          const rel = guardian_relation || "guardian";
+          await conn.query(
+            `INSERT INTO guardians (student_id, relation, full_name, phone) VALUES (?, ?, ?, ?)`,
+            [newStudentId, rel, guardian_name, guardian_phone || null],
+          );
         }
       }
     } else {
       // Update Staff Profiles Table
-      const [staffRows] = await pool.query(
+      const [staffRows] = await conn.query(
         "SELECT id FROM staff_profiles WHERE user_id = ?",
         [userId],
       );
@@ -420,7 +409,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
         employee_code || `TS-EMP-${String(userId).padStart(3, "0")}`;
 
       if (staffRows.length > 0) {
-        await pool.query(
+        await conn.query(
           `UPDATE staff_profiles SET
              employee_code = COALESCE(?, employee_code),
              first_name = COALESCE(?, first_name),
@@ -452,7 +441,7 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
           ],
         );
       } else {
-        await pool.query(
+        await conn.query(
           `INSERT INTO staff_profiles (user_id, employee_code, first_name, last_name, designation, department, qualification, phone, emergency_contact, address, gender, date_of_birth, joining_date)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -474,10 +463,17 @@ router.put("/:id/profile", verifyToken, async (req, res) => {
       }
     }
 
+    await conn.commit();
     res.json({ success: true, message: "Profile updated successfully" });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error("Error updating profile:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(error.code === "ER_DUP_ENTRY" ? 409 : 500).json({
+      success: false,
+      message: error.code === "ER_DUP_ENTRY" ? "Email is already in use by another account." : error.message,
+    });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

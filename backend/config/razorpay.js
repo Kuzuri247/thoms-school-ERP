@@ -6,7 +6,7 @@ const key_secret = process.env.RAZORPAY_KEY_SECRET || "placeholder_secret";
 
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
   console.warn(
-    "testing"
+    "[Razorpay] Warning: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET environment variable is missing. Payment functionality will not work without valid credentials."
   );
 }
 

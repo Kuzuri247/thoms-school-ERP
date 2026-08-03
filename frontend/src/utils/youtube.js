@@ -4,7 +4,9 @@
  */
 export const extractYouTubeId = (url) => {
   if (!url || typeof url !== 'string') return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.trim().match(regExp);
-  return match && match[2].length === 11 ? match[2] : null;
+  const trimmed = url.trim();
+  const match = trimmed.match(
+    /^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})(?:[?#&].*)?$/i
+  );
+  return match ? match[1] : null;
 };

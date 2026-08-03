@@ -47,11 +47,16 @@ const createOrder = async (feeRecordId, createdByUserId) => {
     ],
   );
 
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  if (!keyId) {
+    throw Object.assign(new Error("Razorpay Key ID is not configured"), { status: 500 });
+  }
+
   return {
     orderId: rzpOrder.id,
     amount: amountPaise,
     currency: "INR",
-    keyId: process.env.RAZORPAY_KEY_ID || "rzp_test_placeholder",
+    keyId,
     receipt,
   };
 };
@@ -61,7 +66,10 @@ const verifyPayment = async ({
   razorpay_payment_id,
   razorpay_signature,
 }) => {
-  const secret = process.env.RAZORPAY_KEY_SECRET || "placeholder_secret";
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) {
+    throw Object.assign(new Error("Razorpay Secret is not configured"), { status: 500 });
+  }
   const expectedSignature = crypto
     .createHmac("sha256", secret)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -310,7 +318,6 @@ const collectCashPayment = async (
       [newPaidAmount, newStatus, resolvedFeeRecord.id],
     );
 
-    const crypto = require("crypto");
     const nonce = crypto.randomBytes(4).toString("hex");
     const orderId = `cash_ord_${Date.now()}_${nonce}`;
     const paymentId = `cash_pay_${Date.now()}_${nonce}`;

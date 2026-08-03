@@ -99,12 +99,14 @@ router.post("/send", verifyToken, authorize(...canManage), async (req, res, next
   try {
     const {
       recipient_group,
+      custom_recipients,
       subject,
       message_body,
       is_scheduled,
       scheduled_time,
       recipient_count,
     } = req.body;
+
     if (!recipient_group || !message_body) {
       return res
         .status(400)
@@ -114,17 +116,34 @@ router.post("/send", verifyToken, authorize(...canManage), async (req, res, next
         });
     }
 
-    const senderName = req.user.full_name || "School Admin";
-    const status = is_scheduled ? "Scheduled" : "Sent";
+    if (is_scheduled && (!scheduled_time || !String(scheduled_time).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "Scheduled time is required for scheduled broadcasts.",
+      });
+    }
+
+    let senderName = req.user.full_name;
+    if (!senderName) {
+      const pool = require("../../config/db");
+      const [[uRow]] = await pool.query("SELECT full_name FROM users WHERE id = ?", [req.user.id]);
+      senderName = uRow?.full_name || "School Admin";
+    }
+
+    const effectiveGroup = recipient_group === 'Custom Phone List' && custom_recipients
+      ? `Custom Phone List (${custom_recipients})`
+      : recipient_group;
+
+    const status = is_scheduled ? "Scheduled" : "Recorded";
     const count = typeof recipient_count === "number" && !isNaN(recipient_count) ? recipient_count : null;
 
     const id = await svc.createLog({
-      recipient_group,
+      recipient_group: effectiveGroup,
       subject,
       message_body,
       sender_id: req.user.id,
       sender_name: senderName,
-      scheduled_time: is_scheduled ? scheduled_time || null : null,
+      scheduled_time: is_scheduled ? scheduled_time : null,
       status,
       recipient_count: count,
     });

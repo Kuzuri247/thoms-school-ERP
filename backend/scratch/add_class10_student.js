@@ -41,11 +41,11 @@ async function fix() {
     await conn.commit();
     console.log('SUCCESS: Added Aanya Verma to Class 10!');
   } catch (e) {
-    await conn.rollback();
+    if (conn) await conn.rollback();
     console.error(e);
+    process.exitCode = 1;
   } finally {
-    conn.release();
-    process.exit(0);
+    if (conn) conn.release();
   }
 }
 fix();

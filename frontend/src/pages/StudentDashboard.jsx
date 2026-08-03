@@ -503,6 +503,7 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {filtered.map((item) => {
                   const ytId = item.youtube_video_id || extractYouTubeId(item.youtube_url);
+                  const isApprovedUrl = typeof item.youtube_url === 'string' && /^https?:\/\//i.test(item.youtube_url.trim());
                   return (
                     <div key={item.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 space-y-3 flex flex-col justify-between hover:border-slate-300 transition shadow-2xs">
                       <div className="space-y-2">
@@ -511,7 +512,7 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                             Teacher: {item.teacher_name || 'Subject Teacher'}
                           </span>
                           <span className="text-[10px] text-slate-400 font-semibold">
-                            {new Date(item.created_at).toLocaleDateString()}
+                            {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recently'}
                           </span>
                         </div>
                         <h3 className="text-sm font-extrabold text-slate-900 leading-tight">{item.title}</h3>
@@ -531,16 +532,16 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                             allowFullScreen
                           />
                         </div>
-                      ) : (
+                      ) : isApprovedUrl ? (
                         <a
-                          href={item.youtube_url}
+                          href={item.youtube_url.trim()}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline mt-2"
                         >
                           <ExternalLink className="w-4 h-4" /> Watch Video on YouTube
                         </a>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}

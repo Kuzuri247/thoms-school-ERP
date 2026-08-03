@@ -20,6 +20,28 @@ const DEMO_CLASSES = [
   { class_id: 103, class_name: "Class 12", numeric_value: 12 },
 ];
 
+const EMPTY_STUDENT_FORM = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  phone: "",
+  admission_no: "",
+  roll_no: "",
+  gender: "Male",
+  dob: "",
+  profile_pic: "",
+  address: "",
+  father_name: "",
+  father_phone: "",
+  father_occupation: "",
+  mother_name: "",
+  mother_phone: "",
+  mother_occupation: "",
+  guardian_name: "",
+  guardian_phone: "",
+  guardian_relation: "",
+};
+
 const AdminClassDirectoryView = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -40,28 +62,9 @@ const AdminClassDirectoryView = () => {
   const [newClassTeacher, setNewClassTeacher] = useState("");
 
   // Add Student Form State
-  const [studentForm, setStudentForm] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    admission_no: "",
-    roll_no: "",
-    gender: "Male",
-    dob: "",
-    profile_pic: "",
-    address: "",
-    father_name: "",
-    father_phone: "",
-    father_occupation: "",
-    mother_name: "",
-    mother_phone: "",
-    mother_occupation: "",
-    guardian_name: "",
-    guardian_phone: "",
-    guardian_relation: "",
-  });
-
+  const [studentForm, setStudentForm] = useState(EMPTY_STUDENT_FORM);
+  const [isSubmittingStudent, setIsSubmittingStudent] = useState(false);
+  const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
 
   // Escape key handler for accessible modals
@@ -158,18 +161,28 @@ const AdminClassDirectoryView = () => {
   // Add Student Handler
   const handleAddStudentFrontend = async (e) => {
     e.preventDefault();
-    if (!studentForm.first_name.trim()) return;
+    if (!studentForm.first_name.trim() || isSubmittingStudent) return;
 
     const chosenClassId = studentForm.class_id || selectedClass?.class_id;
 
     try {
+      setIsSubmittingStudent(true);
+      setFormError("");
+
       const res = await api.post("/admin/students", {
         ...studentForm,
         class_id: chosenClassId,
       });
 
-      const newStuData = res.data?.data;
-      if (newStuData) {
+      const rawData = res.data?.data;
+      if (rawData) {
+        const newStuData = {
+          ...rawData,
+          father_name: studentForm.father_name || rawData.father_name || "",
+          father_occupation: studentForm.father_occupation || rawData.father_occupation || "",
+          profile_pic: studentForm.profile_pic || rawData.profile_pic || "",
+        };
+
         const targetClass =
           classesData.find((c) => String(c.class_id) === String(chosenClassId)) ||
           selectedClass;
@@ -183,35 +196,14 @@ const AdminClassDirectoryView = () => {
       }
 
       setShowAddStudentModal(false);
-
-      // Reset Form
-      setStudentForm({
-        first_name: "",
-        last_name: "",
-        email: "",
-        phone: "",
-        admission_no: "",
-        roll_no: "",
-        gender: "Male",
-        dob: "",
-        profile_pic: "",
-        address: "",
-        father_name: "",
-        father_phone: "",
-        father_occupation: "",
-        mother_name: "",
-        mother_phone: "",
-        mother_occupation: "",
-        guardian_name: "",
-        guardian_phone: "",
-        guardian_relation: "",
-      });
-
+      setStudentForm(EMPTY_STUDENT_FORM);
       setFormSuccess("Student added successfully to database!");
       setTimeout(() => setFormSuccess(""), 3500);
     } catch (err) {
       console.error("Failed to add student:", err);
-      alert(err.response?.data?.message || "Failed to add student to database.");
+      setFormError(err.response?.data?.message || "Failed to add student to database.");
+    } finally {
+      setIsSubmittingStudent(false);
     }
   };
 
@@ -377,6 +369,7 @@ const AdminClassDirectoryView = () => {
               <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
                 <tr>
                   <th className="px-4 py-3">Student</th>
+                  <th className="px-4 py-3">Gender</th>
                   <th className="px-4 py-3">Admission & Roll</th>
                   <th className="px-4 py-3">Parent / Guardian</th>
                   <th className="px-4 py-3">Contact Email & Phone</th>
@@ -387,7 +380,7 @@ const AdminClassDirectoryView = () => {
                 {filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-4 py-8 text-center text-slate-400 text-xs font-medium"
                     >
                       No students found for this class.
@@ -419,6 +412,12 @@ const AdminClassDirectoryView = () => {
                             </div>
                           </div>
                         </div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200 capitalize">
+                          {s.gender || "Male"}
+                        </span>
                       </td>
 
                       <td className="px-4 py-3.5">
@@ -722,13 +721,30 @@ const AdminClassDirectoryView = () => {
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-mono"
                     />
                   </div>
+                  <div>
+                    <label className="block mb-1">Gender *</label>
+                    <select
+                      value={studentForm.gender || "Male"}
+                      onChange={(e) =>
+                        setStudentForm({
+                          ...studentForm,
+                          gender: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none font-semibold cursor-pointer"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* Section 2: Address & Previous School */}
+              {/* Section 2: Residential Address Details */}
               <div className="space-y-3 pt-2">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 border-b border-indigo-50 pb-1">
-                  2. Residential & Previous School Details
+                  2. Residential Address Details
                 </h4>
                 <div>
                   <div className="sm:col-span-2">
@@ -898,6 +914,12 @@ const AdminClassDirectoryView = () => {
                 </div>
               </div>
 
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {formError}
+                </div>
+              )}
+
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -908,9 +930,10 @@ const AdminClassDirectoryView = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer"
+                  disabled={isSubmittingStudent}
+                  className={`px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition ${isSubmittingStudent ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                 >
-                  Save Student Profile
+                  {isSubmittingStudent ? "Saving..." : "Save Student Profile"}
                 </button>
               </div>
             </form>

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `communication_templates` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL,
-  INDEX `idx_comm_tpl_channel` (`channel`)
+  INDEX `idx_comm_tpl_channel_created` (`channel`, `created_at`)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `communication_logs` (
@@ -23,11 +23,11 @@ CREATE TABLE IF NOT EXISTS `communication_logs` (
   `sender_id` INT DEFAULT NULL,
   `sender_name` VARCHAR(255) NOT NULL,
   `scheduled_time` DATETIME DEFAULT NULL,
-  `status` ENUM('Sent', 'Delivered', 'Scheduled') DEFAULT 'Sent',
+  `status` ENUM('Sent', 'Delivered', 'Scheduled', 'Recorded', 'Queued') DEFAULT 'Recorded',
   `recipient_count` INT DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`sender_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
-  INDEX `idx_comm_log_channel` (`channel`)
+  INDEX `idx_comm_log_channel_created` (`channel`, `created_at`)
 ) ENGINE=InnoDB;
 
 -- Seed Default WhatsApp Templates for Exams, Holidays, and Celebrations

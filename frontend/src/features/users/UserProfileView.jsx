@@ -149,7 +149,9 @@ const UserProfileView = () => {
       emergency_contact: format10Digits(
         p.emergency_contact || p.emergency_phone || p.phone,
       ),
-      gender: p.gender || "male",
+      gender: p.gender
+        ? p.gender.charAt(0).toUpperCase() + p.gender.slice(1).toLowerCase()
+        : "Male",
       date_of_birth: normalizeDate(p.date_of_birth),
       address: p.address || "",
       blood_group: p.blood_group || "",
@@ -874,13 +876,18 @@ const UserProfileView = () => {
                     <div>
                       <label className="block mb-1">Gender</label>
                       <select
-                        value={form.gender}
+                        value={
+                          form.gender
+                            ? form.gender.charAt(0).toUpperCase() +
+                              form.gender.slice(1).toLowerCase()
+                            : "Male"
+                        }
                         onChange={(e) => handleChange("gender", e.target.value)}
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
                       >
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
                       </select>
                     </div>
 
