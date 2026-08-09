@@ -18,6 +18,7 @@ import {
   LogIn,
 } from "lucide-react";
 import useAuthStore from "../store/authStore";
+import { getRoleHomePath } from "../utils/roleUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -50,11 +51,15 @@ const SchoolLandingPage = () => {
       <div className="absolute top-[800px] -left-40 w-96 h-96 bg-blue-600/15 blur-[120px] rounded-full pointer-events-none" />
 
       {/* Top Navbar Header */}
-      <header className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <header className="sticky top-2 z-50 max-w-7xl mx-auto bg-slate-950/80 backdrop-blur-xl border border-slate-700/70 rounded-lg">
+        <div className="px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-white rounded-2xl flex items-center justify-center p-0.5 shadow-lg border border-slate-700 overflow-hidden">
-              <img src="/st_thomas_logo.png" alt="St. Thomas International School Emblem" className="w-full h-full object-contain" />
+            <div className="size-11 bg-white rounded-2xl flex items-center justify-center p-0.5 shadow-lg border border-slate-700 overflow-hidden">
+              <img
+                src="/st_thomas_logo.png"
+                alt="St. Thomas International School Emblem"
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <span className="text-lg sm:text-xl font-extrabold text-white tracking-tight block leading-none">
@@ -66,15 +71,13 @@ const SchoolLandingPage = () => {
             </div>
           </div>
 
+            <div className="flex items-center gap-10">
           <nav className="hidden md:flex items-center gap-8 text-xs font-bold text-slate-300">
-            <a href="#home" className="hover:text-white transition-colors">
-              Home
-            </a>
             <a
               href="#notices"
               className="hover:text-white transition-colors flex items-center gap-1"
             >
-              <Bell className="w-3.5 h-3.5 text-amber-400" /> Notice Board
+              Notice Board
             </a>
             <a href="#academics" className="hover:text-white transition-colors">
               Academics
@@ -84,20 +87,19 @@ const SchoolLandingPage = () => {
             </a>
           </nav>
 
-          <div className="flex items-center gap-3">
             {user ? (
               <button
-                onClick={() => navigate("/dashboard")}
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
+                onClick={() => navigate(getRoleHomePath(user))}
+                className="group px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
               >
-                Go to Portal <ArrowRight className="w-4 h-4" />
+                Go to Portal <ArrowRight className="size-5 group-hover:translate-x-0.5 transition-all duration-200" />
               </button>
             ) : (
               <Link
                 to="/login"
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
+                className="group px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
               >
-                <LogIn className="w-4 h-4" /> Sign In to ERP
+                <LogIn className="size-5 group-hover:translate-x-0.5 transition-all duration-200" /> Sign In to ERP
               </Link>
             )}
           </div>
@@ -107,14 +109,16 @@ const SchoolLandingPage = () => {
       {/* Hero Section */}
       <section
         id="home"
-        className="relative pt-20 pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8"
+        className="relative h-[85vh] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8"
       >
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-bold animate-in fade-in">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>Welcome to St. Thomas International School • Admissions 2026 Open</span>
+       
+          <span>
+            Welcome to St. Thomas International School • Admissions 2026 Open
+          </span>
         </div>
 
-        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.1]">
+        <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight">
           Nurturing Leaders for <br className="hidden sm:inline" />
           <span className="bg-gradient-to-r from-indigo-400 via-violet-300 to-pink-400 bg-clip-text text-transparent">
             Tomorrow's World
@@ -122,23 +126,23 @@ const SchoolLandingPage = () => {
         </h1>
 
         <p className="max-w-2xl mx-auto text-slate-400 text-sm sm:text-base font-medium leading-relaxed">
-          St. Thomas International School provides a holistic education empowering students with
-          academic rigor, ethical values, modern STEM innovation, and vibrant
-          sports programs.
+          St. Thomas International School provides a holistic education
+          empowering students with academic rigor, ethical values, modern STEM
+          innovation, and vibrant sports programs.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
           <Link
             to="/login"
-            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+            className="group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-sm rounded-2xl shadow-xl shadow-indigo-600/30 transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
-            Access ERP Portal <ArrowRight className="w-4 h-4" />
+            Access ERP Portal <ArrowRight className="size-5 group-hover:translate-x-0.5 transition-all duration-200" />
           </Link>
           <a
             href="#notices"
             className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-extrabold text-sm rounded-2xl transition flex items-center justify-center gap-2"
           >
-            <Bell className="w-4 h-4 text-amber-400" /> View Announcements
+            <Bell className="size-5 text-amber-400" /> View Announcements
           </a>
         </div>
       </section>
@@ -146,7 +150,7 @@ const SchoolLandingPage = () => {
       {/* Announcements & Notice Board Section */}
       <section
         id="notices"
-        className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8"
+        className="py-16 mb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8"
       >
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-800 pb-6 gap-4">
           <div>
@@ -201,7 +205,7 @@ const SchoolLandingPage = () => {
       {/* School Features & Pillars Section */}
       <section
         id="academics"
-        className="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12"
+        className="py-16 mb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12"
       >
         <div className="text-center space-y-3">
           <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
@@ -276,7 +280,11 @@ const SchoolLandingPage = () => {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center p-0.5 shadow-md border border-slate-700 overflow-hidden">
-                <img src="/st_thomas_logo.png" alt="St. Thomas International School Emblem" className="w-full h-full object-contain" />
+                <img
+                  src="/st_thomas_logo.png"
+                  alt="St. Thomas International School Emblem"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="text-base font-extrabold text-white">
                 St. Thomas International School
@@ -292,13 +300,15 @@ const SchoolLandingPage = () => {
               Contact Administration
             </h4>
             <p className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-indigo-400" /> St. Thomas Campus Road, Educational Zone
+              <MapPin className="w-4 h-4 text-indigo-400" /> St. Thomas Campus
+              Road, Educational Zone
             </p>
             <p className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-indigo-400" /> +91 (080) 2345-6789
             </p>
             <p className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-indigo-400" /> admissions@stthomas.edu
+              <Mail className="w-4 h-4 text-indigo-400" />{" "}
+              admissions@stthomas.edu
             </p>
           </div>
 
@@ -316,7 +326,8 @@ const SchoolLandingPage = () => {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-900 pt-6 text-center text-slate-600 font-medium">
-          © {new Date().getFullYear()} St. Thomas International School. All rights reserved. Powered by St. Thomas School ERP.
+          © {new Date().getFullYear()} St. Thomas International School. All
+          rights reserved. Powered by St. Thomas School ERP.
         </div>
       </footer>
     </div>
