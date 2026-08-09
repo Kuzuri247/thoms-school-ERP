@@ -30,6 +30,10 @@ async function testHttpEndpoints() {
     let ct = null;
     let ctToken = null;
 
+    let preSlot = null;
+    let wasCreated = false;
+    let testPeriodNo = 7;
+
     try {
       const [ctRows] = await pool.query(
         `SELECT ta.teacher_user_id, ta.section_id, sec.class_id, u.email
@@ -79,6 +83,23 @@ async function testHttpEndpoints() {
       const stToken = generateToken(st.id, 'teacher', st.email);
       const studentToken = generateToken(student.user_id, 'student', 'student@test.com');
 
+      // Determine pre-test slot state and select test slot
+      const [existingSlots] = await pool.query(
+        `SELECT period_no, subject_id, teacher_user_id, start_time, end_time, is_break FROM timetables WHERE section_id = ? AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
+        [ct.section_id]
+      );
+      const usedPeriods = new Set(existingSlots.map(s => Number(s.period_no)));
+      testPeriodNo = [7, 6, 5, 4, 3, 2, 1].find(p => !usedPeriods.has(p)) || 7;
+      const matchedExisting = existingSlots.find(s => Number(s.period_no) === testPeriodNo);
+
+      if (matchedExisting) {
+        preSlot = matchedExisting;
+        wasCreated = false;
+      } else {
+        preSlot = null;
+        wasCreated = true;
+      }
+
       // 1. GET /my-class
       console.log("\n1. Testing GET /api/v1/timetable/my-class (Student)...");
       const res1 = await fetch(`${baseUrl}/my-class`, {
@@ -120,7 +141,7 @@ async function testHttpEndpoints() {
           day_of_week: 'Monday',
           periods: [
             {
-              period_number: 7,
+              period_number: testPeriodNo,
               start_time: '01:30',
               end_time: '02:15',
               subject_id: null,
@@ -148,7 +169,7 @@ async function testHttpEndpoints() {
           day_of_week: 'Monday',
           periods: [
             {
-              period_number: 7,
+              period_number: testPeriodNo,
               start_time: '01:30',
               end_time: '02:15',
               subject_id: null,
@@ -170,20 +191,54 @@ async function testHttpEndpoints() {
     } finally {
       if (ct && ctToken) {
         try {
-          const [createdSlots] = await pool.query(
-            `SELECT id FROM timetables WHERE section_id = ? AND period_no = 7 AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
-            [ct.section_id]
-          );
-          if (createdSlots[0]) {
-            const res6 = await fetch(`${baseUrl}/period/${createdSlots[0].id}`, {
-              method: 'DELETE',
-              headers: { Authorization: `Bearer ${ctToken}` },
+          if (wasCreated) {
+            const [createdSlots] = await pool.query(
+              `SELECT id FROM timetables WHERE section_id = ? AND period_no = ? AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
+              [ct.section_id, testPeriodNo]
+            );
+            if (createdSlots[0]) {
+              const res6 = await fetch(`${baseUrl}/period/${createdSlots[0].id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${ctToken}` },
+              });
+              const data6 = await res6.json();
+              console.log(`CLEANUP DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
+              if (res6.status !== 200 || !data6.success) {
+                process.exitCode = 1;
+              }
+            }
+          } else if (preSlot) {
+            const resRestore = await fetch(`${baseUrl}/upsert`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${ctToken}`,
+              },
+              body: JSON.stringify({
+                class_id: ct.class_id,
+                section_id: ct.section_id,
+                day_of_week: 'Monday',
+                periods: [
+                  {
+                    period_number: testPeriodNo,
+                    start_time: preSlot.start_time,
+                    end_time: preSlot.end_time,
+                    subject_id: preSlot.subject_id,
+                    teacher_id: preSlot.teacher_user_id,
+                    is_break: Boolean(preSlot.is_break),
+                  },
+                ],
+              }),
             });
-            const data6 = await res6.json();
-            console.log(`CLEANUP DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
+            const dataRestore = await resRestore.json();
+            console.log(`CLEANUP RESTORE STATUS: ${resRestore.status}, MESSAGE: ${dataRestore.message}`);
+            if (resRestore.status !== 200 || !dataRestore.success) {
+              process.exitCode = 1;
+            }
           }
         } catch (cleanupErr) {
           console.error("Cleanup error:", cleanupErr);
+          process.exitCode = 1;
         }
       }
       server.close();

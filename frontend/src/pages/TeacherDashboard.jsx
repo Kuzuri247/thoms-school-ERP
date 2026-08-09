@@ -61,6 +61,64 @@ const monthNames = [
   "December",
 ];
 
+function useModalFocus(isOpen, onClose) {
+  const modalRef = React.useRef(null);
+  const triggerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      triggerRef.current = document.activeElement;
+      setTimeout(() => {
+        if (modalRef.current) {
+          const focusable = modalRef.current.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length) {
+            focusable[0].focus();
+          } else {
+            modalRef.current.focus();
+          }
+        }
+      }, 0);
+
+      const handleKeyDown = (e) => {
+        if (e.key === "Escape" && onClose) {
+          onClose();
+          return;
+        }
+        if (e.key === "Tab" && modalRef.current) {
+          const focusable = Array.from(
+            modalRef.current.querySelectorAll(
+              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          );
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      };
+
+      document.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.removeEventListener("keydown", handleKeyDown);
+        if (triggerRef.current && typeof triggerRef.current.focus === "function") {
+          triggerRef.current.focus();
+        }
+      };
+    }
+  }, [isOpen, onClose]);
+
+  return modalRef;
+}
+
 const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState(initialActiveTab); // overview, timetable, attendance, homework, exams
@@ -128,6 +186,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [allTeachers, setAllTeachers] = useState([]);
   const [showTtModal, setShowTtModal] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
+
+  const ttModalRef = useModalFocus(showTtModal, () => setShowTtModal(false));
+  const confirmAttendanceModalRef = useModalFocus(showConfirmAttendanceModal, () => setShowConfirmAttendanceModal(false));
   const [ttFormData, setTtFormData] = useState({
     day_of_week: "Monday",
     period_number: 1,
@@ -174,12 +235,17 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
   const fetchClassTimetable = async (classId, sectionId) => {
     if (!classId || !sectionId) return;
+    setClassTimetable([]);
+    setIsClassTeacherForTt(false);
     try {
       const res = await api.get(`/v1/timetable/class/${classId}/section/${sectionId}`);
       setClassTimetable(res.data?.data || []);
       setIsClassTeacherForTt(res.data?.is_class_teacher || false);
     } catch (err) {
       console.error("Failed to fetch section timetable:", err);
+      setClassTimetable([]);
+      setIsClassTeacherForTt(false);
+      setTtError(err.response?.data?.message || "Failed to fetch section timetable");
     }
   };
 
@@ -307,6 +373,13 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const handleSaveTtSlot = async (e) => {
     e.preventDefault();
     if (!selectedTtClass) return;
+
+    if (!ttFormData.is_break && !ttFormData.subject_id) {
+      setTtError("Please select a subject for non-break periods");
+      setSavingTtSlot(false);
+      return;
+    }
+
     setSavingTtSlot(true);
     setTtError(null);
     setTtMessage(null);
@@ -337,6 +410,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
         setShowTtModal(false);
         fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
         fetchMySchedule();
+      } else {
+        setTtError(res.data?.message || "Failed to save timetable slot");
       }
     } catch (err) {
       setTtError(err.response?.data?.message || "Failed to save timetable slot");
@@ -1104,10 +1179,11 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     {timetableTabMode === "class" && (
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
                         <div className="flex items-center gap-3 w-full sm:w-auto">
-                          <label className="text-xs font-extrabold text-slate-700 whitespace-nowrap">
+                          <label htmlFor="assigned-tt-class-select" className="text-xs font-extrabold text-slate-700 whitespace-nowrap">
                             Select Class:
                           </label>
                           <select
+                            id="assigned-tt-class-select"
                             value={selectedTtClass ? `${selectedTtClass.class_id}_${selectedTtClass.section_id}` : ""}
                             onChange={(e) => {
                               const [cId, sId] = e.target.value.split("_");
@@ -1155,105 +1231,113 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                   {/* Mode 1: Class Timetable Grid */}
                   {timetableTabMode === "class" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {daysOfWeek.map((day, dayIdx) => {
-                        const dayNum = dayIdx + 1;
-                        const daySlots = classTimetable.filter((t) => Number(t.day_of_week) === dayNum);
+                    assignedTtClasses.length === 0 ? (
+                      <div className="p-8 bg-slate-50 border border-slate-200/80 rounded-2xl text-center text-slate-500 font-semibold text-xs">
+                        No assigned classes available for timetable viewing.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {daysOfWeek.map((day, dayIdx) => {
+                          const dayNum = dayIdx + 1;
+                          const daySlots = classTimetable.filter((t) => Number(t.day_of_week) === dayNum);
 
-                        const defaultPeriods = [1, 2, 3, 4, 5, 6, 7];
+                          const defaultPeriods = [1, 2, 3, 4, 5, 6, 7];
 
-                        return (
-                          <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
-                            <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
-                              <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
-                                {day}
-                              </h4>
-                              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                                7 Periods
-                              </span>
-                            </div>
+                          return (
+                            <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                              <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                                <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                                  {day}
+                                </h4>
+                                <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                                  7 Periods
+                                </span>
+                              </div>
 
-                            <div className="space-y-2">
-                              {defaultPeriods.map((periodNum) => {
-                                const item = daySlots.find((t) => Number(t.period_no) === periodNum || Number(t.period_number) === periodNum);
+                              <div className="space-y-2">
+                                {defaultPeriods.map((periodNum) => {
+                                  const item = daySlots.find((t) => Number(t.period_no) === periodNum || Number(t.period_number) === periodNum);
 
-                                return (
-                                  <React.Fragment key={`slot-${dayNum}-${periodNum}`}>
-                                    <div
-                                      role={isClassTeacherForTt ? "button" : undefined}
-                                      tabIndex={isClassTeacherForTt ? 0 : undefined}
-                                      aria-label={`Period ${periodNum} ${item?.subject_name || (item?.is_break ? "Free Period" : "Not Scheduled")}`}
-                                      onKeyDown={(e) => {
-                                        if (isClassTeacherForTt && (e.key === "Enter" || e.key === " ")) {
-                                          e.preventDefault();
-                                          handleOpenTtModal(item, day, periodNum);
-                                        }
-                                      }}
-                                      className={`relative group p-2.5 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                                        isClassTeacherForTt ? "cursor-pointer" : ""
-                                      } ${
-                                        item?.is_break
-                                          ? "bg-amber-50/70 border-amber-200"
-                                          : item
-                                          ? "bg-white border-slate-200 shadow-2xs hover:border-teal-300"
-                                          : "bg-slate-100/60 border-dashed border-slate-200 hover:border-slate-300"
-                                      }`}
-                                      onClick={() => {
-                                        if (isClassTeacherForTt) handleOpenTtModal(item, day, periodNum);
-                                      }}
-                                    >
-                                      {/* Top Row: Period & Subject on Left, Time on Right */}
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="min-w-0 flex-1 truncate">
-                                          <span className="text-xs font-black text-slate-900 mr-1">
-                                            P{periodNum}:
+                                  return (
+                                    <React.Fragment key={`slot-${dayNum}-${periodNum}`}>
+                                      <div
+                                        role={isClassTeacherForTt ? "button" : undefined}
+                                        tabIndex={isClassTeacherForTt ? 0 : undefined}
+                                        aria-label={`Period ${periodNum} ${item?.subject_name || (item?.is_break ? "Free Period" : "Not Scheduled")}`}
+                                        onKeyDown={(e) => {
+                                          if (isClassTeacherForTt && (e.key === "Enter" || e.key === " ")) {
+                                            e.preventDefault();
+                                            handleOpenTtModal(item, day, periodNum);
+                                          }
+                                        }}
+                                        className={`relative group p-2.5 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+                                          isClassTeacherForTt ? "cursor-pointer" : ""
+                                        } ${
+                                          item?.is_break
+                                            ? "bg-amber-50/70 border-amber-200"
+                                            : item
+                                            ? "bg-white border-slate-200 shadow-2xs hover:border-teal-300"
+                                            : "bg-slate-100/60 border-dashed border-slate-200 hover:border-slate-300"
+                                        }`}
+                                        onClick={() => {
+                                          if (isClassTeacherForTt) handleOpenTtModal(item, day, periodNum);
+                                        }}
+                                      >
+                                        {/* Top Row: Period & Subject on Left, Time on Right */}
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="min-w-0 flex-1 truncate">
+                                            <span className="text-xs font-black text-slate-900 mr-1">
+                                              P{periodNum}:
+                                            </span>
+                                            {item?.is_break ? (
+                                              <span className="text-xs font-black text-amber-800">
+                                                Free Period
+                                              </span>
+                                            ) : item ? (
+                                              <span className="text-xs font-black text-teal-800">
+                                                {item.subject_name || "General"}
+                                              </span>
+                                            ) : (
+                                              <span className="text-xs font-semibold text-slate-400 italic">
+                                                Not Scheduled
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          <span className="text-[10px] font-mono text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
+                                            {item?.start_time && item?.end_time
+                                              ? `${item.start_time.slice(0, 5)} - ${item.end_time.slice(0, 5)}`
+                                              : `${STANDARD_PERIOD_TIMES[periodNum]?.start_time} - ${STANDARD_PERIOD_TIMES[periodNum]?.end_time}`}
                                           </span>
-                                          {item?.is_break ? (
-                                            <span className="text-xs font-black text-amber-800">
-                                              Free Period
-                                            </span>
-                                          ) : item ? (
-                                            <span className="text-xs font-black text-teal-800">
-                                              {item.subject_name || "General"}
-                                            </span>
-                                          ) : (
-                                            <span className="text-xs font-semibold text-slate-400 italic">
-                                              Not Scheduled
-                                            </span>
-                                          )}
                                         </div>
 
-                                        <span className="text-[10px] font-mono text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
-                                          {STANDARD_PERIOD_TIMES[periodNum]?.start_time} - {STANDARD_PERIOD_TIMES[periodNum]?.end_time}
-                                        </span>
+                                        {/* Bottom Row: Teacher Name */}
+                                        {item && !item.is_break && item.teacher_name && (
+                                          <div className="mt-1 pt-1 border-t border-slate-100/80">
+                                            <span className="text-[10px] text-slate-600 font-semibold block truncate">
+                                              {item.teacher_name}
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
 
-                                      {/* Bottom Row: Teacher Name */}
-                                      {item && !item.is_break && item.teacher_name && (
-                                        <div className="mt-1 pt-1 border-t border-slate-100/80">
-                                          <span className="text-[10px] text-slate-600 font-semibold block truncate">
-                                            {item.teacher_name}
+                                      {/* Recess Banner after Period 3 */}
+                                      {periodNum === 3 && (
+                                        <div className="py-1 px-2.5 bg-amber-100/70 border border-amber-200 rounded-lg text-center">
+                                          <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider">
+                                            Recess Break (10:45 AM - 11:15 AM)
                                           </span>
                                         </div>
                                       )}
-                                    </div>
-
-                                    {/* Recess Banner after Period 3 */}
-                                    {periodNum === 3 && (
-                                      <div className="py-1 px-2.5 bg-amber-100/70 border border-amber-200 rounded-lg text-center">
-                                        <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider">
-                                          Recess Break (10:45 AM - 11:15 AM)
-                                        </span>
-                                      </div>
-                                    )}
-                                  </React.Fragment>
-                                );
-                              })}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )
                   )}
 
                   {/* Mode 2: My Teaching Load View */}
@@ -1306,6 +1390,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   {/* Slot Builder Upsert Modal for Class Teacher */}
                   {showTtModal && (
                     <div
+                      ref={ttModalRef}
+                      tabIndex={-1}
                       role="dialog"
                       aria-modal="true"
                       aria-labelledby="tt-modal-title"
@@ -1788,6 +1874,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
         {showConfirmAttendanceModal && (
           <div
+            ref={confirmAttendanceModalRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"

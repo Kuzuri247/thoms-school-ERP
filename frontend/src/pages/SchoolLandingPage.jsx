@@ -18,6 +18,7 @@ import {
   LogIn,
 } from "lucide-react";
 import useAuthStore from "../store/authStore";
+import { getRoleHomePath } from "../utils/roleUtils";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -88,7 +89,7 @@ const SchoolLandingPage = () => {
 
             {user ? (
               <button
-                onClick={() => navigate("/dashboard")}
+                onClick={() => navigate(getRoleHomePath(user))}
                 className="group px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
               >
                 Go to Portal <ArrowRight className="size-5 group-hover:translate-x-0.5 transition-all duration-200" />
