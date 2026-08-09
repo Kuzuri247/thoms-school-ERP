@@ -33,6 +33,8 @@ async function testHttpEndpoints() {
     let preSlot = null;
     let wasCreated = false;
     let testPeriodNo = 7;
+    let test4Mutated = false;
+    let trackedPeriodId = null;
 
     try {
       const [ctRows] = await pool.query(
@@ -155,6 +157,16 @@ async function testHttpEndpoints() {
       console.log(`STATUS: ${res4.status}, MESSAGE: ${data4.message}`);
       if (res4.status !== 200 || !data4.success) throw new Error(`POST /upsert failed with status ${res4.status}`);
 
+      // Record mutation ownership & affected period ID upon write success
+      test4Mutated = true;
+      const [writtenSlots] = await pool.query(
+        `SELECT id FROM timetables WHERE section_id = ? AND period_no = ? AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
+        [ct.section_id, testPeriodNo]
+      );
+      if (writtenSlots[0]) {
+        trackedPeriodId = writtenSlots[0].id;
+      }
+
       // 5. POST /upsert (Subject Teacher -> Forbidden 403)
       console.log("\n5. Testing POST /api/v1/timetable/upsert with Subject Teacher (Expect 403)...");
       const res5 = await fetch(`${baseUrl}/upsert`, {
@@ -189,23 +201,17 @@ async function testHttpEndpoints() {
       console.error("HTTP VERIFICATION FAILED:", err);
       process.exitCode = 1;
     } finally {
-      if (ct && ctToken) {
+      if (ct && ctToken && test4Mutated && trackedPeriodId) {
         try {
           if (wasCreated) {
-            const [createdSlots] = await pool.query(
-              `SELECT id FROM timetables WHERE section_id = ? AND period_no = ? AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
-              [ct.section_id, testPeriodNo]
-            );
-            if (createdSlots[0]) {
-              const res6 = await fetch(`${baseUrl}/period/${createdSlots[0].id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${ctToken}` },
-              });
-              const data6 = await res6.json();
-              console.log(`CLEANUP DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
-              if (res6.status !== 200 || !data6.success) {
-                process.exitCode = 1;
-              }
+            const res6 = await fetch(`${baseUrl}/period/${trackedPeriodId}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${ctToken}` },
+            });
+            const data6 = await res6.json();
+            console.log(`CLEANUP DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
+            if (res6.status !== 200 || !data6.success) {
+              process.exitCode = 1;
             }
           } else if (preSlot) {
             const resRestore = await fetch(`${baseUrl}/upsert`, {

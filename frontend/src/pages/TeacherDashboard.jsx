@@ -64,6 +64,11 @@ const monthNames = [
 function useModalFocus(isOpen, onClose) {
   const modalRef = React.useRef(null);
   const triggerRef = React.useRef(null);
+  const onCloseRef = React.useRef(onClose);
+
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -82,8 +87,8 @@ function useModalFocus(isOpen, onClose) {
       }, 0);
 
       const handleKeyDown = (e) => {
-        if (e.key === "Escape" && onClose) {
-          onClose();
+        if (e.key === "Escape" && onCloseRef.current) {
+          onCloseRef.current();
           return;
         }
         if (e.key === "Tab" && modalRef.current) {
@@ -114,7 +119,7 @@ function useModalFocus(isOpen, onClose) {
         }
       };
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return modalRef;
 }
@@ -235,6 +240,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
   const fetchClassTimetable = async (classId, sectionId) => {
     if (!classId || !sectionId) return;
+    setTtError(null);
     setClassTimetable([]);
     setIsClassTeacherForTt(false);
     try {
@@ -1225,6 +1231,13 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                             </button>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {ttError && !showTtModal && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                        {ttError}
                       </div>
                     )}
                   </div>
