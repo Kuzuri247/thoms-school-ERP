@@ -7,27 +7,30 @@ const { attachTeacherContext } = require('../../middleware/teacherContext');
 const { ROLES } = require('../../config/constants');
 
 const DAY_MAP = {
-  monday: 1, mon: 1, '1': 1, 1: 1,
-  tuesday: 2, tue: 2, '2': 2, 2: 2,
-  wednesday: 3, wed: 3, '3': 3, 3: 3,
-  thursday: 4, thu: 4, '4': 4, 4: 4,
-  friday: 5, fri: 5, '5': 5, 5: 5,
-  saturday: 6, sat: 6, '6': 6, 6: 6,
-  sunday: 7, sun: 7, '7': 7, 7: 7,
+  monday: 1, mon: 1,
+  tuesday: 2, tue: 2,
+  wednesday: 3, wed: 3,
+  thursday: 4, thu: 4,
+  friday: 5, fri: 5,
+  saturday: 6, sat: 6,
+  sunday: 7, sun: 7,
 };
 
-// Helper: resolve day string/number to 1..7
+// Helper: resolve day string/number to 1..7 or null for invalid input
 function parseDayOfWeek(day) {
-  if (!day) return 1;
+  if (day === undefined || day === null) return 1;
   const key = String(day).trim().toLowerCase();
-  return DAY_MAP[key] || 1;
+  if (DAY_MAP[key]) return DAY_MAP[key];
+  const num = Number(key);
+  if (!isNaN(num) && num >= 1 && num <= 7) return num;
+  return null;
 }
 
 // --------------------------------------------------------------------------
-// 1. GET /api/v1/timetable/my-class
+// 1. GET /api/v1/timetable/my-class & /api/v1/timetable/student/my-timetable
 // Access: Student
 // --------------------------------------------------------------------------
-router.get('/my-class', verifyToken, authorize(ROLES.STUDENT), async (req, res) => {
+const getStudentTimetable = async (req, res) => {
   try {
     const [[student]] = await pool.query(
       `SELECT s.section_id, sec.class_id, cl.name AS class_name, sec.name AS section_name
@@ -70,13 +73,10 @@ router.get('/my-class', verifyToken, authorize(ROLES.STUDENT), async (req, res) 
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
-});
+};
 
-// Alias for Student self-timetable
-router.get('/student/my-timetable', verifyToken, authorize(ROLES.STUDENT), async (req, res) => {
-  req.url = '/my-class';
-  router.handle(req, res);
-});
+router.get('/my-class', verifyToken, authorize(ROLES.STUDENT), getStudentTimetable);
+router.get('/student/my-timetable', verifyToken, authorize(ROLES.STUDENT), getStudentTimetable);
 
 // --------------------------------------------------------------------------
 // 2. GET /api/v1/timetable/assigned-classes
@@ -99,17 +99,15 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
         section_name: r.section_name,
         name: `${r.class_name} - ${r.section_name}`,
         is_class_teacher: true,
-        role: 'Admin (Full Management)',
-        subjects: [],
+        role: 'Administrator',
       }));
 
-      return res.json({ success: true, data });
+      return res.json({ success: true, data, teacherContext: req.teacherContext });
     }
 
-    // For Teacher role:
     const [rows] = await pool.query(
-      `SELECT sec.id AS section_id, c.id AS class_id, c.name AS class_name, sec.name AS section_name,
-              sub.id AS subject_id, sub.name AS subject_name, ta.is_class_teacher
+      `SELECT ta.section_id, sec.class_id, c.name AS class_name, sec.name AS section_name,
+              ta.is_class_teacher, ta.subject_id, sub.name AS subject_name
        FROM teacher_assignments ta
        JOIN sections sec ON ta.section_id = sec.id
        JOIN classes c ON sec.class_id = c.id
@@ -163,12 +161,17 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
 router.get('/class/:classId/section/:sectionId', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), attachTeacherContext, async (req, res) => {
   try {
     const { classId, sectionId } = req.params;
+
+    const [[secCheck]] = await pool.query('SELECT class_id FROM sections WHERE id = ?', [sectionId]);
+    if (!secCheck || String(secCheck.class_id) !== String(classId)) {
+      return res.status(404).json({ success: false, message: 'Section not found for specified class' });
+    }
+
     let isClassTeacher = false;
 
     if ([ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user.role)) {
       isClassTeacher = true;
     } else {
-      // Check if teacher is assigned to this section
       const [assignments] = await pool.query(
         `SELECT is_class_teacher FROM teacher_assignments
          WHERE teacher_user_id = ? AND section_id = ?
@@ -226,6 +229,16 @@ router.get('/section/:sectionId', verifyToken, authorize(ROLES.STUDENT, ROLES.TE
       if (!student || String(student.section_id) !== String(sectionId)) {
         return res.status(403).json({ success: false, message: 'Cannot view timetable for other sections' });
       }
+    } else if (req.user.role === ROLES.TEACHER) {
+      const [assignments] = await pool.query(
+        `SELECT 1 FROM teacher_assignments
+         WHERE teacher_user_id = ? AND section_id = ?
+           AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
+        [req.user.id, sectionId]
+      );
+      if (!assignments.length) {
+        return res.status(403).json({ success: false, message: 'Access denied: Not assigned to this class section' });
+      }
     }
 
     const [rows] = await pool.query(
@@ -262,35 +275,43 @@ router.get('/section/:sectionId', verifyToken, authorize(ROLES.STUDENT, ROLES.TE
 // Access: Class Teacher (primary class), Admin, SuperAdmin
 // --------------------------------------------------------------------------
 router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), attachTeacherContext, async (req, res) => {
+  const { class_id, section_id, day_of_week, periods } = req.body;
+
+  if (!section_id || !day_of_week || !Array.isArray(periods)) {
+    return res.status(400).json({ success: false, message: 'Missing required parameters: section_id, day_of_week, and periods array' });
+  }
+
+  const dayNum = parseDayOfWeek(day_of_week);
+  if (!dayNum) {
+    return res.status(400).json({ success: false, message: 'Invalid day_of_week specified' });
+  }
+
+  // RBAC Check: Must be Admin/SuperAdmin OR Class Teacher for this section
+  let isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user.role);
+  if (!isAdmin) {
+    const [[isCt]] = await pool.query(
+      `SELECT 1 FROM teacher_assignments
+       WHERE teacher_user_id = ? AND section_id = ? AND is_class_teacher = 1
+         AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
+      [req.user.id, section_id]
+    );
+    if (!isCt) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Only Class Teacher of this class or Admin can modify timetable entries',
+      });
+    }
+  }
+
+  const [[sessionRow]] = await pool.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+  if (!sessionRow?.id) {
+    return res.status(409).json({ success: false, message: 'No active academic session found' });
+  }
+  const sessionId = sessionRow.id;
+
+  const connection = await pool.getConnection();
   try {
-    const { class_id, section_id, day_of_week, periods } = req.body;
-
-    if (!section_id || !day_of_week || !Array.isArray(periods)) {
-      return res.status(400).json({ success: false, message: 'Missing required parameters: section_id, day_of_week, and periods array' });
-    }
-
-    const dayNum = parseDayOfWeek(day_of_week);
-
-    // RBAC Check: Must be Admin/SuperAdmin OR Class Teacher for this section
-    let isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user.role);
-    if (!isAdmin) {
-      const [[isCt]] = await pool.query(
-        `SELECT 1 FROM teacher_assignments
-         WHERE teacher_user_id = ? AND section_id = ? AND is_class_teacher = 1
-           AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
-        [req.user.id, section_id]
-      );
-      if (!isCt) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied: Only Class Teacher of this class or Admin can modify timetable entries',
-        });
-      }
-    }
-
-    // Fetch active session
-    const [[sessionRow]] = await pool.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
-    const sessionId = sessionRow?.id || 1;
+    await connection.beginTransaction();
 
     const DEFAULT_PERIOD_TIMES = {
       1: { start: '08:30:00', end: '09:15:00' },
@@ -303,49 +324,47 @@ router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.
     };
 
     for (const p of periods) {
-      const periodNo = Number(p.period_number || p.period_no || 1);
+      const periodNo = Number(p.period_number || p.period_no);
+      if (isNaN(periodNo) || periodNo < 1 || periodNo > 7) {
+        throw Object.assign(new Error(`Invalid period number: ${p.period_number || p.period_no}`), { status: 400 });
+      }
+
       const isBreak = p.is_break ? 1 : 0;
       const startTime = p.start_time || DEFAULT_PERIOD_TIMES[periodNo]?.start || '08:30:00';
       const endTime = p.end_time || DEFAULT_PERIOD_TIMES[periodNo]?.end || '09:15:00';
       const subjectId = isBreak ? null : (p.subject_id || null);
       const teacherId = isBreak ? null : (p.teacher_id || p.teacher_user_id || null);
 
-      if (!periodNo) {
-        continue; // Skip invalid slot definition
-      }
-
-      // Teacher clash detection (if not break and teacher specified)
       if (!isBreak && teacherId) {
-        const [[clash]] = await pool.query(
+        const [[clash]] = await connection.query(
           `SELECT id FROM timetables
            WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ? AND section_id != ?`,
           [teacherId, dayNum, periodNo, sessionId, section_id]
         );
 
         if (clash) {
-          return res.status(409).json({
-            success: false,
-            message: `Teacher conflict: Teacher is already scheduled for another class during Period ${periodNo} on Day ${dayNum}`,
-          });
+          throw Object.assign(
+            new Error(`Teacher conflict: Teacher is already scheduled for another class during Period ${periodNo} on Day ${dayNum}`),
+            { status: 409 }
+          );
         }
       }
 
-      // Upsert: check if slot exists for this section, day, period, session
-      const [[existing]] = await pool.query(
+      const [[existing]] = await connection.query(
         `SELECT id FROM timetables
          WHERE section_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ?`,
         [section_id, dayNum, periodNo, sessionId]
       );
 
       if (existing) {
-        await pool.query(
+        await connection.query(
           `UPDATE timetables
            SET subject_id = ?, teacher_user_id = ?, start_time = ?, end_time = ?, is_break = ?
            WHERE id = ?`,
           [subjectId, teacherId, startTime, endTime, isBreak, existing.id]
         );
       } else {
-        await pool.query(
+        await connection.query(
           `INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id, is_break)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [section_id, subjectId, teacherId, dayNum, periodNo, startTime, endTime, sessionId, isBreak]
@@ -353,43 +372,80 @@ router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.
       }
     }
 
+    await connection.commit();
     res.json({ success: true, message: 'Timetable slots updated successfully' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    await connection.rollback();
+    res.status(err.status || 500).json({ success: false, message: err.message });
+  } finally {
+    connection.release();
   }
 });
 
 // Single slot creation (Admin compatibility)
 router.post('/', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN), async (req, res) => {
-  const { section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id, is_break } = req.body;
+  try {
+    const { section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id, is_break } = req.body;
 
-  const dayNum = parseDayOfWeek(day_of_week);
-  const [[sessionRow]] = await pool.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
-  const sessId = session_id || sessionRow?.id || 1;
+    if (!section_id || !day_of_week || !period_no) {
+      return res.status(400).json({ success: false, message: 'Missing required parameters: section_id, day_of_week, period_no' });
+    }
 
-  if (!is_break && teacher_user_id) {
-    const [[clash]] = await pool.query(
-      `SELECT id FROM timetables WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ? AND section_id != ?`,
-      [teacher_user_id, dayNum, period_no, sessId, section_id]
+    const periodNo = Number(period_no);
+    if (isNaN(periodNo) || periodNo < 1 || periodNo > 7) {
+      return res.status(400).json({ success: false, message: 'Invalid period_no: Must be between 1 and 7' });
+    }
+
+    const dayNum = parseDayOfWeek(day_of_week);
+    if (!dayNum) {
+      return res.status(400).json({ success: false, message: 'Invalid day_of_week specified' });
+    }
+
+    const [[sessionRow]] = await pool.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+    const sessId = session_id || sessionRow?.id;
+    if (!sessId) {
+      return res.status(409).json({ success: false, message: 'No active academic session found' });
+    }
+
+    const DEFAULT_PERIOD_TIMES = {
+      1: { start: '08:30:00', end: '09:15:00' },
+      2: { start: '09:15:00', end: '10:00:00' },
+      3: { start: '10:00:00', end: '10:45:00' },
+      4: { start: '11:15:00', end: '12:00:00' },
+      5: { start: '12:00:00', end: '12:45:00' },
+      6: { start: '12:45:00', end: '13:30:00' },
+      7: { start: '13:30:00', end: '14:15:00' },
+    };
+
+    const startTime = start_time || DEFAULT_PERIOD_TIMES[periodNo]?.start || '08:30:00';
+    const endTime = end_time || DEFAULT_PERIOD_TIMES[periodNo]?.end || '09:15:00';
+
+    if (!is_break && teacher_user_id) {
+      const [[clash]] = await pool.query(
+        `SELECT id FROM timetables WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ? AND section_id != ?`,
+        [teacher_user_id, dayNum, periodNo, sessId, section_id]
+      );
+      if (clash) return res.status(409).json({ success: false, message: 'Teacher already scheduled at this time' });
+    }
+
+    await pool.query(
+      `INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id, is_break)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [section_id, is_break ? null : (subject_id || null), is_break ? null : teacher_user_id, dayNum, periodNo, startTime, endTime, sessId, is_break ? 1 : 0]
     );
-    if (clash) return res.status(409).json({ success: false, message: 'Teacher already scheduled at this time' });
+    res.status(201).json({ success: true, message: 'Timetable slot created' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-
-  await pool.query(
-    `INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id, is_break)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [section_id, is_break ? null : (subject_id || null), is_break ? null : teacher_user_id, dayNum, period_no, start_time, end_time, sessId, is_break ? 1 : 0]
-  );
-  res.status(201).json({ success: true, message: 'Timetable slot created' });
 });
 
 // --------------------------------------------------------------------------
 // 5. DELETE /api/v1/timetable/period/:periodId
 // Access: Class Teacher (primary class), Admin, SuperAdmin
 // --------------------------------------------------------------------------
-router.delete('/period/:periodId', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), attachTeacherContext, async (req, res) => {
+const deleteTimetablePeriod = async (req, res) => {
   try {
-    const { periodId } = req.params;
+    const periodId = req.params.periodId || req.params.id;
 
     const [[slot]] = await pool.query('SELECT * FROM timetables WHERE id = ?', [periodId]);
     if (!slot) {
@@ -417,13 +473,10 @@ router.delete('/period/:periodId', verifyToken, authorize(ROLES.TEACHER, ROLES.A
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
-});
+};
 
-// Legacy single period delete alias
-router.delete('/:id', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.TEACHER), attachTeacherContext, async (req, res) => {
-  req.params.periodId = req.params.id;
-  router.handle(req, res);
-});
+router.delete('/period/:periodId', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), attachTeacherContext, deleteTimetablePeriod);
+router.delete('/:id', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), attachTeacherContext, deleteTimetablePeriod);
 
 // --------------------------------------------------------------------------
 // 6. GET /api/v1/timetable/my-schedule
@@ -462,7 +515,7 @@ router.get('/my-schedule', verifyToken, authorize(ROLES.TEACHER), async (req, re
 // 7. GET /api/v1/timetable/subjects & /api/v1/timetable/teachers
 // Helpers for dropdowns in timetable editor
 // --------------------------------------------------------------------------
-router.get('/subjects', verifyToken, async (req, res) => {
+router.get('/subjects', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.STUDENT), async (req, res) => {
   try {
     const { class_id } = req.query;
     let query = 'SELECT id, name, code, class_id FROM subjects';
@@ -474,7 +527,6 @@ router.get('/subjects', verifyToken, async (req, res) => {
     query += ' ORDER BY name, id';
     const [rows] = await pool.query(query, params);
 
-    // Deduplicate by name to prevent multiple duplicates of same subjects
     const uniqueMap = new Map();
     for (const sub of rows) {
       const key = sub.name.trim().toLowerCase();
@@ -489,7 +541,7 @@ router.get('/subjects', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/teachers', verifyToken, async (req, res) => {
+router.get('/teachers', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   try {
     const [teachers] = await pool.query(
       `SELECT u.id, u.full_name, u.email
@@ -498,17 +550,18 @@ router.get('/teachers', verifyToken, async (req, res) => {
        ORDER BY u.full_name`
     );
 
-    // Fetch assigned subjects per teacher from teacher_assignments and timetables
     const [assignments] = await pool.query(
       `SELECT DISTINCT ta.teacher_user_id, ta.subject_id, s.name AS subject_name
        FROM teacher_assignments ta
        JOIN subjects s ON ta.subject_id = s.id
        WHERE ta.subject_id IS NOT NULL
+         AND (ta.session_id IS NULL OR ta.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))
        UNION
        SELECT DISTINCT t.teacher_user_id, t.subject_id, s.name AS subject_name
        FROM timetables t
        JOIN subjects s ON t.subject_id = s.id
-       WHERE t.subject_id IS NOT NULL`
+       WHERE t.subject_id IS NOT NULL
+         AND (t.session_id IS NULL OR t.session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`
     );
 
     const teacherMap = new Map();

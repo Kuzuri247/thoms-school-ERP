@@ -96,7 +96,7 @@ const SchoolLandingPage = () => {
             ) : (
               <Link
                 to="/login"
-                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
+                className="group px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
               >
                 <LogIn className="size-5 group-hover:translate-x-0.5 transition-all duration-200" /> Sign In to ERP
               </Link>

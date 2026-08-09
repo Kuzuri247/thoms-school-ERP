@@ -114,8 +114,15 @@ const listAllForAdmin = async () => {
   return rows;
 };
 
-const deleteHomework = async (homeworkId) => {
-  await pool.query('DELETE FROM homework WHERE id = ?', [homeworkId]);
+const deleteHomework = async (homeworkId, teacherUserId = null) => {
+  let query = 'DELETE FROM homework WHERE id = ?';
+  let params = [homeworkId];
+  if (teacherUserId) {
+    query += ' AND assigned_by = ?';
+    params.push(teacherUserId);
+  }
+  const [result] = await pool.query(query, params);
+  return result.affectedRows;
 };
 
 module.exports = {

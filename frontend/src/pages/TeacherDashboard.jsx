@@ -148,7 +148,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     fetchTeacherElearning();
     fetchAssignedTtClasses();
     fetchMySchedule();
-    fetchTtMetadata();
   }, []);
 
   useEffect(() => {
@@ -165,6 +164,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
       setAssignedTtClasses(data);
       if (data.length > 0) {
         setSelectedTtClass(data[0]);
+      } else {
+        fetchTtMetadata(null);
       }
     } catch (err) {
       console.error("Failed to fetch assigned timetable classes:", err);
@@ -345,10 +346,12 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   };
 
   const handleDeleteTtSlot = async (periodId) => {
+    if (!selectedTtClass) return;
     if (!window.confirm("Are you sure you want to remove this timetable slot?")) return;
     try {
       const res = await api.delete(`/v1/timetable/period/${periodId}`);
       if (res.data?.success) {
+        setShowTtModal(false);
         fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
         fetchMySchedule();
       }
@@ -1048,6 +1051,16 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
               {activeTab === "timetable" && (
                 <div className="space-y-6 animate-in fade-in duration-200">
+                  {ttMessage && (
+                    <div className="p-3.5 bg-teal-50 border border-teal-200 rounded-2xl text-xs font-bold text-teal-800 flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" /> {ttMessage}
+                      </div>
+                      <button type="button" onClick={() => setTtMessage(null)} className="text-teal-600 hover:text-teal-800 p-0.5">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   {/* Top Control Bar */}
                   <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -1167,7 +1180,16 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 return (
                                   <React.Fragment key={`slot-${dayNum}-${periodNum}`}>
                                     <div
-                                      className={`relative group p-2.5 rounded-xl border transition-all ${
+                                      role={isClassTeacherForTt ? "button" : undefined}
+                                      tabIndex={isClassTeacherForTt ? 0 : undefined}
+                                      aria-label={`Period ${periodNum} ${item?.subject_name || (item?.is_break ? "Free Period" : "Not Scheduled")}`}
+                                      onKeyDown={(e) => {
+                                        if (isClassTeacherForTt && (e.key === "Enter" || e.key === " ")) {
+                                          e.preventDefault();
+                                          handleOpenTtModal(item, day, periodNum);
+                                        }
+                                      }}
+                                      className={`relative group p-2.5 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 ${
                                         isClassTeacherForTt ? "cursor-pointer" : ""
                                       } ${
                                         item?.is_break
@@ -1196,7 +1218,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                             </span>
                                           ) : (
                                             <span className="text-xs font-semibold text-slate-400 italic">
-                                              Free Period
+                                              Not Scheduled
                                             </span>
                                           )}
                                         </div>
@@ -1217,7 +1239,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                                       {/* Hover Edit Bubble (Top-Right of the Box) */}
                                       {isClassTeacherForTt && (
-                                        <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+                                        <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 z-10">
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -1300,10 +1322,18 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                   {/* Slot Builder Upsert Modal for Class Teacher */}
                   {showTtModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="tt-modal-title"
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setShowTtModal(false);
+                      }}
+                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+                    >
                       <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                          <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                          <h3 id="tt-modal-title" className="text-lg font-black text-slate-900 flex items-center gap-2">
                             <Clock className="w-5 h-5 text-teal-600" />
                             {editingSlot ? "Edit Period Slot" : "Add / Upsert Period Slot"}
                           </h3>
@@ -1343,7 +1373,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                             <select
                               value={ttFormData.day_of_week}
                               onChange={(e) => setTtFormData({ ...ttFormData, day_of_week: e.target.value })}
-                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              disabled={Boolean(editingSlot)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               {daysOfWeek.map((d) => (
                                 <option key={`opt-${d}`} value={d}>{d}</option>
@@ -1397,6 +1428,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                           )}
 
                           <div className="flex items-center justify-end gap-2 pt-2">
+                            {editingSlot && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTtSlot(editingSlot.id)}
+                                className="mr-auto px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setShowTtModal(false)}

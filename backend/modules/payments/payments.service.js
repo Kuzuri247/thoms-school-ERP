@@ -61,15 +61,27 @@ const createOrder = async (feeRecordId, createdByUserId) => {
   };
 };
 
-const verifyPayment = async ({
-  razorpay_order_id,
-  razorpay_payment_id,
-  razorpay_signature,
-}) => {
+const verifyPayment = async (
+  { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+  user = null
+) => {
   const secret = process.env.RAZORPAY_KEY_SECRET;
   if (!secret) {
     throw Object.assign(new Error("Razorpay Secret is not configured"), { status: 500 });
   }
+
+  if (user && user.role === "student") {
+    const [[orderInfo]] = await pool.query(
+      `SELECT ro.student_id FROM razorpay_orders ro
+       JOIN students s ON ro.student_id = s.id
+       WHERE ro.razorpay_order_id = ? AND s.user_id = ?`,
+      [razorpay_order_id, user.id]
+    );
+    if (!orderInfo) {
+      throw Object.assign(new Error("Unauthorized: Cannot verify payment for another student"), { status: 403 });
+    }
+  }
+
   const expectedSignature = crypto
     .createHmac("sha256", secret)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)

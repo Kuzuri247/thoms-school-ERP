@@ -2,14 +2,23 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+const JWT_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET;
 
 function generateToken(id, role, email) {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_ACCESS_SECRET or JWT_SECRET must be set');
+  }
   return jwt.sign({ id, role, email }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 async function testHttpEndpoints() {
   console.log("=== Starting HTTP Endpoints & RBAC Verification ===");
+
+  if (!JWT_SECRET) {
+    console.error("Verification script skipped: JWT secret environment variable is not set.");
+    await pool.end();
+    process.exit(1);
+  }
 
   const app = express();
   app.use(express.json());
@@ -30,6 +39,12 @@ async function testHttpEndpoints() {
       );
       const ct = ctRows[0];
 
+      if (!ct) {
+        console.error("Verification script error: Missing seed data for Class Teacher");
+        await pool.end();
+        process.exit(1);
+      }
+
       const [stRows] = await pool.query(
         `SELECT u.id, u.email
          FROM users u
@@ -39,8 +54,20 @@ async function testHttpEndpoints() {
       );
       const st = stRows[0];
 
+      if (!st) {
+        console.error("Verification script error: Missing seed data for Subject Teacher");
+        await pool.end();
+        process.exit(1);
+      }
+
       const [studRows] = await pool.query(`SELECT user_id FROM students LIMIT 1`);
       const student = studRows[0];
+
+      if (!student) {
+        console.error("Verification script error: Missing seed data for Student");
+        await pool.end();
+        process.exit(1);
+      }
 
       const ctToken = generateToken(ct.teacher_user_id, 'teacher', ct.email);
       const stToken = generateToken(st.id, 'teacher', st.email);
@@ -53,6 +80,7 @@ async function testHttpEndpoints() {
       });
       const data1 = await res1.json();
       console.log(`STATUS: ${res1.status}, SUCCESS: ${data1.success}, SLOTS: ${data1.data?.length}`);
+      if (res1.status !== 200 || !data1.success) throw new Error(`GET /my-class failed with status ${res1.status}`);
 
       // 2. GET /assigned-classes
       console.log("\n2. Testing GET /api/v1/timetable/assigned-classes (Teacher)...");
@@ -61,6 +89,7 @@ async function testHttpEndpoints() {
       });
       const data2 = await res2.json();
       console.log(`STATUS: ${res2.status}, SUCCESS: ${data2.success}, CLASSES: ${data2.data?.length}`);
+      if (res2.status !== 200 || !data2.success) throw new Error(`GET /assigned-classes failed with status ${res2.status}`);
 
       // 3. GET /class/:classId/section/:sectionId
       console.log("\n3. Testing GET /api/v1/timetable/class/:classId/section/:sectionId...");
@@ -69,6 +98,7 @@ async function testHttpEndpoints() {
       });
       const data3 = await res3.json();
       console.log(`STATUS: ${res3.status}, SUCCESS: ${data3.success}, IS_CLASS_TEACHER: ${data3.is_class_teacher}`);
+      if (res3.status !== 200 || !data3.success) throw new Error(`GET /class/... failed with status ${res3.status}`);
 
       // 4. POST /upsert (Class Teacher -> Allowed)
       console.log("\n4. Testing POST /api/v1/timetable/upsert with Class Teacher...");
@@ -96,6 +126,7 @@ async function testHttpEndpoints() {
       });
       const data4 = await res4.json();
       console.log(`STATUS: ${res4.status}, MESSAGE: ${data4.message}`);
+      if (res4.status !== 200 || !data4.success) throw new Error(`POST /upsert failed with status ${res4.status}`);
 
       // 5. POST /upsert (Subject Teacher -> Forbidden 403)
       console.log("\n5. Testing POST /api/v1/timetable/upsert with Subject Teacher (Expect 403)...");
@@ -122,10 +153,11 @@ async function testHttpEndpoints() {
       });
       const data5 = await res5.json();
       console.log(`STATUS: ${res5.status}, MESSAGE: ${data5.message}`);
+      if (res5.status !== 403) throw new Error(`Expected 403 for Subject Teacher upsert, got ${res5.status}`);
 
       // Clean up
       const [createdSlots] = await pool.query(
-        `SELECT id FROM timetables WHERE section_id = ? AND period_no = 7 AND day_of_week = 1`,
+        `SELECT id FROM timetables WHERE section_id = ? AND period_no = 7 AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
         [ct.section_id]
       );
       if (createdSlots[0]) {
@@ -135,17 +167,18 @@ async function testHttpEndpoints() {
         });
         const data6 = await res6.json();
         console.log(`DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
+        if (res6.status !== 200) throw new Error(`DELETE /period failed with status ${res6.status}`);
       }
 
       console.log("\n==============================================");
       console.log("✅ ALL HTTP API & RBAC ENFORCEMENT TESTS PASSED!");
       console.log("==============================================");
-      await pool.end();
-      process.exit(0);
+      server.close();
+      setTimeout(() => process.exit(0), 50);
     } catch (err) {
       console.error("HTTP VERIFICATION FAILED:", err);
-      await pool.end();
-      process.exit(1);
+      server.close();
+      setTimeout(() => process.exit(1), 50);
     }
   });
 }
