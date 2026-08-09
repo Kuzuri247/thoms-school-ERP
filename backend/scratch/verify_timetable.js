@@ -27,6 +27,8 @@ async function testHttpEndpoints() {
   const server = app.listen(0, async () => {
     const port = server.address().port;
     const baseUrl = `http://localhost:${port}/api/v1/timetable`;
+    let ct = null;
+    let ctToken = null;
 
     try {
       const [ctRows] = await pool.query(
@@ -37,27 +39,30 @@ async function testHttpEndpoints() {
          WHERE ta.is_class_teacher = 1
          LIMIT 1`
       );
-      const ct = ctRows[0];
+      ct = ctRows[0];
 
       if (!ct) {
         console.error("Verification script error: Missing seed data for Class Teacher");
-        await pool.end();
-        process.exit(1);
+        server.close();
+        setTimeout(() => process.exit(1), 50);
+        return;
       }
 
       const [stRows] = await pool.query(
         `SELECT u.id, u.email
          FROM users u
          WHERE u.role = 'teacher' AND u.id != ?
+           AND u.id NOT IN (SELECT teacher_user_id FROM teacher_assignments WHERE section_id = ?)
          LIMIT 1`,
-        [ct.teacher_user_id]
+        [ct.teacher_user_id, ct.section_id]
       );
       const st = stRows[0];
 
       if (!st) {
         console.error("Verification script error: Missing seed data for Subject Teacher");
-        await pool.end();
-        process.exit(1);
+        server.close();
+        setTimeout(() => process.exit(1), 50);
+        return;
       }
 
       const [studRows] = await pool.query(`SELECT user_id FROM students LIMIT 1`);
@@ -65,11 +70,12 @@ async function testHttpEndpoints() {
 
       if (!student) {
         console.error("Verification script error: Missing seed data for Student");
-        await pool.end();
-        process.exit(1);
+        server.close();
+        setTimeout(() => process.exit(1), 50);
+        return;
       }
 
-      const ctToken = generateToken(ct.teacher_user_id, 'teacher', ct.email);
+      ctToken = generateToken(ct.teacher_user_id, 'teacher', ct.email);
       const stToken = generateToken(st.id, 'teacher', st.email);
       const studentToken = generateToken(student.user_id, 'student', 'student@test.com');
 
@@ -155,30 +161,33 @@ async function testHttpEndpoints() {
       console.log(`STATUS: ${res5.status}, MESSAGE: ${data5.message}`);
       if (res5.status !== 403) throw new Error(`Expected 403 for Subject Teacher upsert, got ${res5.status}`);
 
-      // Clean up
-      const [createdSlots] = await pool.query(
-        `SELECT id FROM timetables WHERE section_id = ? AND period_no = 7 AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
-        [ct.section_id]
-      );
-      if (createdSlots[0]) {
-        const res6 = await fetch(`${baseUrl}/period/${createdSlots[0].id}`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${ctToken}` },
-        });
-        const data6 = await res6.json();
-        console.log(`DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
-        if (res6.status !== 200) throw new Error(`DELETE /period failed with status ${res6.status}`);
-      }
-
       console.log("\n==============================================");
       console.log("✅ ALL HTTP API & RBAC ENFORCEMENT TESTS PASSED!");
       console.log("==============================================");
-      server.close();
-      setTimeout(() => process.exit(0), 50);
     } catch (err) {
       console.error("HTTP VERIFICATION FAILED:", err);
+      process.exitCode = 1;
+    } finally {
+      if (ct && ctToken) {
+        try {
+          const [createdSlots] = await pool.query(
+            `SELECT id FROM timetables WHERE section_id = ? AND period_no = 7 AND day_of_week = 1 AND (session_id IS NULL OR session_id = (SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1))`,
+            [ct.section_id]
+          );
+          if (createdSlots[0]) {
+            const res6 = await fetch(`${baseUrl}/period/${createdSlots[0].id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${ctToken}` },
+            });
+            const data6 = await res6.json();
+            console.log(`CLEANUP DELETE STATUS: ${res6.status}, MESSAGE: ${data6.message}`);
+          }
+        } catch (cleanupErr) {
+          console.error("Cleanup error:", cleanupErr);
+        }
+      }
       server.close();
-      setTimeout(() => process.exit(1), 50);
+      setTimeout(() => process.exit(process.exitCode || 0), 50);
     }
   });
 }

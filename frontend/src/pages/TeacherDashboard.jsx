@@ -1236,23 +1236,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                           </span>
                                         </div>
                                       )}
-
-                                      {/* Hover Edit Bubble (Top-Right of the Box) */}
-                                      {isClassTeacherForTt && (
-                                        <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 z-10">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleOpenTtModal(item, day, periodNum);
-                                            }}
-                                            className="p-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-md flex items-center justify-center transition-transform transform hover:scale-110"
-                                            title="Edit Period"
-                                          >
-                                            <Edit3 className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      )}
                                     </div>
 
                                     {/* Recess Banner after Period 3 */}

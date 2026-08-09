@@ -6,7 +6,7 @@ const { authorize } = require('../../middleware/rbac');
 const { attachTeacherContext } = require('../../middleware/teacherContext');
 const { ROLES } = require('../../config/constants');
 
-const DAY_MAP = {
+const DAY_MAP = Object.assign(Object.create(null), {
   monday: 1, mon: 1,
   tuesday: 2, tue: 2,
   wednesday: 3, wed: 3,
@@ -14,13 +14,23 @@ const DAY_MAP = {
   friday: 5, fri: 5,
   saturday: 6, sat: 6,
   sunday: 7, sun: 7,
+});
+
+const DEFAULT_PERIOD_TIMES = {
+  1: { start: '08:30:00', end: '09:15:00' },
+  2: { start: '09:15:00', end: '10:00:00' },
+  3: { start: '10:00:00', end: '10:45:00' },
+  4: { start: '11:15:00', end: '12:00:00' },
+  5: { start: '12:00:00', end: '12:45:00' },
+  6: { start: '12:45:00', end: '13:30:00' },
+  7: { start: '13:30:00', end: '14:15:00' },
 };
 
 // Helper: resolve day string/number to 1..7 or null for invalid input
 function parseDayOfWeek(day) {
   if (day === undefined || day === null) return 1;
   const key = String(day).trim().toLowerCase();
-  if (DAY_MAP[key]) return DAY_MAP[key];
+  if (Object.prototype.hasOwnProperty.call(DAY_MAP, key)) return DAY_MAP[key];
   const num = Number(key);
   if (!isNaN(num) && num >= 1 && num <= 7) return num;
   return null;
@@ -71,7 +81,8 @@ const getStudentTimetable = async (req, res) => {
 
     res.json({ success: true, data: rows, studentInfo: student });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/my-class):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch student timetable' });
   }
 };
 
@@ -150,7 +161,8 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
     const classes = Array.from(sectionMap.values());
     res.json({ success: true, data: classes, teacherContext: req.teacherContext });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/assigned-classes):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch assigned classes' });
   }
 });
 
@@ -216,7 +228,8 @@ router.get('/class/:classId/section/:sectionId', verifyToken, authorize(ROLES.TE
       is_class_teacher: isClassTeacher,
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/class/:classId/section/:sectionId):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch section timetable' });
   }
 });
 
@@ -266,7 +279,8 @@ router.get('/section/:sectionId', verifyToken, authorize(ROLES.STUDENT, ROLES.TE
     );
     res.json({ success: true, data: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/section/:sectionId):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch section timetable' });
   }
 });
 
@@ -313,16 +327,6 @@ router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.
   try {
     await connection.beginTransaction();
 
-    const DEFAULT_PERIOD_TIMES = {
-      1: { start: '08:30:00', end: '09:15:00' },
-      2: { start: '09:15:00', end: '10:00:00' },
-      3: { start: '10:00:00', end: '10:45:00' },
-      4: { start: '11:15:00', end: '12:00:00' },
-      5: { start: '12:00:00', end: '12:45:00' },
-      6: { start: '12:45:00', end: '13:30:00' },
-      7: { start: '13:30:00', end: '14:15:00' },
-    };
-
     for (const p of periods) {
       const periodNo = Number(p.period_number || p.period_no);
       if (isNaN(periodNo) || periodNo < 1 || periodNo > 7) {
@@ -338,7 +342,8 @@ router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.
       if (!isBreak && teacherId) {
         const [[clash]] = await connection.query(
           `SELECT id FROM timetables
-           WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ? AND section_id != ?`,
+           WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ?
+             AND (session_id = ? OR session_id IS NULL) AND section_id != ?`,
           [teacherId, dayNum, periodNo, sessionId, section_id]
         );
 
@@ -352,16 +357,17 @@ router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.
 
       const [[existing]] = await connection.query(
         `SELECT id FROM timetables
-         WHERE section_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ?`,
+         WHERE section_id = ? AND day_of_week = ? AND period_no = ?
+           AND (session_id = ? OR session_id IS NULL)`,
         [section_id, dayNum, periodNo, sessionId]
       );
 
       if (existing) {
         await connection.query(
           `UPDATE timetables
-           SET subject_id = ?, teacher_user_id = ?, start_time = ?, end_time = ?, is_break = ?
+           SET subject_id = ?, teacher_user_id = ?, start_time = ?, end_time = ?, is_break = ?, session_id = ?
            WHERE id = ?`,
-          [subjectId, teacherId, startTime, endTime, isBreak, existing.id]
+          [subjectId, teacherId, startTime, endTime, isBreak, sessionId, existing.id]
         );
       } else {
         await connection.query(
@@ -376,7 +382,11 @@ router.post('/upsert', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.
     res.json({ success: true, message: 'Timetable slots updated successfully' });
   } catch (err) {
     await connection.rollback();
-    res.status(err.status || 500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/upsert):', err);
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    res.status(500).json({ success: false, message: 'Failed to update timetable slots' });
   } finally {
     connection.release();
   }
@@ -407,35 +417,48 @@ router.post('/', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN), async (
       return res.status(409).json({ success: false, message: 'No active academic session found' });
     }
 
-    const DEFAULT_PERIOD_TIMES = {
-      1: { start: '08:30:00', end: '09:15:00' },
-      2: { start: '09:15:00', end: '10:00:00' },
-      3: { start: '10:00:00', end: '10:45:00' },
-      4: { start: '11:15:00', end: '12:00:00' },
-      5: { start: '12:00:00', end: '12:45:00' },
-      6: { start: '12:45:00', end: '13:30:00' },
-      7: { start: '13:30:00', end: '14:15:00' },
-    };
-
     const startTime = start_time || DEFAULT_PERIOD_TIMES[periodNo]?.start || '08:30:00';
     const endTime = end_time || DEFAULT_PERIOD_TIMES[periodNo]?.end || '09:15:00';
+    const isBreakVal = is_break ? 1 : 0;
+    const subjIdVal = isBreakVal ? null : (subject_id || null);
+    const teacherIdVal = isBreakVal ? null : (teacher_user_id || null);
 
-    if (!is_break && teacher_user_id) {
+    if (!isBreakVal && teacherIdVal) {
       const [[clash]] = await pool.query(
-        `SELECT id FROM timetables WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ? AND session_id = ? AND section_id != ?`,
-        [teacher_user_id, dayNum, periodNo, sessId, section_id]
+        `SELECT id FROM timetables
+         WHERE teacher_user_id = ? AND day_of_week = ? AND period_no = ?
+           AND (session_id = ? OR session_id IS NULL) AND section_id != ?`,
+        [teacherIdVal, dayNum, periodNo, sessId, section_id]
       );
       if (clash) return res.status(409).json({ success: false, message: 'Teacher already scheduled at this time' });
+    }
+
+    const [[existing]] = await pool.query(
+      `SELECT id FROM timetables
+       WHERE section_id = ? AND day_of_week = ? AND period_no = ?
+         AND (session_id = ? OR session_id IS NULL)`,
+      [section_id, dayNum, periodNo, sessId]
+    );
+
+    if (existing) {
+      await pool.query(
+        `UPDATE timetables
+         SET subject_id = ?, teacher_user_id = ?, start_time = ?, end_time = ?, is_break = ?, session_id = ?
+         WHERE id = ?`,
+        [subjIdVal, teacherIdVal, startTime, endTime, isBreakVal, sessId, existing.id]
+      );
+      return res.json({ success: true, message: 'Timetable slot updated successfully' });
     }
 
     await pool.query(
       `INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id, is_break)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [section_id, is_break ? null : (subject_id || null), is_break ? null : teacher_user_id, dayNum, periodNo, startTime, endTime, sessId, is_break ? 1 : 0]
+      [section_id, subjIdVal, teacherIdVal, dayNum, periodNo, startTime, endTime, sessId, isBreakVal]
     );
     res.status(201).json({ success: true, message: 'Timetable slot created' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (POST /):', err);
+    res.status(500).json({ success: false, message: 'Failed to create timetable slot' });
   }
 });
 
@@ -471,7 +494,8 @@ const deleteTimetablePeriod = async (req, res) => {
     await pool.query('DELETE FROM timetables WHERE id = ?', [periodId]);
     res.json({ success: true, message: 'Period removed successfully' });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/period/:periodId):', err);
+    res.status(500).json({ success: false, message: 'Failed to delete timetable period' });
   }
 };
 
@@ -507,7 +531,8 @@ router.get('/my-schedule', verifyToken, authorize(ROLES.TEACHER), async (req, re
     );
     res.json({ success: true, data: rows });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/my-schedule):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch teaching schedule' });
   }
 });
 
@@ -530,14 +555,18 @@ router.get('/subjects', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES
     const uniqueMap = new Map();
     for (const sub of rows) {
       const key = sub.name.trim().toLowerCase();
-      if (!uniqueMap.has(key)) {
+      const existing = uniqueMap.get(key);
+      if (!existing) {
+        uniqueMap.set(key, sub);
+      } else if (class_id && Number(sub.class_id) === Number(class_id)) {
         uniqueMap.set(key, sub);
       }
     }
 
     res.json({ success: true, data: Array.from(uniqueMap.values()) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/subjects):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch subjects' });
   }
 });
 
@@ -582,7 +611,8 @@ router.get('/teachers', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES
 
     res.json({ success: true, data: Array.from(teacherMap.values()) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Timetable API error (/teachers):', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch teachers' });
   }
 });
 
