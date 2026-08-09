@@ -33,7 +33,7 @@ router.post('/create-order',
 );
 
 // POST /api/payments/verify - Verify Razorpay payment signature
-router.post('/verify', verifyToken, async (req, res) => {
+router.post('/verify', verifyToken, authorize(...canCreateOrder), async (req, res) => {
   try {
     const result = await svc.verifyPayment(req.body);
     res.json({ success: true, data: result });

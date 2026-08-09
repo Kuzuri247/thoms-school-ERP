@@ -35,7 +35,7 @@ router.get('/my-assignments', verifyToken, authorize(ROLES.TEACHER), async (req,
 });
 
 // Admin/Super Admin view of all teachers + assignments
-router.get('/all', verifyToken, authorize(...canManage, ROLES.SUPER_ADMIN), async (req, res) => {
+router.get('/all', verifyToken, authorize(...canManage), async (req, res) => {
   const rows = await svc.listAllTeachersWithAssignments();
   res.json({ success: true, data: rows });
 });
