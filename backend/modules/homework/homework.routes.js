@@ -138,7 +138,14 @@ router.put('/status', verifyToken, authorize(ROLES.STUDENT), async (req, res) =>
 // Teacher or Admin deletes homework
 router.delete('/:id', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, ROLES.SUPER_ADMIN), async (req, res) => {
   try {
-    await svc.deleteHomework(req.params.id);
+    const teacherUserId = req.user.role === ROLES.TEACHER ? req.user.id : null;
+    const affected = await svc.deleteHomework(req.params.id, teacherUserId);
+    if (affected === 0) {
+      if (req.user.role === ROLES.TEACHER) {
+        return res.status(403).json({ success: false, message: 'Not authorized to delete this homework assignment or homework not found' });
+      }
+      return res.status(404).json({ success: false, message: 'Homework not found' });
+    }
     res.json({ success: true, message: 'Homework deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

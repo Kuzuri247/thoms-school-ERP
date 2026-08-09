@@ -1,27 +1,27 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import SchoolLandingPage from './pages/SchoolLandingPage';
-import Login from './pages/Login';
-import ForgotPassword from './pages/ForgotPassword';
-import SuperAdminDashboard from './pages/SuperAdminDashboard';
-import TeacherDashboard from './pages/TeacherDashboard';
-import StudentDashboard from './pages/StudentDashboard';
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import SchoolLandingPage from "./pages/SchoolLandingPage";
+import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import TeacherDashboard from "./pages/TeacherDashboard";
+import StudentDashboard from "./pages/StudentDashboard";
+import Layout from "./components/Layout";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 // Feature Views
-import FinanceDashboard from './features/fees/FinanceDashboard';
-import AdminUserManagementView from './features/admin/AdminUserManagementView';
-import AdminClassDirectoryView from './features/admin/AdminClassDirectoryView';
-import UserProfileView from './features/users/UserProfileView';
-import AdminHomeworkView from './features/admin/AdminHomeworkView';
-import Noticeboard from './features/noticeboard/Noticeboard';
-import AcademicCalendarView from './features/academics/AcademicCalendarView';
+import FinanceDashboard from "./features/fees/FinanceDashboard";
+import AdminUserManagementView from "./features/admin/AdminUserManagementView";
+import AdminClassDirectoryView from "./features/admin/AdminClassDirectoryView";
+import UserProfileView from "./features/users/UserProfileView";
+import AdminHomeworkView from "./features/admin/AdminHomeworkView";
+import Noticeboard from "./features/noticeboard/Noticeboard";
+import AcademicCalendarView from "./features/academics/AcademicCalendarView";
 // import ExamResultsView from './features/academics/ExamResultsView';
-import CommunicationCenterView from './features/communication/CommunicationCenterView';
-import SystemSettingsView from './features/admin/SystemSettingsView';
-import TransportManagementView from './features/transport/TransportManagementView';
-import FinancialReportsView from './features/reports/FinancialReportsView';
+import CommunicationCenterView from "./features/communication/CommunicationCenterView";
+import SystemSettingsView from "./features/admin/SystemSettingsView";
+import TransportManagementView from "./features/transport/TransportManagementView";
+import FinancialReportsView from "./features/reports/FinancialReportsView";
 
 function App() {
   return (
@@ -38,9 +38,12 @@ function App() {
               <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto font-bold text-xl">
                 !
               </div>
-              <h1 className="text-xl font-bold text-slate-900">Access Denied</h1>
+              <h1 className="text-xl font-bold text-slate-900">
+                Access Denied
+              </h1>
               <p className="text-sm text-slate-500">
-                You do not have permission to view this page under your current role.
+                You do not have permission to view this page under your current
+                role.
               </p>
               <a
                 href="/"
@@ -54,7 +57,7 @@ function App() {
       />
 
       {/* Dynamic RBAC Shell */}
-      <Route element={<ProtectedRoute allowedRoles={['*']} />}>
+      <Route element={<ProtectedRoute allowedRoles={["*"]} />}>
         <Route element={<Layout />}>
           <Route path="/profile" element={<UserProfileView />} />
           <Route path="/profile/:id" element={<UserProfileView />} />
@@ -62,44 +65,109 @@ function App() {
           {/* <Route path="/academic/examinations" element={<ExamResultsView />} /> */}
 
           {/* Super Admin Exclusive Route */}
-          <Route element={<ProtectedRoute allowedRoles={['super_admin']} />}>
+          <Route element={<ProtectedRoute allowedRoles={["super_admin"]} />}>
             <Route path="/dashboard" element={<SuperAdminDashboard />} />
           </Route>
 
           {/* Admin & Super Admin Management Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
+          <Route
+            element={<ProtectedRoute allowedRoles={["admin", "super_admin"]} />}
+          >
             <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
-            <Route path="/admin/users" element={<AdminUserManagementView initialTab="all" />} />
-            <Route path="/admin/classes" element={<AdminClassDirectoryView />} />
+            <Route
+              path="/admin/users"
+              element={<AdminUserManagementView initialTab="all" />}
+            />
+            <Route
+              path="/admin/classes"
+              element={<AdminClassDirectoryView />}
+            />
             <Route path="/admin/notices" element={<Noticeboard />} />
             <Route path="/admin/homework" element={<AdminHomeworkView />} />
-            <Route path="/communication/center" element={<CommunicationCenterView />} />
-            <Route path="/transport/management" element={<TransportManagementView />} />
+            <Route
+              path="/communication/center"
+              element={<CommunicationCenterView />}
+            />
+            <Route
+              path="/transport/management"
+              element={<TransportManagementView />}
+            />
           </Route>
 
           {/* Teacher Suite Routes (Strictly Teacher, Admin, Super Admin) */}
-          <Route element={<ProtectedRoute allowedRoles={['teacher', 'admin', 'super_admin']} />}>
-            <Route path="/teacher/dashboard" element={<TeacherDashboard activeTab="overview" />} />
-            <Route path="/teacher/attendance" element={<TeacherDashboard activeTab="attendance" />} />
-            <Route path="/teacher/timetable" element={<TeacherDashboard activeTab="timetable" />} />
-            <Route path="/teacher/homework" element={<TeacherDashboard activeTab="homework" />} />
-            <Route path="/teacher/elearning" element={<TeacherDashboard activeTab="elearning" />} />
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["teacher", "admin", "super_admin"]}
+              />
+            }
+          >
+            <Route
+              path="/teacher/dashboard"
+              element={<TeacherDashboard activeTab="overview" />}
+            />
+            <Route
+              path="/teacher/attendance"
+              element={<TeacherDashboard activeTab="attendance" />}
+            />
+            <Route
+              path="/teacher/timetable"
+              element={<TeacherDashboard activeTab="timetable" />}
+            />
+            <Route
+              path="/teacher/homework"
+              element={<TeacherDashboard activeTab="homework" />}
+            />
+            <Route
+              path="/teacher/elearning"
+              element={<TeacherDashboard activeTab="elearning" />}
+            />
           </Route>
 
           {/* Student Portal Routes (Strictly Student, Admin, Super Admin) */}
-          <Route element={<ProtectedRoute allowedRoles={['student', 'admin', 'super_admin']} />}>
-            <Route path="/student/dashboard" element={<StudentDashboard activeTab="home" />} />
-            <Route path="/student/work" element={<StudentDashboard activeTab="work" />} />
-            <Route path="/student/timetable" element={<StudentDashboard activeTab="timetable" />} />
-            <Route path="/student/fees" element={<StudentDashboard activeTab="fees" />} />
-            <Route path="/student/elearning" element={<StudentDashboard activeTab="elearning" />} />
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["student", "admin", "super_admin"]}
+              />
+            }
+          >
+            <Route
+              path="/student/dashboard"
+              element={<StudentDashboard activeTab="home" />}
+            />
+            <Route
+              path="/student/work"
+              element={<StudentDashboard activeTab="work" />}
+            />
+            <Route
+              path="/student/timetable"
+              element={<StudentDashboard activeTab="timetable" />}
+            />
+            <Route
+              path="/student/fees"
+              element={<StudentDashboard activeTab="fees" />}
+            />
+            <Route
+              path="/student/elearning"
+              element={<StudentDashboard activeTab="elearning" />}
+            />
           </Route>
 
           {/* Finance & Fees Terminal Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['cashier', 'admin', 'super_admin']} />}>
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["cashier", "admin", "super_admin"]}
+              />
+            }
+          >
             <Route path="/finance/dashboard" element={<FinanceDashboard />} />
             <Route path="/finance/reports" element={<FinancialReportsView />} />
-            <Route path="/fees/collect" element={<Navigate to="/finance/dashboard" replace />} />
+            <Route
+              path="/fees/collect"
+              element={<Navigate to="/finance/dashboard" replace />}
+            />
           </Route>
         </Route>
       </Route>

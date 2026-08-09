@@ -68,8 +68,8 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
       setAttendanceSummary(attRes.data?.data || null);
       setElearningItems(elearnRes.data?.data || []);
 
-      // Fetch parameterless student timetable
-      const ttRes = await api.get('/timetable/student/my-timetable').catch(() => ({ data: { data: [] } }));
+      // Fetch parameterless student timetable from /v1/timetable/my-class
+      const ttRes = await api.get('/v1/timetable/my-class').catch(() => ({ data: { data: [] } }));
       setTimetable(ttRes.data?.data || []);
     } catch (err) {
       console.error('Failed to load student dashboard data:', err);
@@ -360,7 +360,7 @@ const StudentDashboard = ({ activeTab = 'home' }) => {
                                 </span>
                               )}
                             </div>
-                            <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                            <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100 whitespace-nowrap">
                               {item ? `${item.start_time?.slice(0, 5)} - ${item.end_time?.slice(0, 5)}` : slot.label}
                             </span>
                           </div>

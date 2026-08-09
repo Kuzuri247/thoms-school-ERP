@@ -21,6 +21,11 @@ import {
   Tv,
   Video,
   Play,
+  Lock,
+  Unlock,
+  ShieldAlert,
+  Layers,
+  UserCheck,
 } from "lucide-react";
 
 const daysOfWeek = [
@@ -31,6 +36,16 @@ const daysOfWeek = [
   "Friday",
   "Saturday",
 ];
+
+const STANDARD_PERIOD_TIMES = {
+  1: { start_time: "08:30", end_time: "09:15" },
+  2: { start_time: "09:15", end_time: "10:00" },
+  3: { start_time: "10:00", end_time: "10:45" },
+  4: { start_time: "11:15", end_time: "12:00" },
+  5: { start_time: "12:00", end_time: "12:45" },
+  6: { start_time: "12:45", end_time: "13:30" },
+  7: { start_time: "13:30", end_time: "14:15" },
+};
 const monthNames = [
   "January",
   "February",
@@ -102,12 +117,248 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [postingVideo, setPostingVideo] = useState(false);
   const [elearningMessage, setElearningMessage] = useState("");
 
+  // Refined Timetable Feature State
+  const [assignedTtClasses, setAssignedTtClasses] = useState([]);
+  const [selectedTtClass, setSelectedTtClass] = useState(null);
+  const [classTimetable, setClassTimetable] = useState([]);
+  const [mySchedule, setMySchedule] = useState([]);
+  const [isClassTeacherForTt, setIsClassTeacherForTt] = useState(false);
+  const [timetableTabMode, setTimetableTabMode] = useState("class"); // 'class' | 'my-schedule'
+  const [allSubjects, setAllSubjects] = useState([]);
+  const [allTeachers, setAllTeachers] = useState([]);
+  const [showTtModal, setShowTtModal] = useState(false);
+  const [editingSlot, setEditingSlot] = useState(null);
+  const [ttFormData, setTtFormData] = useState({
+    day_of_week: "Monday",
+    period_number: 1,
+    start_time: "08:30",
+    end_time: "09:15",
+    subject_id: "",
+    teacher_id: "",
+    is_break: false,
+  });
+  const [ttMessage, setTtMessage] = useState(null);
+  const [ttError, setTtError] = useState(null);
+  const [savingTtSlot, setSavingTtSlot] = useState(false);
+
   useEffect(() => {
     fetchTeacherClasses();
     fetchTeacherTimetable();
     fetchTeacherHomeworks();
     fetchTeacherElearning();
+    fetchAssignedTtClasses();
+    fetchMySchedule();
   }, []);
+
+  useEffect(() => {
+    if (selectedTtClass) {
+      fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
+      fetchTtMetadata(selectedTtClass.class_id);
+    }
+  }, [selectedTtClass]);
+
+  const fetchAssignedTtClasses = async () => {
+    try {
+      const res = await api.get("/v1/timetable/assigned-classes");
+      const data = res.data?.data || [];
+      setAssignedTtClasses(data);
+      if (data.length > 0) {
+        setSelectedTtClass(data[0]);
+      } else {
+        fetchTtMetadata(null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch assigned timetable classes:", err);
+    }
+  };
+
+  const fetchClassTimetable = async (classId, sectionId) => {
+    if (!classId || !sectionId) return;
+    try {
+      const res = await api.get(`/v1/timetable/class/${classId}/section/${sectionId}`);
+      setClassTimetable(res.data?.data || []);
+      setIsClassTeacherForTt(res.data?.is_class_teacher || false);
+    } catch (err) {
+      console.error("Failed to fetch section timetable:", err);
+    }
+  };
+
+  const fetchMySchedule = async () => {
+    try {
+      const res = await api.get("/v1/timetable/my-schedule");
+      setMySchedule(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch my schedule:", err);
+    }
+  };
+
+  const fetchTtMetadata = async (classId = null) => {
+    try {
+      const subUrl = classId ? `/v1/timetable/subjects?class_id=${classId}` : "/v1/timetable/subjects";
+      const [subRes, teachRes] = await Promise.all([
+        api.get(subUrl).catch(() => ({ data: { data: [] } })),
+        api.get("/v1/timetable/teachers").catch(() => ({ data: { data: [] } })),
+      ]);
+      setAllSubjects(subRes.data?.data || []);
+      setAllTeachers(teachRes.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch timetable metadata:", err);
+    }
+  };
+
+  // Bidirectional Subject & Teacher Filtering for Timetable Editor Modal
+  const selectedTeacher = allTeachers.find((t) => String(t.id) === String(ttFormData.teacher_id));
+  const selectedSubject = allSubjects.find((s) => String(s.id) === String(ttFormData.subject_id));
+
+  const filteredSubjects = React.useMemo(() => {
+    if (!selectedTeacher || !selectedTeacher.subject_ids || selectedTeacher.subject_ids.length === 0) {
+      return allSubjects;
+    }
+    return allSubjects.filter((sub) => {
+      const nameMatch = selectedTeacher.subject_names?.includes(sub.name.trim().toLowerCase());
+      const idMatch = selectedTeacher.subject_ids?.includes(sub.id);
+      return idMatch || nameMatch;
+    });
+  }, [allSubjects, selectedTeacher]);
+
+  const filteredTeachers = React.useMemo(() => {
+    if (!selectedSubject) {
+      return allTeachers;
+    }
+    const subjName = selectedSubject.name.trim().toLowerCase();
+    return allTeachers.filter((t) => {
+      if (!t.subject_ids || t.subject_ids.length === 0) return true;
+      const nameMatch = t.subject_names?.includes(subjName);
+      const idMatch = t.subject_ids?.includes(selectedSubject.id);
+      return idMatch || nameMatch;
+    });
+  }, [allTeachers, selectedSubject]);
+
+  const handleTeacherChange = (e) => {
+    const newTeacherId = e.target.value;
+    const tObj = allTeachers.find((t) => String(t.id) === String(newTeacherId));
+    let nextSubjId = ttFormData.subject_id;
+
+    if (tObj && tObj.subject_ids && tObj.subject_ids.length > 0) {
+      const currentSubj = allSubjects.find((s) => String(s.id) === String(ttFormData.subject_id));
+      const isValid = currentSubj && (tObj.subject_ids.includes(currentSubj.id) || tObj.subject_names?.includes(currentSubj.name.trim().toLowerCase()));
+      if (!isValid) {
+        const firstMatch = allSubjects.find((s) => tObj.subject_ids.includes(s.id) || tObj.subject_names?.includes(s.name.trim().toLowerCase()));
+        nextSubjId = firstMatch ? firstMatch.id : "";
+      }
+    }
+
+    setTtFormData({ ...ttFormData, teacher_id: newTeacherId, subject_id: nextSubjId });
+  };
+
+  const handleSubjectChange = (e) => {
+    const newSubjId = e.target.value;
+    const sObj = allSubjects.find((s) => String(s.id) === String(newSubjId));
+    let nextTeacherId = ttFormData.teacher_id;
+
+    if (sObj) {
+      const sName = sObj.name.trim().toLowerCase();
+      const currentTeacher = allTeachers.find((t) => String(t.id) === String(ttFormData.teacher_id));
+      if (currentTeacher && currentTeacher.subject_ids && currentTeacher.subject_ids.length > 0) {
+        const isQualified = currentTeacher.subject_ids.includes(sObj.id) || currentTeacher.subject_names?.includes(sName);
+        if (!isQualified) {
+          const qualifiedTeacher = allTeachers.find((t) => t.subject_ids?.includes(sObj.id) || t.subject_names?.includes(sName));
+          nextTeacherId = qualifiedTeacher ? qualifiedTeacher.id : "";
+        }
+      }
+    }
+
+    setTtFormData({ ...ttFormData, subject_id: newSubjId, teacher_id: nextTeacherId });
+  };
+
+  const handleOpenTtModal = (slot = null, defaultDay = "Monday", defaultPeriod = 1) => {
+    setTtError(null);
+    setTtMessage(null);
+    const pNum = Number(slot?.period_number || slot?.period_no || defaultPeriod || 1);
+    const pTimes = STANDARD_PERIOD_TIMES[pNum] || { start_time: "08:30", end_time: "09:15" };
+
+    if (slot) {
+      setEditingSlot(slot);
+      const dayName = daysOfWeek[slot.day_of_week - 1] || defaultDay || "Monday";
+      setTtFormData({
+        day_of_week: dayName,
+        period_number: pNum,
+        start_time: pTimes.start_time,
+        end_time: pTimes.end_time,
+        subject_id: slot.subject_id || "",
+        teacher_id: slot.teacher_id || slot.teacher_user_id || user?.id || "",
+        is_break: Boolean(slot.is_break),
+      });
+    } else {
+      setEditingSlot(null);
+      setTtFormData({
+        day_of_week: defaultDay,
+        period_number: pNum,
+        start_time: pTimes.start_time,
+        end_time: pTimes.end_time,
+        subject_id: "",
+        teacher_id: user?.id || "",
+        is_break: false,
+      });
+    }
+    setShowTtModal(true);
+  };
+
+  const handleSaveTtSlot = async (e) => {
+    e.preventDefault();
+    if (!selectedTtClass) return;
+    setSavingTtSlot(true);
+    setTtError(null);
+    setTtMessage(null);
+
+    const pNum = Number(ttFormData.period_number || 1);
+    const pTimes = STANDARD_PERIOD_TIMES[pNum] || { start_time: "08:30", end_time: "09:15" };
+
+    try {
+      const payload = {
+        class_id: selectedTtClass.class_id,
+        section_id: selectedTtClass.section_id,
+        day_of_week: ttFormData.day_of_week,
+        periods: [
+          {
+            period_number: pNum,
+            start_time: pTimes.start_time,
+            end_time: pTimes.end_time,
+            subject_id: ttFormData.is_break ? null : (ttFormData.subject_id || null),
+            teacher_id: ttFormData.is_break ? null : (ttFormData.teacher_id || null),
+            is_break: ttFormData.is_break,
+          },
+        ],
+      };
+
+      const res = await api.post("/v1/timetable/upsert", payload);
+      if (res.data?.success) {
+        setTtMessage("Slot saved successfully!");
+        setShowTtModal(false);
+        fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
+        fetchMySchedule();
+      }
+    } catch (err) {
+      setTtError(err.response?.data?.message || "Failed to save timetable slot");
+    } finally {
+      setSavingTtSlot(false);
+    }
+  };
+
+  const handleDeleteTtSlot = async (periodId) => {
+    if (!selectedTtClass) return;
+    if (!window.confirm("Are you sure you want to remove this timetable slot?")) return;
+    try {
+      const res = await api.delete(`/v1/timetable/period/${periodId}`);
+      if (res.data?.success) {
+        setShowTtModal(false);
+        fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
+        fetchMySchedule();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete period slot");
+    }
+  };
 
   useEffect(() => {
     if (selectedClass) {
@@ -800,81 +1051,411 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
               {activeTab === "timetable" && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-teal-600" /> My Teaching Schedule (7 Periods)
-                      </h2>
-                      <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Weekly teaching timetable with 7 periods daily and Recess Break after 3rd period.
-                      </p>
+                  {ttMessage && (
+                    <div className="p-3.5 bg-teal-50 border border-teal-200 rounded-2xl text-xs font-bold text-teal-800 flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" /> {ttMessage}
+                      </div>
+                      <button type="button" onClick={() => setTtMessage(null)} className="text-teal-600 hover:text-teal-800 p-0.5">
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
+                  )}
+                  {/* Top Control Bar */}
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                      <div>
+                        <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                          <Clock className="w-5 h-5 text-teal-600" /> Timetable & Teaching Workstation
+                        </h2>
+                        <p className="text-xs font-semibold text-slate-500 mt-1">
+                          Manage homeroom class timetables or view subject teaching schedules.
+                        </p>
+                      </div>
+
+                      {/* View Mode Toggle */}
+                      <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80 self-start md:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setTimetableTabMode("class")}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                            timetableTabMode === "class"
+                              ? "bg-white text-teal-700 shadow-xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          Class Schedule
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTimetableTabMode("my-schedule")}
+                          className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
+                            timetableTabMode === "my-schedule"
+                              ? "bg-white text-teal-700 shadow-xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          My Teaching Load
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Class Selector & RBAC Status Header */}
+                    {timetableTabMode === "class" && (
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                          <label className="text-xs font-extrabold text-slate-700 whitespace-nowrap">
+                            Select Class:
+                          </label>
+                          <select
+                            value={selectedTtClass ? `${selectedTtClass.class_id}_${selectedTtClass.section_id}` : ""}
+                            onChange={(e) => {
+                              const [cId, sId] = e.target.value.split("_");
+                              const found = assignedTtClasses.find(
+                                (item) => String(item.class_id) === cId && String(item.section_id) === sId
+                              );
+                              if (found) setSelectedTtClass(found);
+                            }}
+                            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
+                          >
+                            {assignedTtClasses.map((c) => (
+                              <option key={`tt-cls-${c.class_id}-${c.section_id}`} value={`${c.class_id}_${c.section_id}`}>
+                                {c.name} {c.is_class_teacher ? "★ Homeroom" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          {/* RBAC Badge */}
+                          {isClassTeacherForTt ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold text-teal-800 bg-teal-50 border border-teal-200">
+                              <Unlock className="w-3.5 h-3.5 text-teal-600" /> Class Teacher (Full Edit Control)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold text-slate-600 bg-slate-100 border border-slate-200">
+                              <Lock className="w-3.5 h-3.5 text-slate-500" /> Read-Only: Subject Class
+                            </span>
+                          )}
+
+                          {/* Add / Edit Period Button for Class Teacher */}
+                          {isClassTeacherForTt && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenTtModal(null)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-black shadow-xs transition-all"
+                            >
+                              <Plus className="w-4 h-4" /> Add / Upsert Period
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {daysOfWeek.map((day, dayIdx) => {
-                      const dayClasses = timetable.filter((t) => Number(t.day_of_week) === dayIdx + 1);
+                  {/* Mode 1: Class Timetable Grid */}
+                  {timetableTabMode === "class" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {daysOfWeek.map((day, dayIdx) => {
+                        const dayNum = dayIdx + 1;
+                        const daySlots = classTimetable.filter((t) => Number(t.day_of_week) === dayNum);
 
-                      const defaultSlots = [
-                        { p: 1, label: "08:30 - 09:15" },
-                        { p: 2, label: "09:15 - 10:00" },
-                        { p: 3, label: "10:00 - 10:45" },
-                        // RECESS BREAK
-                        { p: 4, label: "11:15 - 12:00" },
-                        { p: 5, label: "12:00 - 12:45" },
-                        { p: 6, label: "12:45 - 01:30" },
-                        { p: 7, label: "01:30 - 02:15" },
-                      ];
+                        const defaultPeriods = [1, 2, 3, 4, 5, 6, 7];
 
-                      return (
-                        <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
-                          <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
-                            <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
-                              {day}
-                            </h4>
-                            <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-                              7 Periods
+                        return (
+                          <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                              <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                                {day}
+                              </h4>
+                              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                                7 Periods
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              {defaultPeriods.map((periodNum) => {
+                                const item = daySlots.find((t) => Number(t.period_no) === periodNum || Number(t.period_number) === periodNum);
+
+                                return (
+                                  <React.Fragment key={`slot-${dayNum}-${periodNum}`}>
+                                    <div
+                                      role={isClassTeacherForTt ? "button" : undefined}
+                                      tabIndex={isClassTeacherForTt ? 0 : undefined}
+                                      aria-label={`Period ${periodNum} ${item?.subject_name || (item?.is_break ? "Free Period" : "Not Scheduled")}`}
+                                      onKeyDown={(e) => {
+                                        if (isClassTeacherForTt && (e.key === "Enter" || e.key === " ")) {
+                                          e.preventDefault();
+                                          handleOpenTtModal(item, day, periodNum);
+                                        }
+                                      }}
+                                      className={`relative group p-2.5 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+                                        isClassTeacherForTt ? "cursor-pointer" : ""
+                                      } ${
+                                        item?.is_break
+                                          ? "bg-amber-50/70 border-amber-200"
+                                          : item
+                                          ? "bg-white border-slate-200 shadow-2xs hover:border-teal-300"
+                                          : "bg-slate-100/60 border-dashed border-slate-200 hover:border-slate-300"
+                                      }`}
+                                      onClick={() => {
+                                        if (isClassTeacherForTt) handleOpenTtModal(item, day, periodNum);
+                                      }}
+                                    >
+                                      {/* Top Row: Period & Subject on Left, Time on Right */}
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0 flex-1 truncate">
+                                          <span className="text-xs font-black text-slate-900 mr-1">
+                                            P{periodNum}:
+                                          </span>
+                                          {item?.is_break ? (
+                                            <span className="text-xs font-black text-amber-800">
+                                              Free Period
+                                            </span>
+                                          ) : item ? (
+                                            <span className="text-xs font-black text-teal-800">
+                                              {item.subject_name || "General"}
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs font-semibold text-slate-400 italic">
+                                              Not Scheduled
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <span className="text-[10px] font-mono text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 whitespace-nowrap shrink-0">
+                                          {STANDARD_PERIOD_TIMES[periodNum]?.start_time} - {STANDARD_PERIOD_TIMES[periodNum]?.end_time}
+                                        </span>
+                                      </div>
+
+                                      {/* Bottom Row: Teacher Name */}
+                                      {item && !item.is_break && item.teacher_name && (
+                                        <div className="mt-1 pt-1 border-t border-slate-100/80">
+                                          <span className="text-[10px] text-slate-600 font-semibold block truncate">
+                                            {item.teacher_name}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {/* Hover Edit Bubble (Top-Right of the Box) */}
+                                      {isClassTeacherForTt && (
+                                        <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 z-10">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenTtModal(item, day, periodNum);
+                                            }}
+                                            className="p-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-full shadow-md flex items-center justify-center transition-transform transform hover:scale-110"
+                                            title="Edit Period"
+                                          >
+                                            <Edit3 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Recess Banner after Period 3 */}
+                                    {periodNum === 3 && (
+                                      <div className="py-1 px-2.5 bg-amber-100/70 border border-amber-200 rounded-lg text-center">
+                                        <span className="text-[10px] font-black uppercase text-amber-900 tracking-wider">
+                                          Recess Break (10:45 AM - 11:15 AM)
+                                        </span>
+                                      </div>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Mode 2: My Teaching Load View */}
+                  {timetableTabMode === "my-schedule" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {daysOfWeek.map((day, dayIdx) => {
+                        const dayNum = dayIdx + 1;
+                        const teacherSlots = mySchedule.filter((t) => Number(t.day_of_week) === dayNum);
+
+                        return (
+                          <div key={`my-sched-${day}`} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                              <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                                {day}
+                              </h4>
+                              <span className="text-[10px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                                {teacherSlots.length} Classes Assigned
+                              </span>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {teacherSlots.length === 0 ? (
+                                <div className="p-3 text-center text-xs font-semibold text-slate-400 italic bg-white rounded-xl border border-slate-100">
+                                  No classes assigned on {day}
+                                </div>
+                              ) : (
+                                teacherSlots.map((item) => (
+                                  <div key={`tslot-${item.id}`} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs">
+                                    <div>
+                                      <span className="text-xs font-black text-slate-900 block">
+                                        P{item.period_no}: {item.class_name} - {item.section_name}
+                                      </span>
+                                      <span className="text-[10px] font-bold text-teal-700 block">
+                                        {item.subject_name || "General"}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                                      {item.start_time?.slice(0, 5)} - {item.end_time?.slice(0, 5)}
+                                    </span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Slot Builder Upsert Modal for Class Teacher */}
+                  {showTtModal && (
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="tt-modal-title"
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setShowTtModal(false);
+                      }}
+                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+                    >
+                      <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <h3 id="tt-modal-title" className="text-lg font-black text-slate-900 flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-teal-600" />
+                            {editingSlot ? "Edit Period Slot" : "Add / Upsert Period Slot"}
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() => setShowTtModal(false)}
+                            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+
+                        {ttError && (
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" /> {ttError}
+                          </div>
+                        )}
+                        {ttMessage && (
+                          <div className="p-3 bg-teal-50 border border-teal-200 rounded-2xl text-xs font-bold text-teal-800 flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" /> {ttMessage}
+                          </div>
+                        )}
+
+                        <form onSubmit={handleSaveTtSlot} className="space-y-4 text-xs">
+                          {/* Read-Only Period & Time Info */}
+                          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
+                            <span className="text-sm font-black text-slate-900">
+                              Period {ttFormData.period_number}
+                            </span>
+                            <span className="text-xs font-mono font-black text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1 rounded-xl">
+                              {STANDARD_PERIOD_TIMES[ttFormData.period_number]?.start_time} - {STANDARD_PERIOD_TIMES[ttFormData.period_number]?.end_time}
                             </span>
                           </div>
 
-                          <div className="space-y-1.5">
-                            {defaultSlots.map((slot) => {
-                              const item = dayClasses.find((t) => Number(t.period_no) === slot.p);
-
-                              return (
-                                <React.Fragment key={`t-slot-${slot.p}`}>
-                                  <div className="p-2 bg-white rounded-xl border border-slate-100 flex items-center justify-between">
-                                    <div>
-                                      <span className="text-xs font-bold text-slate-900 block">
-                                        P{slot.p}: {item ? `${item.class_name} ${item.section_name}` : "Free Period"}
-                                      </span>
-                                      {item?.subject_name && (
-                                        <span className="text-[10px] text-teal-700 font-semibold block">
-                                          {item.subject_name}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                                      {item ? `${item.start_time?.slice(0, 5)} - ${item.end_time?.slice(0, 5)}` : slot.label}
-                                    </span>
-                                  </div>
-
-                                  {/* RECESS BREAK Banner after Period 3 */}
-                                  {slot.p === 3 && (
-                                    <div className="py-1.5 px-3 bg-amber-50 border border-amber-200/80 rounded-xl text-center shadow-2xs">
-                                      <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">
-                                        ☕ Recess Break (10:45 AM - 11:15 AM)
-                                      </span>
-                                    </div>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
+                          <div>
+                            <label className="font-extrabold text-slate-700 block mb-1">Day of Week</label>
+                            <select
+                              value={ttFormData.day_of_week}
+                              onChange={(e) => setTtFormData({ ...ttFormData, day_of_week: e.target.value })}
+                              disabled={Boolean(editingSlot)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {daysOfWeek.map((d) => (
+                                <option key={`opt-${d}`} value={d}>{d}</option>
+                              ))}
+                            </select>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+
+                          <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl flex items-center justify-between">
+                            <div>
+                              <span className="font-extrabold text-amber-900 block">Mark as Free Period</span>
+                              <span className="text-[10px] text-amber-700 font-medium">Mark period as free period without subject assignment</span>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={ttFormData.is_break}
+                              onChange={(e) => setTtFormData({ ...ttFormData, is_break: e.target.checked })}
+                              className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                            />
+                          </div>
+
+                          {!ttFormData.is_break && (
+                            <>
+                              <div>
+                                <label className="font-extrabold text-slate-700 block mb-1">Assigned Teacher</label>
+                                <select
+                                  value={ttFormData.teacher_id}
+                                  onChange={handleTeacherChange}
+                                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                >
+                                  <option value="">Select Teacher</option>
+                                  {filteredTeachers.map((t) => (
+                                    <option key={`t-opt-${t.id}`} value={t.id}>{t.full_name} ({t.email})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="font-extrabold text-slate-700 block mb-1">Subject</label>
+                                <select
+                                  value={ttFormData.subject_id}
+                                  onChange={handleSubjectChange}
+                                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                >
+                                  <option value="">Select Subject</option>
+                                  {filteredSubjects.map((sub) => (
+                                    <option key={`sub-opt-${sub.id}`} value={sub.id}>{sub.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          )}
+
+                          <div className="flex items-center justify-end gap-2 pt-2">
+                            {editingSlot && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTtSlot(editingSlot.id)}
+                                className="mr-auto px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setShowTtModal(false)}
+                              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={savingTtSlot}
+                              className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white font-black rounded-xl shadow-xs disabled:opacity-50"
+                            >
+                              {savingTtSlot ? "Saving..." : "Save Slot"}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
