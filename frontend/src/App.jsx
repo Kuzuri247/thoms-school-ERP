@@ -122,6 +122,11 @@ function App() {
               path="/teacher/elearning"
               element={<TeacherDashboard activeTab="elearning" />}
             />
+            <Route
+              path="/teacher/remarks"
+              element={<TeacherDashboard activeTab="remarks" />}
+            />
+
           </Route>
 
           {/* Student Portal Routes (Strictly Student, Admin, Super Admin) */}

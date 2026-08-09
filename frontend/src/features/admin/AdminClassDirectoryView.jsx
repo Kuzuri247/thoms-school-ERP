@@ -11,8 +11,11 @@ import {
   User,
   Eye,
   Upload,
+  Sparkles,
 } from "lucide-react";
 import useAuthStore from "../../store/authStore";
+import { useAcademicsStore } from "../../store/academicsStore";
+
 
 const DEMO_CLASSES = [
   { class_id: 101, class_name: "Class 10", numeric_value: 10 },
@@ -45,6 +48,8 @@ const EMPTY_STUDENT_FORM = {
 const AdminClassDirectoryView = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { executeAnnualPromotion, promoting, promotionResult, error: promoError } = useAcademicsStore();
+
 
   const [classesData, setClassesData] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
@@ -264,12 +269,16 @@ const AdminClassDirectoryView = () => {
         </div>
       </div>
 
+
+
       {formSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
           <Check className="w-4 h-4 text-emerald-600" />
           {formSuccess}
         </div>
       )}
+
+
 
       {/* Grid: Class Standard Selector & Roster Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

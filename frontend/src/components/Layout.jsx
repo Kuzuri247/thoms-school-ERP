@@ -30,7 +30,9 @@ import {
   AlertCircle,
   User,
   Tv,
+  MessageSquareText,
 } from "lucide-react";
+
 import useAuthStore from "../store/authStore";
 import {
   isSuperAdmin as checkIsSuperAdmin,
@@ -682,7 +684,14 @@ const Layout = () => {
                 >
                   <Tv className="w-4 h-4" /> E-Learning
                 </Link>
+                <Link
+                  to="/teacher/remarks"
+                  className={navLinkClass("/teacher/remarks")}
+                >
+                  <MessageSquareText className="w-4 h-4" /> Monthly Remarks
+                </Link>
               </>
+
             )}
 
             {/* Student Exclusive Portal (Visible ONLY to Students) */}

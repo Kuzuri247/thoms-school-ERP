@@ -26,7 +26,10 @@ import {
   ShieldAlert,
   Layers,
   UserCheck,
+  MessageSquareText,
 } from "lucide-react";
+import { useRemarksStore } from "../store/remarksStore";
+
 
 const daysOfWeek = [
   "Monday",
@@ -205,10 +208,83 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   });
   const [ttMessage, setTtMessage] = useState(null);
   const [ttError, setTtError] = useState(null);
-  const [savingTtSlot, setSavingTtSlot] = useState(false);
+  // Remarks State - Strictly locked to current month & year
+  const PREDEFINED_TAGS = [
+    "Punctual",
+    "Obedient",
+    "Disciplined",
+    "Attentive",
+    "Hardworking",
+    "Creative",
+    "Lazy",
+    "Needs Focus",
+    "Irregular",
+  ];
+  const now = new Date();
+  const remarkMonth = now.getMonth() + 1;
+  const remarkYear = now.getFullYear();
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const currentMonthName = monthNames[now.getMonth()];
+
+  const [localRemarks, setLocalRemarks] = useState({});
+  const [localTags, setLocalTags] = useState({});
+  const {
+    fetchSectionRemarks,
+    saveBatchRemarks,
+    loading: loadingRemarks,
+    successMessage: remarkSuccessMsg,
+    error: remarkErrMsg,
+    clearStatus: clearRemarkStatus,
+  } = useRemarksStore();
 
   useEffect(() => {
+    if (selectedClass?.section_id && (activeTab === "remarks" || selectedClass?.is_class_teacher)) {
+      fetchSectionRemarks(selectedClass.section_id, remarkMonth, remarkYear).then((roster) => {
+        const initRem = {};
+        const initTags = {};
+        (roster || []).forEach((item) => {
+          initRem[item.student_id] = item.remark || "";
+          initTags[item.student_id] = Array.isArray(item.tags) ? item.tags : [];
+        });
+        setLocalRemarks(initRem);
+        setLocalTags(initTags);
+      });
+    }
+  }, [selectedClass, remarkMonth, remarkYear, activeTab]);
+
+  const handleToggleTag = (studentId, tag) => {
+    setLocalTags((prev) => {
+      const existing = prev[studentId] || [];
+      const updated = existing.includes(tag)
+        ? existing.filter((t) => t !== tag)
+        : [...existing, tag];
+      return { ...prev, [studentId]: updated };
+    });
+  };
+
+  const handleSaveRemarks = async () => {
+    if (!selectedClass?.section_id) return;
+    const allStudentIds = Array.from(new Set([...Object.keys(localRemarks), ...Object.keys(localTags)]));
+    const remarkList = allStudentIds.map((student_id) => ({
+      student_id: Number(student_id),
+      remark: localRemarks[student_id] || "",
+      tags: localTags[student_id] || [],
+    }));
+    await saveBatchRemarks({
+      section_id: selectedClass.section_id,
+      month: remarkMonth,
+      year: remarkYear,
+      remarks: remarkList,
+    });
+  };
+
+  useEffect(() => {
+
     fetchTeacherClasses();
+
     fetchTeacherTimetable();
     fetchTeacherHomeworks();
     fetchTeacherElearning();
@@ -751,7 +827,11 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     if (r.date) calendarDataMap[r.date] = r;
   });
 
-  const visibleClasses = activeTab === "attendance" ? classes.filter((c) => c.is_class_teacher) : classes;
+  const visibleClasses =
+    activeTab === "attendance" || activeTab === "remarks"
+      ? classes.filter((c) => c.is_class_teacher)
+      : classes;
+
 
   return (
     <div className="space-y-6 pb-12">
@@ -864,6 +944,124 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                       </h3>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activeTab === "remarks" && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <MessageSquareText className="w-5 h-5 text-indigo-600" /> Class Student Monthly Remarks
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-500 mt-1">
+                        Post & update monthly performance remarks for students of {selectedClass?.name || "assigned homeroom"}.
+                      </p>
+                    </div>
+                    {selectedClass?.is_class_teacher && (
+                      <button
+                        onClick={handleSaveRemarks}
+                        disabled={loadingRemarks}
+                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 transition flex items-center gap-2 cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" />
+                        {loadingRemarks ? "Saving..." : "Save Monthly Remarks"}
+                      </button>
+                    )}
+                  </div>
+
+                  {remarkSuccessMsg && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" /> {remarkSuccessMsg}
+                      </div>
+                      <button onClick={clearRemarkStatus} className="text-emerald-600 hover:underline">Dismiss</button>
+                    </div>
+                  )}
+
+                  {remarkErrMsg && (
+                    <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 font-bold text-xs rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-600" /> {remarkErrMsg}
+                      </div>
+                      <button onClick={clearRemarkStatus} className="text-rose-600 hover:underline">Dismiss</button>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 to-violet-50 p-4 rounded-2xl border border-indigo-100/80 text-xs">
+                    <div className="flex items-center gap-2 font-black text-indigo-950">
+                      <span className="px-3 py-1 bg-indigo-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-xs">
+                        Current Month: {currentMonthName} {remarkYear}
+                      </span>
+                      <span className="text-slate-500 font-medium text-[11px]">
+                        (Monthly evaluations are locked to current month. Updates apply immediately.)
+                      </span>
+                    </div>
+                  </div>
+
+                  {!selectedClass?.is_class_teacher ? (
+                    <div className="p-6 bg-amber-50 rounded-2xl border border-amber-200 text-xs font-bold text-amber-800 text-center">
+                      Monthly Student Remarks entry is exclusively reserved for assigned Class Teachers (Homeroom).
+                    </div>
+                  ) : students.length === 0 ? (
+                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-400 text-center">
+                      No active students found in this homeroom section.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {students.map((stu) => (
+                        <div key={stu.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-black text-xs flex items-center justify-center border border-indigo-100">
+                                {stu.roll || stu.roll_no || "#"}
+                              </span>
+                              <div>
+                                <h4 className="font-extrabold text-sm text-slate-900">{stu.name || `${stu.first_name} ${stu.last_name}`}</h4>
+                                <p className="text-[10px] text-slate-400 font-mono font-medium">Adm No: {stu.admission_no || "N/A"}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Behavioral / Performance Tag Chips */}
+                          <div>
+                            <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
+                              Quick Behavioral / Performance Tags:
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {PREDEFINED_TAGS.map((tag) => {
+                                const selected = (localTags[stu.id] || []).includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => handleToggleTag(stu.id, tag)}
+                                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition flex items-center gap-1 cursor-pointer ${
+                                      selected
+                                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                                    }`}
+                                  >
+                                    {selected && <Check className="w-3 h-3" />}
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <textarea
+                            rows={2}
+                            placeholder={`Enter additional monthly note for ${stu.name || `${stu.first_name || ''} ${stu.last_name || ''}`.trim() || 'student'}...`}
+                            value={localRemarks[stu.id] || ""}
+                            onChange={(e) => setLocalRemarks({ ...localRemarks, [stu.id]: e.target.value })}
+                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition resize-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                 </div>
               )}
 
