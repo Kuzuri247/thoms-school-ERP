@@ -235,7 +235,7 @@ const AdminHomeworkView = () => {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            {hw.subject_name || "General"}
+                            {hw.subject_name || "Subject"}
                           </span>
                           <h3 className="text-sm font-extrabold text-slate-900 mt-1.5">
                             {hw.title}

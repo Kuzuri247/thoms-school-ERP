@@ -5,28 +5,72 @@ const { verifyToken } = require("../../middleware/auth");
 const { ROLES } = require("../../config/constants");
 
 /**
+ * Shared helper to parse tags string/JSON array into a normalized string array
+ */
+function parseTags(tags) {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === "string") {
+    const trimmed = tags.trim();
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        // Fallback to comma split below
+      }
+    }
+    return trimmed.split(",").map((t) => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+/**
  * GET /api/remarks/student/:studentId
  * Fetch all monthly remarks for a specific student by student_id or user_id
  */
 router.get("/student/:studentId", verifyToken, async (req, res) => {
   try {
     const paramId = req.params.studentId;
+    const byUser = req.query.by === "user_id" || req.query.type === "user_id";
 
-    // Resolve student_id if paramId is user_id
+    const whereClause = byUser ? "WHERE s.user_id = ?" : "WHERE s.id = ?";
     const [stuRows] = await pool.query(
       `SELECT s.id AS student_id, s.user_id, s.first_name, s.last_name, sec.id AS section_id, c.name AS class_name, sec.name AS section_name
        FROM students s
        LEFT JOIN sections sec ON s.section_id = sec.id
        LEFT JOIN classes c ON sec.class_id = c.id
-       WHERE s.id = ? OR s.user_id = ?`,
-      [paramId, paramId],
+       ${whereClause}
+       LIMIT 1`,
+      [paramId],
     );
 
     if (stuRows.length === 0) {
       return res.json({ success: true, data: [] });
     }
 
-    const studentId = stuRows[0].student_id;
+    const targetStudent = stuRows[0];
+    const studentId = targetStudent.student_id;
+
+    // Authorization check: student owner, assigned section teacher, or admin
+    const userId = req.user.id;
+    const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user.role);
+    if (!isAdmin && userId !== targetStudent.user_id) {
+      let isAssigned = false;
+      if (targetStudent.section_id) {
+        const [assignment] = await pool.query(
+          `SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND section_id = ?`,
+          [userId, targetStudent.section_id],
+        );
+        isAssigned = assignment.length > 0;
+      }
+      if (!isAssigned) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Unauthorized to view remarks for this student.",
+        });
+      }
+    }
 
     const [remarks] = await pool.query(
       `SELECT sr.id, sr.student_id, sr.teacher_user_id, sr.section_id, sr.session_id,
@@ -44,10 +88,15 @@ router.get("/student/:studentId", verifyToken, async (req, res) => {
       [studentId],
     );
 
-    res.json({ success: true, data: remarks });
+    const formattedRemarks = remarks.map((r) => ({
+      ...r,
+      tags: parseTags(r.tags),
+    }));
+
+    res.json({ success: true, data: formattedRemarks });
   } catch (error) {
     console.error("Error fetching student remarks:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Internal server error fetching student remarks." });
   }
 });
 
@@ -58,14 +107,47 @@ router.get("/student/:studentId", verifyToken, async (req, res) => {
 router.get("/section/:sectionId", verifyToken, async (req, res) => {
   try {
     const { sectionId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(userRole);
+
+    // Authorization check for section access
+    if (!isAdmin) {
+      const [assignment] = await pool.query(
+        `SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND section_id = ?`,
+        [userId, sectionId],
+      );
+
+      if (assignment.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied: Unauthorized to view remarks for this section.",
+        });
+      }
+    }
+
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
-    // If teacher, strictly enforce current month & year
-    const isTeacher = req.user.role === ROLES.TEACHER;
-    const month = isTeacher ? currentMonth : parseInt(req.query.month) || currentMonth;
-    const year = isTeacher ? currentYear : parseInt(req.query.year) || currentYear;
+    let month = currentMonth;
+    let year = currentYear;
+
+    if (isAdmin && (req.query.month !== undefined || req.query.year !== undefined)) {
+      const parsedM = parseInt(req.query.month);
+      const parsedY = parseInt(req.query.year);
+      if (
+        (req.query.month !== undefined && (isNaN(parsedM) || parsedM < 1 || parsedM > 12)) ||
+        (req.query.year !== undefined && (isNaN(parsedY) || parsedY < 2000 || parsedY > 2100))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid month (1-12) or year parameter.",
+        });
+      }
+      if (!isNaN(parsedM)) month = parsedM;
+      if (!isNaN(parsedY)) year = parsedY;
+    }
 
     // Fetch active students in section
     const [students] = await pool.query(
@@ -92,22 +174,11 @@ router.get("/section/:sectionId", verifyToken, async (req, res) => {
 
     const result = students.map((stu) => {
       const rem = remarkMap[stu.student_id];
-      let tagArray = [];
-      if (rem && rem.tags) {
-        try {
-          tagArray = typeof rem.tags === "string" && rem.tags.startsWith("[")
-            ? JSON.parse(rem.tags)
-            : rem.tags.split(",").map((t) => t.trim()).filter(Boolean);
-        } catch (e) {
-          tagArray = rem.tags.split(",").map((t) => t.trim()).filter(Boolean);
-        }
-      }
-
       return {
         ...stu,
         remark_id: rem ? rem.remark_id : null,
         remark: rem ? rem.remark : "",
-        tags: tagArray,
+        tags: rem ? parseTags(rem.tags) : [],
         teacher_user_id: rem ? rem.teacher_user_id : null,
         updated_at: rem ? rem.updated_at : null,
         month,
@@ -118,7 +189,7 @@ router.get("/section/:sectionId", verifyToken, async (req, res) => {
     res.json({ success: true, data: result, month, year });
   } catch (error) {
     console.error("Error fetching section remarks:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Internal server error fetching section remarks." });
   }
 });
 
@@ -138,9 +209,24 @@ router.post("/batch", verifyToken, async (req, res) => {
     const userRole = req.user.role;
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(userRole);
 
-    // For teachers, strictly lock month and year to current month & year
-    const month = isAdmin ? parseInt(req.body.month) || currentMonth : currentMonth;
-    const year = isAdmin ? parseInt(req.body.year) || currentYear : currentYear;
+    let month = currentMonth;
+    let year = currentYear;
+
+    if (isAdmin && (req.body.month !== undefined || req.body.year !== undefined)) {
+      const parsedM = parseInt(req.body.month);
+      const parsedY = parseInt(req.body.year);
+      if (
+        (req.body.month !== undefined && (isNaN(parsedM) || parsedM < 1 || parsedM > 12)) ||
+        (req.body.year !== undefined && (isNaN(parsedY) || parsedY < 2000 || parsedY > 2100))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid month (1-12) or year parameter.",
+        });
+      }
+      if (!isNaN(parsedM)) month = parsedM;
+      if (!isNaN(parsedY)) year = parsedY;
+    }
 
     if (!section_id || !Array.isArray(remarks)) {
       return res.status(400).json({
@@ -178,13 +264,12 @@ router.post("/batch", verifyToken, async (req, res) => {
     for (const item of remarks) {
       const studentId = item.student_id;
       const remarkText = (item.remark || "").trim();
-      const tagsData = Array.isArray(item.tags)
-        ? JSON.stringify(item.tags)
-        : (item.tags || "").trim();
+      const parsedTagsArr = parseTags(item.tags);
+      const tagsData = parsedTagsArr.length > 0 ? JSON.stringify(parsedTagsArr) : "";
 
       if (!studentId) continue;
 
-      if (remarkText.length > 0 || (Array.isArray(item.tags) && item.tags.length > 0) || tagsData.length > 0) {
+      if (remarkText.length > 0 || parsedTagsArr.length > 0) {
         await conn.query(
           `INSERT INTO student_remarks (student_id, teacher_user_id, section_id, session_id, month, year, remark, tags)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -224,7 +309,7 @@ router.post("/batch", verifyToken, async (req, res) => {
   } catch (error) {
     if (conn) await conn.rollback();
     console.error("Error saving monthly remarks batch:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Internal server error saving monthly remarks." });
   } finally {
     if (conn) conn.release();
   }

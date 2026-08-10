@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetUserProfile } from "./useUsers";
@@ -7,7 +7,6 @@ import {
   getRoleBadgeStyle,
   isStaff as checkIsStaff,
 } from "../../utils/roleUtils";
-import { validatePassword } from "../../utils/validationUtils";
 import {
   ArrowLeft,
   User,
@@ -33,7 +32,89 @@ import {
   MessageSquareText,
 } from "lucide-react";
 import { useRemarksStore } from "../../store/remarksStore";
+import { MONTH_NAMES, NEGATIVE_TAGS } from "../../constants/remarksConstants";
 
+const StudentRemarksCard = ({ remarks = [] }) => {
+  if (!Array.isArray(remarks) || remarks.length === 0) {
+    return (
+      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-400 font-medium text-center">
+        No monthly class teacher remarks recorded for this student yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {remarks.map((rem) => {
+        const monthLabel =
+          MONTH_NAMES[(rem.month || 1) - 1] || `Month ${rem.month}`;
+        let tagList = [];
+        if (rem.tags) {
+          if (Array.isArray(rem.tags)) {
+            tagList = rem.tags;
+          } else if (typeof rem.tags === "string") {
+            const trimmed = rem.tags.trim();
+            if (trimmed.startsWith("[")) {
+              try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) tagList = parsed;
+              } catch (e) {
+                tagList = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
+              }
+            } else {
+              tagList = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
+            }
+          }
+        }
+
+        return (
+          <div
+            key={rem.id || `${rem.month}-${rem.year}`}
+            className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-2.5 text-xs"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-indigo-100/60 pb-2">
+              <div className="flex items-center gap-2 font-extrabold text-indigo-950">
+                <span className="px-2.5 py-0.5 bg-indigo-600 text-white font-black text-[10px] rounded-full uppercase tracking-wider">
+                  {monthLabel} {rem.year}
+                </span>
+                <span>Class Teacher: {rem.teacher_name || "Assigned Teacher"}</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">
+                Posted:{" "}
+                {rem.updated_at
+                  ? new Date(rem.updated_at).toLocaleDateString()
+                  : ""}
+              </span>
+            </div>
+
+            {tagList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {tagList.map((tag, tIdx) => (
+                  <span
+                    key={tIdx}
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                      NEGATIVE_TAGS.includes(tag)
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    }`}
+                  >
+                    🏷️ {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {rem.remark && (
+              <p className="text-slate-800 font-medium leading-relaxed bg-white p-3 rounded-xl border border-indigo-100/80">
+                "{rem.remark}"
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 const UserProfileView = () => {
   const { id: paramId } = useParams();
@@ -738,80 +819,9 @@ const UserProfileView = () => {
                   <MessageSquareText className="w-5 h-5 text-indigo-600" /> Class Teacher Monthly Remarks
                 </h3>
 
-                {(() => {
-                  const studentId = profile.student_db_id || profile.id;
-                  const remarks = remarksByStudent[studentId] || [];
-                  const monthNames = [
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
-                  ];
-
-                  if (remarks.length === 0) {
-                    return (
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-400 font-medium text-center">
-                        No monthly class teacher remarks recorded for this student yet.
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="space-y-4">
-                      {remarks.map((rem) => {
-                        const monthLabel = monthNames[(rem.month || 1) - 1] || `Month ${rem.month}`;
-                        let tagList = [];
-                        if (rem.tags) {
-                          try {
-                            tagList = typeof rem.tags === "string" && rem.tags.startsWith("[")
-                              ? JSON.parse(rem.tags)
-                              : rem.tags.split(",").map((t) => t.trim()).filter(Boolean);
-                          } catch (e) {
-                            tagList = rem.tags.split(",").map((t) => t.trim()).filter(Boolean);
-                          }
-                        }
-
-                        return (
-                          <div key={rem.id} className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-2.5 text-xs">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-indigo-100/60 pb-2">
-                              <div className="flex items-center gap-2 font-extrabold text-indigo-950">
-                                <span className="px-2.5 py-0.5 bg-indigo-600 text-white font-black text-[10px] rounded-full uppercase tracking-wider">
-                                  {monthLabel} {rem.year}
-                                </span>
-                                <span>Class Teacher: {rem.teacher_name || "Assigned Teacher"}</span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 font-medium">
-                                Posted: {rem.updated_at ? new Date(rem.updated_at).toLocaleDateString() : ""}
-                              </span>
-                            </div>
-
-                            {tagList.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                {tagList.map((tag, tIdx) => (
-                                  <span
-                                    key={tIdx}
-                                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
-                                      ["Lazy", "Needs Focus", "Irregular"].includes(tag)
-                                        ? "bg-rose-50 text-rose-700 border-rose-200"
-                                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    }`}
-                                  >
-                                    🏷️ {tag}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-
-                            {rem.remark && (
-                              <p className="text-slate-800 font-medium leading-relaxed bg-white p-3 rounded-xl border border-indigo-100/80">
-                                "{rem.remark}"
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                    </div>
-                  );
-                })()}
+                <StudentRemarksCard
+                  remarks={remarksByStudent[profile.student_db_id || profile.id] || []}
+                />
               </div>
             </div>
           )}

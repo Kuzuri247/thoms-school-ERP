@@ -18,7 +18,9 @@ router.post(
       res.json(result);
     } catch (error) {
       console.error("Failed to execute grade promotion:", error);
-      res.status(500).json({ success: false, message: error.message });
+      res
+        .status(500)
+        .json({ success: false, message: "Failed to execute grade promotion." });
     }
   },
 );

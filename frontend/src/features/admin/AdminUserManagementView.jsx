@@ -44,7 +44,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [teacherAssignmentType, setTeacherAssignmentType] =
     useState("class_teacher"); // 'class_teacher' | 'subject_teacher'
   const [targetClassId, setTargetClassId] = useState("");
-  const [subjectName, setSubjectName] = useState("General");
+  const [subjectName, setSubjectName] = useState("Mathematics");
   const [classesWithTeachers, setClassesWithTeachers] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
 
@@ -105,7 +105,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     setPassword("");
     setGender("Male");
     setTeacherAssignmentType("class_teacher");
-    setSubjectName("General");
+    setSubjectName("Mathematics");
     setShowAddModal(true);
   };
 
@@ -562,9 +562,6 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                           onChange={(e) => setSubjectName(e.target.value)}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
                         >
-                          <option value="General">
-                            General / All Subjects
-                          </option>
                           <option value="Mathematics">Mathematics</option>
                           <option value="Science">
                             Science (Physics & Chemistry)

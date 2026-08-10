@@ -127,7 +127,8 @@ const AdminClassDirectoryView = () => {
 
   const fetchStudents = async (classId) => {
     try {
-      const res = await api.get(`/admin/classes/${classId}/students`);
+      const endpoint = String(classId) === "graduated" ? "/admin/graduates" : `/admin/classes/${classId}/students`;
+      const res = await api.get(endpoint);
       const apiStudents = res.data?.data || [];
       setStudents(apiStudents);
     } catch (err) {
@@ -231,6 +232,19 @@ const AdminClassDirectoryView = () => {
     );
   });
 
+  const handleRunPromotion = async () => {
+    if (promoting) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to run the Annual Grade Advancement / Promotion for all active students? This will advance eligible students to the next class standard."
+    );
+    if (confirmed) {
+      const res = await executeAnnualPromotion();
+      if (res?.success) {
+        fetchClasses();
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
@@ -250,26 +264,52 @@ const AdminClassDirectoryView = () => {
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           {(user?.role === "super_admin" || user?.role === "admin") && (
-            <button
-              onClick={() => {
-                const initialClassId =
-                  selectedClass?.class_id || classesData[0]?.class_id || "";
-                setStudentForm((prev) => ({
-                  ...prev,
-                  class_id: initialClassId,
-                }));
-                setShowAddStudentModal(true);
-              }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4" />
-              Add Student
-            </button>
+            <>
+              <button
+                onClick={handleRunPromotion}
+                disabled={promoting}
+                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                {promoting ? "Promoting..." : "Run Annual Promotion"}
+              </button>
+              <button
+                onClick={() => {
+                  const initialClassId =
+                    selectedClass?.class_id || classesData[0]?.class_id || "";
+                  setStudentForm((prev) => ({
+                    ...prev,
+                    class_id: initialClassId,
+                  }));
+                  setShowAddStudentModal(true);
+                }}
+                className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Student
+              </button>
+            </>
           )}
         </div>
       </div>
 
+      {promotionResult && (
+        <div className="p-3.5 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
+          <Sparkles className="w-4 h-4 text-indigo-600" />
+          <span>
+            {typeof promotionResult === "string"
+              ? promotionResult
+              : promotionResult.message || "Annual promotion completed successfully!"}
+          </span>
+        </div>
+      )}
 
+      {promoError && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
+          <X className="w-4 h-4 text-rose-600" />
+          {promoError}
+        </div>
+      )}
 
       {formSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
@@ -338,6 +378,45 @@ const AdminClassDirectoryView = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Graduated Alumni Selector */}
+          <div className="pt-2 border-t border-slate-200/80">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Select Graduated Alumni"
+              onClick={() => {
+                const gradClass = { class_id: "graduated", class_name: "Graduated Alumni", numeric_value: 99 };
+                setSelectedClass(gradClass);
+                sessionStorage.setItem("selectedClassId", "graduated");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  const gradClass = { class_id: "graduated", class_name: "Graduated Alumni", numeric_value: 99 };
+                  setSelectedClass(gradClass);
+                  sessionStorage.setItem("selectedClassId", "graduated");
+                }
+              }}
+              className={`p-3.5 rounded-2xl border transition text-left cursor-pointer flex items-center justify-between ${
+                selectedClass?.class_id === "graduated"
+                  ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white border-amber-600 shadow-md shadow-amber-500/20"
+                  : "bg-amber-50/60 hover:bg-amber-100/60 border-amber-200/80 text-amber-950"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl ${selectedClass?.class_id === "graduated" ? "bg-white/20 text-white" : "bg-amber-200/60 text-amber-800"}`}>
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-black block">Graduated Alumni</span>
+                  <span className={`text-[10px] font-bold block ${selectedClass?.class_id === "graduated" ? "text-amber-100" : "text-amber-700"}`}>
+                    Passed Out Batch Records
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

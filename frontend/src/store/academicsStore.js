@@ -13,6 +13,7 @@ export const useAcademicsStore = create((set, get) => ({
 
   // Execute Annual April 1st Grade Advancement (Promotion)
   executeAnnualPromotion: async () => {
+    if (get().promoting) return;
     set({ promoting: true, error: null, promotionResult: null });
     try {
       const { data } = await api.post("/admin/promote-students");

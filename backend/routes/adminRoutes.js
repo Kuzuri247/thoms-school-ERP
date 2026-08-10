@@ -248,6 +248,13 @@ router.post('/attendance', [verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, R
         if (!date || !attendanceData) {
             return res.status(400).json({ success: false, message: 'Date and attendance data are required' });
         }
+        const parts = String(date).split('T')[0].split('-');
+        if (parts.length === 3) {
+            const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+            if (dt.getDay() === 0) {
+                return res.status(400).json({ success: false, message: 'Attendance cannot be marked on Sundays' });
+            }
+        }
         for (const [userId, status] of Object.entries(attendanceData)) {
             const [[student]] = await pool.query('SELECT id, section_id FROM students WHERE user_id = ?', [userId]);
             if (student) {
@@ -325,9 +332,26 @@ router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, RO
             LEFT JOIN classes c ON sec.class_id = c.id
             LEFT JOIN guardians g_father ON g_father.student_id = s.id AND g_father.relation = 'father'
             LEFT JOIN guardians g_guard ON g_guard.student_id = s.id AND g_guard.relation = 'guardian'
-            WHERE c.id = ?
-            ORDER BY s.roll_no, s.first_name
+            WHERE c.id = ? AND (s.status IS NULL OR s.status = 'active')
+            ORDER BY CAST(s.roll_no AS UNSIGNED) ASC, s.last_name ASC, s.first_name ASC
         `, [classId]);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Get graduated students / Alumni list (Admin / Super Admin)
+router.get('/graduates', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+            SELECT s.id AS student_id, s.user_id, s.admission_no, s.roll_no, s.first_name, s.last_name,
+                   s.gender, s.status, u.email, u.phone, 'Graduated' AS class_name, 'Alumni' AS section_name
+            FROM students s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.status = 'graduated' OR u.status = 'graduated'
+            ORDER BY s.last_name ASC, s.first_name ASC
+        `);
         res.json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

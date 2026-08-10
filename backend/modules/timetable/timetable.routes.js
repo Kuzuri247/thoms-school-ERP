@@ -133,7 +133,7 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
 
     for (const r of rows) {
       const existing = sectionMap.get(r.section_id);
-      const subjName = r.subject_name || 'General';
+      const subjName = r.subject_name || '';
       const subjObj = r.subject_id ? { id: r.subject_id, name: subjName } : null;
 
       if (!existing) {
@@ -144,7 +144,7 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
           section_name: r.section_name,
           name: `${r.class_name} - ${r.section_name}`,
           is_class_teacher: Boolean(r.is_class_teacher),
-          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : `Subject Teacher (${subjName})`,
+          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : (subjName ? `Subject Teacher (${subjName})` : 'Subject Teacher'),
           subjects: subjObj ? [subjObj] : [],
         });
       } else {
