@@ -22,8 +22,8 @@ router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherConte
 
     for (const r of rows) {
       const existing = sectionMap.get(r.section_id);
-      const subjName = r.subject_name || 'General';
-      const subjObj = { id: r.subject_id, name: subjName };
+      const subjName = r.subject_name || '';
+      const subjObj = r.subject_id ? { id: r.subject_id, name: subjName } : null;
 
       if (!existing) {
         sectionMap.set(r.section_id, {
@@ -32,8 +32,8 @@ router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherConte
           name: `${r.class_name} - ${r.section_name}`,
           subject_id: r.subject_id,
           subject: subjName,
-          subjects: r.subject_name ? [subjObj] : [],
-          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : `Subject Teacher (${subjName})`,
+          subjects: subjObj ? [subjObj] : [],
+          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : (subjName ? `Subject Teacher (${subjName})` : 'Subject Teacher'),
           is_class_teacher: Boolean(r.is_class_teacher)
         });
       } else {
@@ -42,7 +42,7 @@ router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherConte
           existing.role = 'Class Teacher (Homeroom)';
         }
         if (r.subject_name) {
-          if (!existing.subjects.some(s => s.id === r.subject_id)) {
+          if (subjObj && !existing.subjects.some(s => s.id === r.subject_id)) {
             existing.subjects.push(subjObj);
           }
           existing.subject = existing.subjects.map(s => s.name).join(', ');
@@ -65,11 +65,11 @@ router.get('/classes/:classId/students', verifyToken, authorize(ROLES.TEACHER, R
   try {
     const { classId } = req.params;
     const [rows] = await pool.query(`
-      SELECT s.id, COALESCE(s.roll_no, s.admission_no) AS roll, s.roll_no, CONCAT(s.first_name, ' ', s.last_name) AS name, s.section_id
+      SELECT s.id, COALESCE(s.roll_no, s.admission_no) AS roll, s.roll_no, s.first_name, s.last_name, CONCAT(s.first_name, ' ', s.last_name) AS name, s.section_id
       FROM students s
       JOIN sections sec ON s.section_id = sec.id
-      WHERE sec.class_id = ? OR sec.id = ?
-      ORDER BY s.roll_no, s.first_name
+      WHERE (sec.class_id = ? OR sec.id = ?) AND (s.status IS NULL OR s.status = 'active')
+      ORDER BY CAST(COALESCE(s.roll_no, s.admission_no) AS UNSIGNED) ASC, s.last_name ASC, s.first_name ASC
     `, [classId, classId]);
 
     res.json({ success: true, data: rows });

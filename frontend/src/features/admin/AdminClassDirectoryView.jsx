@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/axios";
 import {
   Search,
@@ -11,14 +11,25 @@ import {
   User,
   Eye,
   Upload,
+  Sparkles,
+  Lock,
 } from "lucide-react";
 import useAuthStore from "../../store/authStore";
+import { useAcademicsStore } from "../../store/academicsStore";
+
 
 const DEMO_CLASSES = [
   { class_id: 101, class_name: "Class 10", numeric_value: 10 },
   { class_id: 102, class_name: "Class 11", numeric_value: 11 },
   { class_id: 103, class_name: "Class 12", numeric_value: 12 },
 ];
+
+const GRADUATED_SENTINEL_ID = "graduated";
+const GRADUATED_PSEUDO_CLASS = {
+  class_id: GRADUATED_SENTINEL_ID,
+  class_name: "Graduated Alumni",
+  numeric_value: 99,
+};
 
 const EMPTY_STUDENT_FORM = {
   first_name: "",
@@ -45,6 +56,8 @@ const EMPTY_STUDENT_FORM = {
 const AdminClassDirectoryView = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { executeAnnualPromotion, promoting, promotionResult, error: promoError, clearPromotionStatus } = useAcademicsStore();
+
 
   const [classesData, setClassesData] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
@@ -55,6 +68,10 @@ const AdminClassDirectoryView = () => {
   // Modals visibility
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showAddClassModal, setShowAddClassModal] = useState(false);
+  const [showPromotionModal, setShowPromotionModal] = useState(false);
+  const [showPasswordAuthModal, setShowPasswordAuthModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [modalLocalError, setModalLocalError] = useState("");
 
   // Add Class Form State
   const [newClassName, setNewClassName] = useState("");
@@ -73,11 +90,31 @@ const AdminClassDirectoryView = () => {
       if (e.key === "Escape") {
         if (showAddStudentModal) setShowAddStudentModal(false);
         if (showAddClassModal) setShowAddClassModal(false);
+        if (showPromotionModal) {
+          if (showPasswordAuthModal) {
+            setShowPasswordAuthModal(false);
+          } else {
+            setShowPromotionModal(false);
+          }
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAddStudentModal, showAddClassModal]);
+  }, [showAddStudentModal, showAddClassModal, showPromotionModal, showPasswordAuthModal]);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get("openPromotion") === "true") {
+      clearPromotionStatus();
+      setAdminPassword("");
+      setModalLocalError("");
+      setShowPasswordAuthModal(false);
+      setShowPromotionModal(true);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     fetchClasses();
@@ -122,7 +159,8 @@ const AdminClassDirectoryView = () => {
 
   const fetchStudents = async (classId) => {
     try {
-      const res = await api.get(`/admin/classes/${classId}/students`);
+      const endpoint = String(classId) === GRADUATED_SENTINEL_ID ? "/admin/graduates" : `/admin/classes/${classId}/students`;
+      const res = await api.get(endpoint);
       const apiStudents = res.data?.data || [];
       setStudents(apiStudents);
     } catch (err) {
@@ -226,6 +264,8 @@ const AdminClassDirectoryView = () => {
     );
   });
 
+
+
   return (
     <div className="space-y-6">
       {/* Top Banner Header */}
@@ -245,24 +285,74 @@ const AdminClassDirectoryView = () => {
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           {(user?.role === "super_admin" || user?.role === "admin") && (
-            <button
-              onClick={() => {
-                const initialClassId =
-                  selectedClass?.class_id || classesData[0]?.class_id || "";
-                setStudentForm((prev) => ({
-                  ...prev,
-                  class_id: initialClassId,
-                }));
-                setShowAddStudentModal(true);
-              }}
-              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4" />
-              Add Student
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  clearPromotionStatus();
+                  setAdminPassword("");
+                  setModalLocalError("");
+                  setShowPasswordAuthModal(false);
+                  setShowPromotionModal(true);
+                }}
+                disabled={promoting}
+                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                {promoting ? "Promoting..." : "Run Annual Promotion"}
+              </button>
+              <button
+                onClick={() => {
+                  const isGraduated =
+                    selectedClass?.class_id === GRADUATED_SENTINEL_ID ||
+                    selectedClass?.class_id === GRADUATED_PSEUDO_CLASS.class_id;
+                  const initialClassId =
+                    (!isGraduated && selectedClass?.class_id) ||
+                    classesData[0]?.class_id ||
+                    "";
+                  setStudentForm({
+                    ...EMPTY_STUDENT_FORM,
+                    class_id: initialClassId,
+                  });
+                  setFormError("");
+                  setShowAddStudentModal(true);
+                }}
+                className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-500/20 transition cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add Student
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {promotionResult && (
+        <div className="p-3.5 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-bold rounded-2xl flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-indigo-600" />
+            <span>
+              {typeof promotionResult === "string"
+                ? promotionResult
+                : promotionResult.message || "Annual promotion completed successfully!"}
+            </span>
+          </div>
+          <button onClick={clearPromotionStatus} className="text-indigo-400 hover:text-indigo-700 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {promoError && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center justify-between gap-2 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <X className="w-4 h-4 text-rose-600" />
+            <span>{promoError}</span>
+          </div>
+          <button onClick={clearPromotionStatus} className="text-rose-400 hover:text-rose-700 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {formSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
@@ -270,6 +360,8 @@ const AdminClassDirectoryView = () => {
           {formSuccess}
         </div>
       )}
+
+
 
       {/* Grid: Class Standard Selector & Roster Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -330,6 +422,43 @@ const AdminClassDirectoryView = () => {
               );
             })}
           </div>
+
+          {/* Graduated Alumni Selector */}
+          <div className="pt-2 border-t border-slate-200/80">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Select Graduated Alumni"
+              onClick={() => {
+                setSelectedClass(GRADUATED_PSEUDO_CLASS);
+                sessionStorage.setItem("selectedClassId", GRADUATED_SENTINEL_ID);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelectedClass(GRADUATED_PSEUDO_CLASS);
+                  sessionStorage.setItem("selectedClassId", GRADUATED_SENTINEL_ID);
+                }
+              }}
+              className={`p-3.5 rounded-2xl border transition text-left cursor-pointer flex items-center justify-between ${
+                selectedClass?.class_id === GRADUATED_SENTINEL_ID
+                  ? "bg-gradient-to-r from-amber-600 to-amber-700 text-white border-amber-600 shadow-md shadow-amber-500/20"
+                  : "bg-amber-50/60 hover:bg-amber-100/60 border-amber-200/80 text-amber-950"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl ${selectedClass?.class_id === GRADUATED_SENTINEL_ID ? "bg-white/20 text-white" : "bg-amber-200/60 text-amber-800"}`}>
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-black block">Graduated Alumni</span>
+                  <span className={`text-[10px] font-bold block ${selectedClass?.class_id === GRADUATED_SENTINEL_ID ? "text-amber-100" : "text-amber-700"}`}>
+                    Passed Out Batch Records
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Selected Class Student Roster & Teacher Info */}
@@ -350,14 +479,14 @@ const AdminClassDirectoryView = () => {
               </div>
 
               {/* Search Bar */}
-              <div className="relative w-full md:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+              <div className="relative flex items-center w-full md:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search student or roll no..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500 shadow-xs"
+                  className="w-full pl-9 pr-3.5 py-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
                 />
               </div>
             </div>
@@ -500,7 +629,7 @@ const AdminClassDirectoryView = () => {
               </button>
             </div>
 
-            <form onSubmit={handleAddClassFrontend} className="space-y-4">
+            <form onSubmit={handleAddClassFrontend} autoComplete="off" className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                   Class / Standard Name *
@@ -595,6 +724,7 @@ const AdminClassDirectoryView = () => {
 
             <form
               onSubmit={handleAddStudentFrontend}
+              autoComplete="off"
               className="space-y-4 text-xs font-semibold text-slate-700"
             >
               {/* Section 1: Basic & Academic Information */}
@@ -937,6 +1067,227 @@ const AdminClassDirectoryView = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Detailed Annual Promotion Info Modal (Step 1) */}
+      {showPromotionModal && !showPasswordAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-0">
+            {/* Modal Header */}
+            <div className="p-6 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-950 text-white relative">
+              <button
+                onClick={() => setShowPromotionModal(false)}
+                className="absolute right-5 top-5 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-500/30 rounded-2xl border border-indigo-400/30 shadow-inner">
+                  <Sparkles className="w-6 h-6 text-indigo-300" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black tracking-tight text-white">
+                    Annual Grade Advancement (Promotion)
+                  </h2>
+                  <p className="text-xs font-semibold text-indigo-200 mt-0.5">
+                    School-wide Academic Session Rollover & Progression
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body / Detailed Effects Overview */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar bg-slate-50/50">
+              <div className="p-3.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold rounded-2xl flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-extrabold block">Annual Execution Notice:</span>
+                  Grade promotion is executed <span className="underline">once per academic year</span> at session rollover. Review the detailed effects below before authorizing.
+                </div>
+              </div>
+
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-400">
+                Action Impacts & System Effects
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+                  <div className="flex items-center gap-2 text-indigo-600 font-extrabold">
+                    <GraduationCap className="w-4 h-4" />
+                    <span>Standard Progression</span>
+                  </div>
+                  <p className="text-slate-600 text-[11px] font-medium leading-relaxed">
+                    All active students advance to the next standard (e.g. LKG → UKG, Class 1 → Class 2 ... Class 11 → Class 12).
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+                  <div className="flex items-center gap-2 text-amber-600 font-extrabold">
+                    <Check className="w-4 h-4" />
+                    <span>Class 12 Graduation</span>
+                  </div>
+                  <p className="text-slate-600 text-[11px] font-medium leading-relaxed">
+                    Outcoming Class 12 batch students are marked as <span className="font-bold text-slate-800">'graduated'</span> and unlinked to Alumni records.
+                  </p>
+                </div>
+
+
+                <div className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
+                  <div className="flex items-center gap-2 text-blue-600 font-extrabold">
+                    <Sparkles className="w-4 h-4" />
+                    <span>Session Activation</span>
+                  </div>
+                  <p className="text-slate-600 text-[11px] font-medium leading-relaxed">
+                    The new target academic session is activated as current across timetables, attendance registers, and marksheets.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-white border-t border-slate-200/80 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowPromotionModal(false)}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setAdminPassword("");
+                  setModalLocalError("");
+                  setShowPasswordAuthModal(true);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold rounded-xl shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
+              >
+                <span>Proceed to Authorize Advancement</span>
+                <Lock className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Authorization Prompt Modal (Step 2) */}
+      {showPromotionModal && showPasswordAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-0">
+            {/* Modal Header */}
+            <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white relative">
+              <button
+                onClick={() => {
+                  setShowPasswordAuthModal(false);
+                  setAdminPassword("");
+                  setModalLocalError("");
+                }}
+                className="absolute right-5 top-5 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-500/30 rounded-2xl border border-indigo-400/30 shadow-inner">
+                  <Lock className="w-6 h-6 text-indigo-300" />
+                </div>
+                <div>
+                  <h2 className="text-base font-black tracking-tight text-white">
+                    Administrator Authorization
+                  </h2>
+                  <p className="text-xs font-semibold text-indigo-200 mt-0.5">
+                    Security Lock • School-Wide Grade Advancement
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body / Password Input */}
+            <div className="p-6 space-y-4 bg-slate-50/50">
+              <div className="p-3 bg-indigo-50 border border-indigo-200/80 rounded-2xl text-indigo-900 text-xs font-semibold flex items-center gap-2">
+                <Lock className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                <span>Enter your administrator password to authorize execution.</span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
+                  Admin Password
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    autoFocus
+                    placeholder="Enter your login password..."
+                    value={adminPassword}
+                    onChange={(e) => {
+                      setAdminPassword(e.target.value);
+                      setModalLocalError("");
+                    }}
+                    onKeyDown={async (e) => {
+                      if (e.key === "Enter" && adminPassword.trim() && !promoting) {
+                        e.preventDefault();
+                        setModalLocalError("");
+                        const res = await executeAnnualPromotion(adminPassword);
+                        if (res?.success) {
+                          setShowPromotionModal(false);
+                          setShowPasswordAuthModal(false);
+                          setAdminPassword("");
+                          fetchClasses();
+                        } else {
+                          setModalLocalError(res?.error || "Authorization failed.");
+                        }
+                      }
+                    }}
+                    className="w-full px-4 py-2.5 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-xs transition-all"
+                  />
+                </div>
+              </div>
+
+              {(modalLocalError || promoError) && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center gap-2 animate-in fade-in">
+                  <X className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span>{modalLocalError || promoError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-white border-t border-slate-200/80 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowPasswordAuthModal(false);
+                  setAdminPassword("");
+                  setModalLocalError("");
+                }}
+                disabled={promoting}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                Back to Review
+              </button>
+              <button
+                onClick={async () => {
+                  if (!adminPassword.trim()) {
+                    setModalLocalError("Administrator password is required to authorize annual grade advancement.");
+                    return;
+                  }
+                  setModalLocalError("");
+                  const res = await executeAnnualPromotion(adminPassword);
+                  if (res?.success) {
+                    setShowPromotionModal(false);
+                    setShowPasswordAuthModal(false);
+                    setAdminPassword("");
+                    fetchClasses();
+                  } else {
+                    setModalLocalError(res?.error || "Authorization failed.");
+                  }
+                }}
+                disabled={!adminPassword.trim() || promoting}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-extrabold rounded-xl shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                {promoting ? "Authorizing & Executing..." : "Confirm & Execute Advancement"}
+              </button>
+            </div>
           </div>
         </div>
       )}

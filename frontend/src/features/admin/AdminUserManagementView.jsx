@@ -44,7 +44,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [teacherAssignmentType, setTeacherAssignmentType] =
     useState("class_teacher"); // 'class_teacher' | 'subject_teacher'
   const [targetClassId, setTargetClassId] = useState("");
-  const [subjectName, setSubjectName] = useState("General");
+  const [subjectName, setSubjectName] = useState("Mathematics");
   const [classesWithTeachers, setClassesWithTeachers] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
 
@@ -105,7 +105,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     setPassword("");
     setGender("Male");
     setTeacherAssignmentType("class_teacher");
-    setSubjectName("General");
+    setSubjectName("Mathematics");
     setShowAddModal(true);
   };
 
@@ -246,14 +246,14 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
             </button>
           ))}
         </div>
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+        <div className="relative flex items-center flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
           <input
             type="text"
             placeholder="Search by name, email, department or role..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="w-full pl-10 pr-4 py-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
           />
         </div>
       </div>
@@ -562,9 +562,6 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                           onChange={(e) => setSubjectName(e.target.value)}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
                         >
-                          <option value="General">
-                            General / All Subjects
-                          </option>
                           <option value="Mathematics">Mathematics</option>
                           <option value="Science">
                             Science (Physics & Chemistry)

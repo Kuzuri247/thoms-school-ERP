@@ -15,6 +15,17 @@ const AttendanceView = () => {
   const saveAttendanceMutation = useSaveAttendance();
   const { data: usersData } = useGetUsers();
 
+  const isSundayDate = (dStr) => {
+    if (!dStr) return false;
+    const parts = String(dStr).split('T')[0].split('-');
+    if (parts.length === 3) {
+      const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return dt.getDay() === 0;
+    }
+    return new Date(dStr).getDay() === 0;
+  };
+  const isSelectedDateSunday = isSundayDate(selectedDate);
+
   const mockStudents = (usersData || [])
     .filter(u => u.role === 'student')
     .map(u => ({
@@ -40,6 +51,10 @@ const AttendanceView = () => {
   };
 
   const handleSave = async () => {
+    if (isSelectedDateSunday) {
+      alert('Attendance register cannot be marked on Sundays.');
+      return;
+    }
     const finalData = { ...attendanceState };
     mockStudents.forEach((s) => {
       if (!finalData[s.id]) finalData[s.id] = 'Present';
@@ -102,7 +117,7 @@ const AttendanceView = () => {
           />
           <button
             onClick={handleSave}
-            disabled={saveAttendanceMutation.isPending}
+            disabled={saveAttendanceMutation.isPending || isSelectedDateSunday}
             className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow-md shadow-indigo-500/20 active:scale-[0.99] disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
@@ -110,6 +125,13 @@ const AttendanceView = () => {
           </button>
         </div>
       </div>
+
+      {isSelectedDateSunday && (
+        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
+          <XCircle className="w-5 h-5 text-amber-600" />
+          Attendance register cannot be marked on Sundays. Please select a weekday (Monday – Saturday).
+        </div>
+      )}
 
       {submitSuccess && (
         <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center gap-2 animate-in fade-in">
@@ -143,14 +165,14 @@ const AttendanceView = () => {
 
       {/* Control Bar: Search + Batch Actions */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+        <div className="relative flex items-center flex-1">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
           <input
             type="text"
             placeholder="Filter by student name or roll number..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            className="w-full pl-10 pr-4 py-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
           />
         </div>
 

@@ -20,12 +20,12 @@ async function seed() {
       connectTimeout: 20000,
     });
 
-    console.log('Connected to MySQL Database. Starting comprehensive extended demo seed...');
+    console.log('Connected to MySQL Database. Starting detailed mock database seed...');
 
     const defaultPassword = 'Thomson2026!';
     const hashedPassword = await bcrypt.hash(defaultPassword, 8);
 
-    // 1. Academic Session
+    // 1. Academic Session (Active session 2026-2027)
     await connection.query(`
       INSERT INTO academic_sessions (name, start_date, end_date, is_current) 
       VALUES ('2026-2027', '2026-04-01', '2027-03-31', 1)
@@ -38,6 +38,8 @@ async function seed() {
     console.log('Purging legacy data...');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     try {
+      await connection.query('TRUNCATE TABLE marks');
+      await connection.query('TRUNCATE TABLE exams');
       await connection.query('TRUNCATE TABLE attendance');
       await connection.query('TRUNCATE TABLE timetables');
       await connection.query('TRUNCATE TABLE homework');
@@ -48,7 +50,7 @@ async function seed() {
       await connection.query('TRUNCATE TABLE subjects');
       await connection.query('TRUNCATE TABLE sections');
       await connection.query('TRUNCATE TABLE classes');
-      await connection.query("DELETE FROM users WHERE email LIKE '%@erp.com' OR role IN ('student', 'teacher', 'cashier')");
+      await connection.query("DELETE FROM users WHERE email LIKE '%@thomson.edu' OR role IN ('student', 'teacher', 'cashier')");
     } finally {
       await connection.query('SET FOREIGN_KEY_CHECKS = 1');
     }
@@ -112,134 +114,36 @@ async function seed() {
     async function createStudent(userId, admnNo, fname, lname, roll, sectionId) {
       let [existingStu] = await connection.query('SELECT id FROM students WHERE user_id = ?', [userId]);
       if (existingStu.length > 0) {
-        await connection.query('UPDATE students SET section_id = ?, first_name = ?, last_name = ? WHERE id = ?', [sectionId, fname, lname, existingStu[0].id]);
+        await connection.query('UPDATE students SET section_id = ?, first_name = ?, last_name = ?, roll_no = ? WHERE id = ?', [sectionId, fname, lname, roll, existingStu[0].id]);
         return existingStu[0].id;
       }
       await connection.query(`
         INSERT INTO students (user_id, admission_no, roll_no, first_name, last_name, section_id, session_id, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
-        ON DUPLICATE KEY UPDATE section_id=VALUES(section_id)
+        ON DUPLICATE KEY UPDATE section_id=VALUES(section_id), roll_no=VALUES(roll_no)
       `, [userId, admnNo, roll, fname, lname, sectionId, sessionId]);
 
       let [[stuRow]] = await connection.query('SELECT id FROM students WHERE user_id = ?', [userId]);
       return stuRow?.id;
     }
 
-    // 3. Super Admin
+    // 3. Super Admin & Admins & Cashiers
     let saId = await createUser('superadmin@thomson.edu', 'super_admin', 'Super Admin Official');
 
-    // 4. Admins
     let admin1Id = await createUser('admin@thomson.edu', 'admin', 'Principal Rajesh Sharma');
     await createStaff(admin1Id, 'ADM001', 'Rajesh', 'Sharma', 'Principal & Director', 'Management');
     
     let admin2Id = await createUser('admin2@thomson.edu', 'admin', 'Vice Principal Meenakshi');
     await createStaff(admin2Id, 'ADM002', 'Meenakshi', 'Sundaram', 'Vice Principal', 'Management');
 
-    // 5. Cashiers
     let cashier1Id = await createUser('cashier@thomson.edu', 'cashier', 'Senior Cashier Vikram');
     await createStaff(cashier1Id, 'CSH001', 'Vikram', 'Mehta', 'Senior Cashier & Fee Incharge', 'Finance');
 
     let cashier2Id = await createUser('cashier2@thomson.edu', 'cashier', 'Accountant Sunita');
     await createStaff(cashier2Id, 'CSH002', 'Sunita', 'Kapoor', 'Accounts Officer', 'Finance');
 
-    // 6. Class Teachers (14 Class Teachers - 1 for each class)
-    const teachersData = [
-      { email: 'teacher.lkg@thomson.edu', code: 'TCH001', fname: 'Sunita', lname: 'Sharma', desc: 'Class Teacher - LKG', cls: 'LKG' },
-      { email: 'teacher.ukg@thomson.edu', code: 'TCH002', fname: 'Priya', lname: 'Verma', desc: 'Class Teacher - UKG', cls: 'UKG' },
-      { email: 'teacher.c1@thomson.edu', code: 'TCH003', fname: 'Ramesh', lname: 'Gupta', desc: 'Class Teacher - Class 1', cls: 'Class 1' },
-      { email: 'teacher.c2@thomson.edu', code: 'TCH004', fname: 'Kavita', lname: 'Singh', desc: 'Class Teacher - Class 2', cls: 'Class 2' },
-      { email: 'teacher.c3@thomson.edu', code: 'TCH005', fname: 'Manoj', lname: 'Kumar', desc: 'Class Teacher - Class 3', cls: 'Class 3' },
-      { email: 'teacher.c4@thomson.edu', code: 'TCH006', fname: 'Rekha', lname: 'Patel', desc: 'Class Teacher - Class 4', cls: 'Class 4' },
-      { email: 'teacher.c5@thomson.edu', code: 'TCH007', fname: 'Amit', lname: 'Joshi', desc: 'Class Teacher - Class 5', cls: 'Class 5' },
-      { email: 'teacher.c6@thomson.edu', code: 'TCH008', fname: 'Suman', lname: 'Rao', desc: 'Class Teacher - Class 6', cls: 'Class 6' },
-      { email: 'teacher.c7@thomson.edu', code: 'TCH009', fname: 'Deepak', lname: 'Kulkarni', desc: 'Class Teacher - Class 7', cls: 'Class 7' },
-      { email: 'teacher.c8@thomson.edu', code: 'TCH010', fname: 'Arvind', lname: 'Sharma', desc: 'Class Teacher - Class 8', cls: 'Class 8' },
-      { email: 'teacher.c9@thomson.edu', code: 'TCH011', fname: 'Anita', lname: 'Deshmukh', desc: 'Class Teacher - Class 9', cls: 'Class 9' },
-      { email: 'teacher@thomson.edu', code: 'TCH012', fname: 'Rajesh', lname: 'Verma', desc: 'Class Teacher - Class 10 (HOD)', cls: 'Class 10' },
-      { email: 'teacher.c11@thomson.edu', code: 'TCH013', fname: 'Dr. S. K.', lname: 'Gupta', desc: 'Class Teacher - Class 11', cls: 'Class 11' },
-      { email: 'teacher.c12@thomson.edu', code: 'TCH014', fname: 'Meenakshi', lname: 'Sundaram', desc: 'Class Teacher - Class 12', cls: 'Class 12' },
-      // Pure Subject Teachers (Not Class Teachers)
-      { email: 'teacher.phy@thomson.edu', code: 'TCH020', fname: 'Dr. Vikram', lname: 'Sarabhai', desc: 'Physics Senior Faculty', cls: null },
-      { email: 'teacher.chem@thomson.edu', code: 'TCH021', fname: 'Priyanka', lname: 'Sen', desc: 'Chemistry Department Lead', cls: null },
-      { email: 'teacher.eng@thomson.edu', code: 'TCH022', fname: 'David', lname: 'Miller', desc: 'English & Humanities Lecturer', cls: null },
-    ];
-
-    const teacherUserIds = [];
-    const teacherUserIdsByEmail = {};
-    for (const t of teachersData) {
-      const uId = await createUser(t.email, 'teacher', `Prof. ${t.fname} ${t.lname}`);
-      await createStaff(uId, t.code, t.fname, t.lname, t.desc, 'Academics');
-      teacherUserIds.push(uId);
-      teacherUserIdsByEmail[t.email] = uId;
-      if (t.cls) {
-        const secId = sectionIds[t.cls]['Section A'];
-        if (secId) {
-          await connection.query(`
-            INSERT INTO teacher_assignments (teacher_user_id, section_id, session_id, is_class_teacher) 
-            VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE is_class_teacher=1
-          `, [uId, secId, sessionId]);
-        }
-      }
-    }
-
-    // 7. Students (28 Students across 14 classes - 2 per class)
-    const studentDefs = [
-      // LKG
-      { fname: 'Aarav', lname: 'Malhotra', cls: 'LKG', roll: '101', admn: 'TS-2026-LKG-01', email: 'aarav.lkg@thomson.edu' },
-      { fname: 'Avani', lname: 'Sharma', cls: 'LKG', roll: '102', admn: 'TS-2026-LKG-02', email: 'avani.lkg@thomson.edu' },
-      // UKG
-      { fname: 'Vivaan', lname: 'Gupta', cls: 'UKG', roll: '101', admn: 'TS-2026-UKG-01', email: 'vivaan.ukg@thomson.edu' },
-      { fname: 'Ananya', lname: 'Roy', cls: 'UKG', roll: '102', admn: 'TS-2026-UKG-02', email: 'ananya.ukg@thomson.edu' },
-      // Class 1
-      { fname: 'Reyansh', lname: 'Verma', cls: 'Class 1', roll: '101', admn: 'TS-2026-C01-01', email: 'reyansh.c1@thomson.edu' },
-      { fname: 'Diya', lname: 'Patel', cls: 'Class 1', roll: '102', admn: 'TS-2026-C01-02', email: 'diya.c1@thomson.edu' },
-      // Class 2
-      { fname: 'Dhruv', lname: 'Singh', cls: 'Class 2', roll: '101', admn: 'TS-2026-C02-01', email: 'dhruv.c2@thomson.edu' },
-      { fname: 'Myra', lname: 'Kapoor', cls: 'Class 2', roll: '102', admn: 'TS-2026-C02-02', email: 'myra.c2@thomson.edu' },
-      // Class 3
-      { fname: 'Kabir', lname: 'Joshi', cls: 'Class 3', roll: '101', admn: 'TS-2026-C03-01', email: 'kabir.c3@thomson.edu' },
-      { fname: 'Anvi', lname: 'Mehta', cls: 'Class 3', roll: '102', admn: 'TS-2026-C03-02', email: 'anvi.c3@thomson.edu' },
-      // Class 4
-      { fname: 'Sai', lname: 'Reddy', cls: 'Class 4', roll: '101', admn: 'TS-2026-C04-01', email: 'sai.c4@thomson.edu' },
-      { fname: 'Isha', lname: 'Nair', cls: 'Class 4', roll: '102', admn: 'TS-2026-C04-02', email: 'isha.c4@thomson.edu' },
-      // Class 5
-      { fname: 'Advait', lname: 'Rao', cls: 'Class 5', roll: '101', admn: 'TS-2026-C05-01', email: 'advait.c5@thomson.edu' },
-      { fname: 'Sara', lname: 'Das', cls: 'Class 5', roll: '102', admn: 'TS-2026-C05-02', email: 'sara.c5@thomson.edu' },
-      // Class 6
-      { fname: 'Yash', lname: 'Kulkarni', cls: 'Class 6', roll: '101', admn: 'TS-2026-C06-01', email: 'yash.c6@thomson.edu' },
-      { fname: 'Riya', lname: 'Chawla', cls: 'Class 6', roll: '102', admn: 'TS-2026-C06-02', email: 'riya.c6@thomson.edu' },
-      // Class 7
-      { fname: 'Atharva', lname: 'Sen', cls: 'Class 7', roll: '101', admn: 'TS-2026-C07-01', email: 'atharva.c7@thomson.edu' },
-      { fname: 'Pari', lname: 'Yadav', cls: 'Class 7', roll: '102', admn: 'TS-2026-C07-02', email: 'pari.c7@thomson.edu' },
-      // Class 8
-      { fname: 'Shlok', lname: 'Bose', cls: 'Class 8', roll: '101', admn: 'TS-2026-C08-01', email: 'shlok.c8@thomson.edu' },
-      { fname: 'Navya', lname: 'Pillai', cls: 'Class 8', roll: '102', admn: 'TS-2026-C08-02', email: 'navya.c8@thomson.edu' },
-      // Class 9
-      { fname: 'Ishita', lname: 'Joshi', cls: 'Class 9', roll: '101', admn: 'TS-2026-C09-01', email: 'ishita.c9@thomson.edu' },
-      { fname: 'Karan', lname: 'Patel', cls: 'Class 9', roll: '102', admn: 'TS-2026-C09-02', email: 'karan.c9@thomson.edu' },
-      // Class 10
-      { fname: 'Aarav', lname: 'Kumar', cls: 'Class 10', roll: '101', admn: 'TS-2026-C10-01', email: 'student@thomson.edu' },
-      { fname: 'Riya', lname: 'Singh', cls: 'Class 10', roll: '102', admn: 'TS-2026-C10-02', email: 'riya.c10@thomson.edu' },
-      // Class 11
-      { fname: 'Siddharth', lname: 'Rao', cls: 'Class 11', roll: '101', admn: 'TS-2026-C11-01', email: 'siddharth.c11@thomson.edu' },
-      { fname: 'Tanvi', lname: 'Chawla', cls: 'Class 11', roll: '102', admn: 'TS-2026-C11-02', email: 'tanvi.c11@thomson.edu' },
-      // Class 12
-      { fname: 'Vivek', lname: 'Reddy', cls: 'Class 12', roll: '101', admn: 'TS-2026-C12-01', email: 'vivek.c12@thomson.edu' },
-      { fname: 'Pooja', lname: 'Nair', cls: 'Class 12', roll: '102', admn: 'TS-2026-C12-02', email: 'pooja.c12@thomson.edu' },
-    ];
-
-    const studentDbIds = [];
-    for (const st of studentDefs) {
-      const uId = await createUser(st.email, 'student', `${st.fname} ${st.lname}`);
-      const secId = sectionIds[st.cls]['Section A'];
-      const sId = await createStudent(uId, st.admn, st.fname, st.lname, st.roll, secId);
-      if (sId) {
-        studentDbIds.push({ id: sId, userId: uId, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
-      }
-    }
-
-    // 8. Subjects per Class
-    const subjectList = ['Mathematics', 'Physics', 'Chemistry', 'English', 'Computer Science', 'Social Studies', 'Biology'];
+    // 4. Subjects per Class Standard (English, Mathematics, Science, Physics, Chemistry, Social Studies, Computer Science)
+    const subjectList = ['English', 'Mathematics', 'Science', 'Physics', 'Chemistry', 'Social Studies', 'Computer Science'];
     const subjectIdsByClass = {};
 
     for (const [clsName, cId] of Object.entries(classIds)) {
@@ -252,44 +156,207 @@ async function seed() {
       }
     }
 
-    // Assign Subject Teachers (is_class_teacher = 0)
-    const phyTeacherId = teacherUserIdsByEmail['teacher.phy@thomson.edu']; // Dr. Vikram Sarabhai
-    const chemTeacherId = teacherUserIdsByEmail['teacher.chem@thomson.edu']; // Priyanka Sen
-    const engTeacherId = teacherUserIdsByEmail['teacher.eng@thomson.edu']; // David Miller
+    // 5. Teachers & Assignments (Each teacher has a specific subject & teaches at least 2 classes)
+    const teachersData = [
+      { email: 'teacher.lkg@thomson.edu', code: 'TCH001', fname: 'Sunita', lname: 'Sharma', subject: 'English', desc: 'Class Teacher - LKG', homeroomCls: 'LKG', teachClasses: ['LKG', 'UKG', 'Class 1'] },
+      { email: 'teacher.ukg@thomson.edu', code: 'TCH002', fname: 'Priya', lname: 'Verma', subject: 'English', desc: 'Class Teacher - UKG', homeroomCls: 'UKG', teachClasses: ['UKG', 'Class 2', 'Class 3'] },
+      { email: 'teacher.c1@thomson.edu', code: 'TCH003', fname: 'Ramesh', lname: 'Gupta', subject: 'Mathematics', desc: 'Class Teacher - Class 1', homeroomCls: 'Class 1', teachClasses: ['Class 1', 'LKG', 'Class 2'] },
+      { email: 'teacher.c2@thomson.edu', code: 'TCH004', fname: 'Kavita', lname: 'Singh', subject: 'Mathematics', desc: 'Class Teacher - Class 2', homeroomCls: 'Class 2', teachClasses: ['Class 2', 'Class 4', 'Class 5'] },
+      { email: 'teacher.c3@thomson.edu', code: 'TCH005', fname: 'Manoj', lname: 'Kumar', subject: 'Science', desc: 'Class Teacher - Class 3', homeroomCls: 'Class 3', teachClasses: ['Class 3', 'Class 1', 'Class 4'] },
+      { email: 'teacher.c4@thomson.edu', code: 'TCH006', fname: 'Rekha', lname: 'Patel', subject: 'Science', desc: 'Class Teacher - Class 4', homeroomCls: 'Class 4', teachClasses: ['Class 4', 'Class 5', 'Class 6'] },
+      { email: 'teacher.c5@thomson.edu', code: 'TCH007', fname: 'Amit', lname: 'Joshi', subject: 'Social Studies', desc: 'Class Teacher - Class 5', homeroomCls: 'Class 5', teachClasses: ['Class 5', 'Class 6', 'Class 7'] },
+      { email: 'teacher.c6@thomson.edu', code: 'TCH008', fname: 'Suman', lname: 'Rao', subject: 'Social Studies', desc: 'Class Teacher - Class 6', homeroomCls: 'Class 6', teachClasses: ['Class 6', 'Class 7', 'Class 8'] },
+      { email: 'teacher.c7@thomson.edu', code: 'TCH009', fname: 'Deepak', lname: 'Kulkarni', subject: 'Computer Science', desc: 'Class Teacher - Class 7', homeroomCls: 'Class 7', teachClasses: ['Class 7', 'Class 8', 'Class 9'] },
+      { email: 'teacher.c8@thomson.edu', code: 'TCH010', fname: 'Arvind', lname: 'Sharma', subject: 'Computer Science', desc: 'Class Teacher - Class 8', homeroomCls: 'Class 8', teachClasses: ['Class 8', 'Class 9', 'Class 10'] },
+      { email: 'teacher.c9@thomson.edu', code: 'TCH011', fname: 'Anita', lname: 'Deshmukh', subject: 'English', desc: 'Class Teacher - Class 9', homeroomCls: 'Class 9', teachClasses: ['Class 9', 'Class 10', 'Class 11'] },
+      { email: 'teacher@thomson.edu', code: 'TCH012', fname: 'Rajesh', lname: 'Verma', subject: 'Mathematics', desc: 'Class Teacher - Class 10 (HOD)', homeroomCls: 'Class 10', teachClasses: ['Class 10', 'Class 11', 'Class 12'] },
+      { email: 'teacher.c11@thomson.edu', code: 'TCH013', fname: 'Dr. S. K.', lname: 'Gupta', subject: 'Physics', desc: 'Class Teacher - Class 11', homeroomCls: 'Class 11', teachClasses: ['Class 11', 'Class 10', 'Class 12'] },
+      { email: 'teacher.c12@thomson.edu', code: 'TCH014', fname: 'Meenakshi', lname: 'Sundaram', subject: 'Chemistry', desc: 'Class Teacher - Class 12', homeroomCls: 'Class 12', teachClasses: ['Class 12', 'Class 10', 'Class 11'] },
+      { email: 'teacher.phy@thomson.edu', code: 'TCH020', fname: 'Dr. Vikram', lname: 'Sarabhai', subject: 'Physics', desc: 'Physics Senior Lecturer', homeroomCls: null, teachClasses: ['Class 9', 'Class 10', 'Class 11', 'Class 12'] },
+      { email: 'teacher.chem@thomson.edu', code: 'TCH021', fname: 'Priyanka', lname: 'Sen', subject: 'Chemistry', desc: 'Chemistry Senior Lecturer', homeroomCls: null, teachClasses: ['Class 9', 'Class 10', 'Class 11', 'Class 12'] },
+      { email: 'teacher.eng@thomson.edu', code: 'TCH022', fname: 'David', lname: 'Miller', subject: 'English', desc: 'English Senior Lecturer', homeroomCls: null, teachClasses: ['Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'] },
+    ];
 
-    const targetClassesForSubjectTeachers = ['Class 9', 'Class 10', 'Class 11', 'Class 12'];
-    for (const clsName of targetClassesForSubjectTeachers) {
-      const secId = sectionIds[clsName] ? sectionIds[clsName]['Section A'] : null;
-      if (secId) {
-        // Physics Subject Teacher
-        if (phyTeacherId && subjectIdsByClass[clsName]['Physics']) {
-          await connection.query(`
-            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
-            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
-          `, [phyTeacherId, secId, subjectIdsByClass[clsName]['Physics'], sessionId]);
+    const teacherUserIds = {};
+    const classTeacherInfoByClass = {}; // class -> { uId, subjectName, subjectId }
+
+    for (const t of teachersData) {
+      const uId = await createUser(t.email, 'teacher', `Prof. ${t.fname} ${t.lname}`);
+      await createStaff(uId, t.code, t.fname, t.lname, t.desc, 'Academics');
+      teacherUserIds[t.email] = uId;
+
+      // Assign teacher to their classes
+      for (const clsName of t.teachClasses) {
+        const secId = sectionIds[clsName] ? sectionIds[clsName]['Section A'] : null;
+        const isHomeroom = t.homeroomCls === clsName;
+        const subjId = subjectIdsByClass[clsName] ? subjectIdsByClass[clsName][t.subject] : null;
+
+        if (secId && subjId) {
+          const [existingAssig] = await connection.query(
+            "SELECT id FROM teacher_assignments WHERE section_id = ? AND subject_id = ? AND session_id = ?",
+            [secId, subjId, sessionId]
+          );
+          if (existingAssig.length === 0) {
+            await connection.query(`
+              INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher) 
+              VALUES (?, ?, ?, ?, ?)
+              ON DUPLICATE KEY UPDATE is_class_teacher=VALUES(is_class_teacher)
+            `, [uId, secId, subjId, sessionId, isHomeroom ? 1 : 0]);
+          } else if (isHomeroom) {
+            await connection.query(`
+              UPDATE teacher_assignments 
+              SET teacher_user_id = ?, is_class_teacher = 1 
+              WHERE id = ?
+            `, [uId, existingAssig[0].id]);
+          }
         }
-        // Chemistry Subject Teacher
-        if (chemTeacherId && subjectIdsByClass[clsName]['Chemistry']) {
-          await connection.query(`
-            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
-            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
-          `, [chemTeacherId, secId, subjectIdsByClass[clsName]['Chemistry'], sessionId]);
-        }
-        // English Subject Teacher
-        if (engTeacherId && subjectIdsByClass[clsName]['English']) {
-          await connection.query(`
-            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher)
-            VALUES (?, ?, ?, ?, 0) ON DUPLICATE KEY UPDATE is_class_teacher=is_class_teacher
-          `, [engTeacherId, secId, subjectIdsByClass[clsName]['English'], sessionId]);
+
+        if (isHomeroom) {
+          if (subjId) {
+            classTeacherInfoByClass[clsName] = {
+              uId,
+              fname: t.fname,
+              lname: t.lname,
+              subjectName: t.subject,
+              subjectId: subjId,
+            };
+          } else {
+            console.warn(`Missing subject '${t.subject}' for class teacher of ${clsName}`);
+          }
         }
       }
     }
 
-    // 10. Attendance Records (Past 10 Days)
+    // 6. Students (3-5 Students in EACH Grade, Surname Sorted, Roll numbers 1, 2, 3, 4, 5)
+    const rawStudentList = [
+      // LKG
+      { fname: 'Vihaan', lname: 'Sharma', cls: 'LKG', admn: 'TS-2026-LKG-01', email: 'vihaan.lkg@thomson.edu' },
+      { fname: 'Diya', lname: 'Deshmukh', cls: 'LKG', admn: 'TS-2026-LKG-02', email: 'diya.lkg@thomson.edu' },
+      { fname: 'Aarav', lname: 'Bhatia', cls: 'LKG', admn: 'TS-2026-LKG-03', email: 'aarav.lkg@thomson.edu' },
+      { fname: 'Kavya', lname: 'Malhotra', cls: 'LKG', admn: 'TS-2026-LKG-04', email: 'kavya.lkg@thomson.edu' },
+
+      // UKG
+      { fname: 'Kabir', lname: 'Gupta', cls: 'UKG', admn: 'TS-2026-UKG-01', email: 'kabir.ukg@thomson.edu' },
+      { fname: 'Ananya', lname: 'Agarwal', cls: 'UKG', admn: 'TS-2026-UKG-02', email: 'ananya.ukg@thomson.edu' },
+      { fname: 'Reyansh', lname: 'Roy', cls: 'UKG', admn: 'TS-2026-UKG-03', email: 'reyansh.ukg@thomson.edu' },
+      { fname: 'Myra', lname: 'Mehta', cls: 'UKG', admn: 'TS-2026-UKG-04', email: 'myra.ukg@thomson.edu' },
+
+      // Class 1
+      { fname: 'Reyansh', lname: 'Verma', cls: 'Class 1', admn: 'TS-2026-C01-01', email: 'reyansh.c1@thomson.edu' },
+      { fname: 'Diya', lname: 'Patel', cls: 'Class 1', admn: 'TS-2026-C01-02', email: 'diya.c1@thomson.edu' },
+      { fname: 'Rohan', lname: 'Chawla', cls: 'Class 1', admn: 'TS-2026-C01-03', email: 'rohan.c1@thomson.edu' },
+      { fname: 'Ishaan', lname: 'Singh', cls: 'Class 1', admn: 'TS-2026-C01-04', email: 'ishaan.c1@thomson.edu' },
+
+      // Class 2
+      { fname: 'Dhruv', lname: 'Singh', cls: 'Class 2', admn: 'TS-2026-C02-01', email: 'dhruv.c2@thomson.edu' },
+      { fname: 'Myra', lname: 'Kapoor', cls: 'Class 2', admn: 'TS-2026-C02-02', email: 'myra.c2@thomson.edu' },
+      { fname: 'Aditya', lname: 'Nair', cls: 'Class 2', admn: 'TS-2026-C02-03', email: 'aditya.c2@thomson.edu' },
+      { fname: 'Siddharth', lname: 'Rao', cls: 'Class 2', admn: 'TS-2026-C02-04', email: 'siddharth.c2@thomson.edu' },
+
+      // Class 3
+      { fname: 'Kabir', lname: 'Kulkarni', cls: 'Class 3', admn: 'TS-2026-C03-01', email: 'kabir.c3@thomson.edu' },
+      { fname: 'Anvi', lname: 'Joshi', cls: 'Class 3', admn: 'TS-2026-C03-02', email: 'anvi.c3@thomson.edu' },
+      { fname: 'Yash', lname: 'Sharma', cls: 'Class 3', admn: 'TS-2026-C03-03', email: 'yash.c3@thomson.edu' },
+      { fname: 'Anika', lname: 'Mehta', cls: 'Class 3', admn: 'TS-2026-C03-04', email: 'anika.c3@thomson.edu' },
+
+      // Class 4
+      { fname: 'Sai', lname: 'Reddy', cls: 'Class 4', admn: 'TS-2026-C04-01', email: 'sai.c4@thomson.edu' },
+      { fname: 'Isha', lname: 'Nair', cls: 'Class 4', admn: 'TS-2026-C04-02', email: 'isha.c4@thomson.edu' },
+      { fname: 'Tanvi', lname: 'Patel', cls: 'Class 4', admn: 'TS-2026-C04-03', email: 'tanvi.c4@thomson.edu' },
+      { fname: 'Arjun', lname: 'Verma', cls: 'Class 4', admn: 'TS-2026-C04-04', email: 'arjun.c4@thomson.edu' },
+
+      // Class 5
+      { fname: 'Advait', lname: 'Rao', cls: 'Class 5', admn: 'TS-2026-C05-01', email: 'advait.c5@thomson.edu' },
+      { fname: 'Sara', lname: 'Das', cls: 'Class 5', admn: 'TS-2026-C05-02', email: 'sara.c5@thomson.edu' },
+      { fname: 'Avani', lname: 'Sen', cls: 'Class 5', admn: 'TS-2026-C05-03', email: 'avani.c5@thomson.edu' },
+      { fname: 'Karan', lname: 'Trivedi', cls: 'Class 5', admn: 'TS-2026-C05-04', email: 'karan.c5@thomson.edu' },
+
+      // Class 6
+      { fname: 'Yash', lname: 'Kulkarni', cls: 'Class 6', admn: 'TS-2026-C06-01', email: 'yash.c6@thomson.edu' },
+      { fname: 'Riya', lname: 'Chawla', cls: 'Class 6', admn: 'TS-2026-C06-02', email: 'riya.c6@thomson.edu' },
+      { fname: 'Atharva', lname: 'Pillai', cls: 'Class 6', admn: 'TS-2026-C06-03', email: 'atharva.c6@thomson.edu' },
+      { fname: 'Sneha', lname: 'Sharma', cls: 'Class 6', admn: 'TS-2026-C06-04', email: 'sneha.c6@thomson.edu' },
+
+      // Class 7
+      { fname: 'Atharva', lname: 'Sen', cls: 'Class 7', admn: 'TS-2026-C07-01', email: 'atharva.c7@thomson.edu' },
+      { fname: 'Pari', lname: 'Yadav', cls: 'Class 7', admn: 'TS-2026-C07-02', email: 'pari.c7@thomson.edu' },
+      { fname: 'Shlok', lname: 'Bose', cls: 'Class 7', admn: 'TS-2026-C07-03', email: 'shlok.c7@thomson.edu' },
+      { fname: 'Rohan', lname: 'Zaveri', cls: 'Class 7', admn: 'TS-2026-C07-04', email: 'rohan.c7@thomson.edu' },
+
+      // Class 8
+      { fname: 'Shlok', lname: 'Bose', cls: 'Class 8', admn: 'TS-2026-C08-01', email: 'shlok.c8@thomson.edu' },
+      { fname: 'Navya', lname: 'Pillai', cls: 'Class 8', admn: 'TS-2026-C08-02', email: 'navya.c8@thomson.edu' },
+      { fname: 'Aarav', lname: 'Banerjee', cls: 'Class 8', admn: 'TS-2026-C08-03', email: 'aarav.c8@thomson.edu' },
+      { fname: 'Vikram', lname: 'Singh', cls: 'Class 8', admn: 'TS-2026-C08-04', email: 'vikram.c8@thomson.edu' },
+
+      // Class 9
+      { fname: 'Ishita', lname: 'Joshi', cls: 'Class 9', admn: 'TS-2026-C09-01', email: 'ishita.c9@thomson.edu' },
+      { fname: 'Karan', lname: 'Patel', cls: 'Class 9', admn: 'TS-2026-C09-02', email: 'karan.c9@thomson.edu' },
+      { fname: 'Rahul', lname: 'Sharma', cls: 'Class 9', admn: 'TS-2026-C09-03', email: 'rahul.c9@thomson.edu' },
+      { fname: 'Priyanka', lname: 'Verma', cls: 'Class 9', admn: 'TS-2026-C09-04', email: 'priyanka.c9@thomson.edu' },
+
+      // Class 10 (5 students)
+      { fname: 'Aarav', lname: 'Agarwal', cls: 'Class 10', admn: 'TS-2026-C10-01', email: 'student@thomson.edu' },
+      { fname: 'Bhavya', lname: 'Chawla', cls: 'Class 10', admn: 'TS-2026-C10-02', email: 'bhavya.c10@thomson.edu' },
+      { fname: 'Dev', lname: 'Patel', cls: 'Class 10', admn: 'TS-2026-C10-03', email: 'dev.c10@thomson.edu' },
+      { fname: 'Ishita', lname: 'Sharma', cls: 'Class 10', admn: 'TS-2026-C10-04', email: 'ishita.c10@thomson.edu' },
+      { fname: 'Riya', lname: 'Verma', cls: 'Class 10', admn: 'TS-2026-C10-05', email: 'riya.c10@thomson.edu' },
+
+      // Class 11
+      { fname: 'Siddharth', lname: 'Rao', cls: 'Class 11', admn: 'TS-2026-C11-01', email: 'siddharth.c11@thomson.edu' },
+      { fname: 'Kavita', lname: 'Deshmukh', cls: 'Class 11', admn: 'TS-2026-C11-02', email: 'kavita.c11@thomson.edu' },
+      { fname: 'Tanvi', lname: 'Sharma', cls: 'Class 11', admn: 'TS-2026-C11-03', email: 'tanvi.c11@thomson.edu' },
+      { fname: 'Aditya', lname: 'Verma', cls: 'Class 11', admn: 'TS-2026-C11-04', email: 'aditya.c11@thomson.edu' },
+
+      // Class 12
+      { fname: 'Vivek', lname: 'Reddy', cls: 'Class 12', admn: 'TS-2026-C12-01', email: 'vivek.c12@thomson.edu' },
+      { fname: 'Pooja', lname: 'Nair', cls: 'Class 12', admn: 'TS-2026-C12-02', email: 'pooja.c12@thomson.edu' },
+      { fname: 'Ananya', lname: 'Singh', cls: 'Class 12', admn: 'TS-2026-C12-03', email: 'ananya.c12@thomson.edu' },
+      { fname: 'Vikram', lname: 'Verma', cls: 'Class 12', admn: 'TS-2026-C12-04', email: 'vikram.c12@thomson.edu' },
+    ];
+
+    // Group students by class and sort alphabetically by last_name, first_name
+    const studentsByClass = {};
+    for (const st of rawStudentList) {
+      if (!studentsByClass[st.cls]) studentsByClass[st.cls] = [];
+      studentsByClass[st.cls].push(st);
+    }
+
+    const studentDbIds = [];
+
+    for (const [clsName, stList] of Object.entries(studentsByClass)) {
+      // SORT BY SURNAME (last_name) ASC
+      stList.sort((a, b) => {
+        const cmpLname = a.lname.localeCompare(b.lname);
+        if (cmpLname !== 0) return cmpLname;
+        return a.fname.localeCompare(b.fname);
+      });
+
+      // Assign sequential Roll Number starting from 1
+      stList.forEach((st, idx) => {
+        st.roll = String(idx + 1);
+      });
+
+      for (const st of stList) {
+        const uId = await createUser(st.email, 'student', `${st.fname} ${st.lname}`);
+        const secId = sectionIds[st.cls]['Section A'];
+        const sId = await createStudent(uId, st.admn, st.fname, st.lname, st.roll, secId);
+        if (sId) {
+          studentDbIds.push({ id: sId, userId: uId, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
+        }
+      }
+    }
+
+    // 7. Attendance Records (Past 10 Days - Excluding Sundays)
     for (let dayOffset = 0; dayOffset < 10; dayOffset++) {
       const d = new Date();
       d.setDate(d.getDate() - dayOffset);
-      const dateStr = d.toISOString().split('T')[0];
+      if (d.getDay() === 0) continue; // Skip Sundays
+
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const dy = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yr}-${mo}-${dy}`;
 
       for (const st of studentDbIds) {
         const status = (st.id + dayOffset) % 7 === 0 ? 'absent' : (st.id + dayOffset) % 5 === 0 ? 'late' : 'present';
@@ -297,44 +364,78 @@ async function seed() {
           INSERT INTO attendance (student_id, section_id, date, status, marked_by) 
           VALUES (?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE status=VALUES(status)
-        `, [st.id, st.sectionId, dateStr, status, teacherUserIds[0]]);
+        `, [st.id, st.sectionId, dateStr, status, teacherUserIds['teacher@thomson.edu']]);
       }
     }
 
-    // 11. Timetable Schedule (7 Periods Mon-Sat with Recess between Period 3 & 4)
-    const class10SecA = sectionIds['Class 10'] ? sectionIds['Class 10']['Section A'] : null;
-    const class10Math = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Mathematics'] : null;
-    const class10Phy = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Physics'] : null;
-    const class10Chem = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Chemistry'] : null;
-    const class10Eng = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['English'] : null;
-    const class10CS = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Computer Science'] : null;
-    const class10SST = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Social Studies'] : null;
-    const class10Bio = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Biology'] : null;
+    // 8. Timetable Schedules across ALL Standards (7 Periods Mon-Fri)
+    // CRITICAL USER REQUIREMENT:
+    // Period 1 MUST BE the Class Teacher teaching their own subject in their own homeroom class!
+    const timeSlots = [
+      { period: 1, start: '08:30:00', end: '09:15:00' },
+      { period: 2, start: '09:15:00', end: '10:00:00' },
+      { period: 3, start: '10:00:00', end: '10:45:00' },
+      // RECESS BREAK 10:45 - 11:15
+      { period: 4, start: '11:15:00', end: '12:00:00' },
+      { period: 5, start: '12:00:00', end: '12:45:00' },
+      { period: 6, start: '12:45:00', end: '13:30:00' },
+      { period: 7, start: '13:30:00', end: '14:15:00' },
+    ];
 
-    if (class10SecA && class10Math && class10Phy && class10Chem && class10Eng && class10CS && class10SST && class10Bio) {
-      const periods7 = [
-        { period: 1, start: '08:30:00', end: '09:15:00', sub: class10Math, teacher: teacherUserIds[10] || teacherUserIds[0] },
-        { period: 2, start: '09:15:00', end: '10:00:00', sub: class10Phy, teacher: phyTeacherId || teacherUserIds[0] },
-        { period: 3, start: '10:00:00', end: '10:45:00', sub: class10Chem, teacher: chemTeacherId || teacherUserIds[0] },
-        // RECESS BREAK: 10:45 AM - 11:15 AM
-        { period: 4, start: '11:15:00', end: '12:00:00', sub: class10Eng, teacher: engTeacherId || teacherUserIds[0] },
-        { period: 5, start: '12:00:00', end: '12:45:00', sub: class10CS, teacher: teacherUserIds[10] || teacherUserIds[0] },
-        { period: 6, start: '12:45:00', end: '13:30:00', sub: class10SST, teacher: teacherUserIds[10] || teacherUserIds[0] },
-        { period: 7, start: '13:30:00', end: '14:15:00', sub: class10Bio, teacher: teacherUserIds[10] || teacherUserIds[0] },
-      ];
+    const occupiedTeacherSlots = new Set(); // `${day}_${period}_${teacher_user_id}`
 
-      for (let day = 1; day <= 6; day++) {
-        for (const p of periods7) {
-          await connection.query(`
-            INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE start_time=VALUES(start_time), end_time=VALUES(end_time), subject_id=VALUES(subject_id)
-          `, [class10SecA, p.sub, p.teacher, day, p.period, p.start, p.end, sessionId]);
+    for (const [clsName, cId] of Object.entries(classIds)) {
+      const secId = sectionIds[clsName]['Section A'];
+      const classTeacherInfo = classTeacherInfoByClass[clsName];
+
+      if (secId && classTeacherInfo) {
+        // Fetch all teacher assignments for this section
+        const [assignedRows] = await connection.query(`
+          SELECT ta.teacher_user_id, ta.subject_id, sub.name AS subject_name
+          FROM teacher_assignments ta
+          JOIN subjects sub ON ta.subject_id = sub.id
+          WHERE ta.section_id = ?
+        `, [secId]);
+
+        if (assignedRows.length > 0) {
+          // Period 1 MUST BE Class Teacher's subject with Class Teacher
+          const period1Assignment = {
+            teacher_user_id: classTeacherInfo.uId,
+            subject_id: classTeacherInfo.subjectId,
+          };
+
+          for (let day = 1; day <= 5; day++) {
+            for (let pIdx = 0; pIdx < timeSlots.length; pIdx++) {
+              const slot = timeSlots[pIdx];
+              let assignment;
+
+              if (slot.period === 1) {
+                // Period 1: Class Teacher & Class Teacher Subject
+                assignment = period1Assignment;
+              } else {
+                // Other periods: pick from assigned subject teachers avoiding teacher schedule conflict
+                const isAvailable = candidate => !occupiedTeacherSlots.has(`${day}_${slot.period}_${candidate.teacher_user_id}`);
+                const otherAssigns = assignedRows.filter(a => a.teacher_user_id !== classTeacherInfo.uId);
+                let chosen = otherAssigns.find(isAvailable);
+                if (!chosen) chosen = assignedRows.find(isAvailable);
+                assignment = chosen || null;
+              }
+
+              if (assignment && assignment.subject_id) {
+                occupiedTeacherSlots.add(`${day}_${slot.period}_${assignment.teacher_user_id}`);
+                await connection.query(`
+                  INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  ON DUPLICATE KEY UPDATE start_time=VALUES(start_time), end_time=VALUES(end_time), subject_id=VALUES(subject_id), teacher_user_id=VALUES(teacher_user_id)
+                `, [secId, assignment.subject_id, assignment.teacher_user_id, day, slot.period, slot.start, slot.end, sessionId]);
+              }
+            }
+          }
         }
       }
     }
 
-    // 12. Notices (Global & Targeted Notices)
+    // 9. Notices
     await connection.query('TRUNCATE TABLE notices');
     const todayStr = new Date().toISOString().split('T')[0];
     const noticesList = [
@@ -350,7 +451,7 @@ async function seed() {
       `, [n.title, n.content, n.ntype, n.type, n.role, null, saId, todayStr]);
     }
 
-    // 13. Transport Routes, Vehicles, Stops & Student Assignments
+    // 10. Transport Routes & Assignments
     await connection.query(`
       INSERT INTO transport_routes (route_no, name, bus_no, driver_name, driver_phone) 
       VALUES ('R-101', 'North Express Route', 'KA-01-EQ-9900', 'Ramesh Yadav', '9876543210')
@@ -380,7 +481,7 @@ async function seed() {
       }
     }
 
-    // 14. Fee Categories, Structures, and Records
+    // 11. Fee Structure & Records
     await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Tuition Fee', 'Quarterly Tuition Fee')");
     await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Exam Fee', 'Term Examination Fee')");
 
@@ -407,7 +508,7 @@ async function seed() {
       }
     }
 
-    // 15. Examinations & Marks
+    // 12. Exams & Marks
     await connection.query(`
       INSERT INTO exams (name, session_id, class_id, exam_type, half_year, start_date, end_date, status) 
       VALUES ('Mid-Term Board Examination', ?, ?, 'semester', 'H1', ?, ?, 'completed')
@@ -415,30 +516,28 @@ async function seed() {
     `, [sessionId, classIds['Class 10'], todayStr, todayStr]);
 
     let [[exRow]] = await connection.query("SELECT id FROM exams WHERE name='Mid-Term Board Examination'");
+    const class10Math = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Mathematics'] : null;
+    const class10Phy = subjectIdsByClass['Class 10'] ? subjectIdsByClass['Class 10']['Physics'] : null;
+
     if (exRow && class10Math && class10Phy) {
       for (const st of studentDbIds.filter(s => s.cls === 'Class 10')) {
         await connection.query(`
           INSERT INTO marks (exam_id, student_id, subject_id, marks_obtained, max_marks, grade, entered_by) 
           VALUES (?, ?, ?, 92.50, 100.00, 'A+', ?)
           ON DUPLICATE KEY UPDATE marks_obtained=92.50
-        `, [exRow.id, st.id, class10Math, teacherUserIds[0]]);
+        `, [exRow.id, st.id, class10Math, teacherUserIds['teacher@thomson.edu']]);
 
         await connection.query(`
           INSERT INTO marks (exam_id, student_id, subject_id, marks_obtained, max_marks, grade, entered_by) 
           VALUES (?, ?, ?, 84.00, 100.00, 'A', ?)
           ON DUPLICATE KEY UPDATE marks_obtained=84.00
-        `, [exRow.id, st.id, class10Phy, teacherUserIds[1]]);
+        `, [exRow.id, st.id, class10Phy, teacherUserIds['teacher.phy@thomson.edu']]);
       }
     }
 
-    // 16. Homework Assignments
-    try {
-      await connection.query("ALTER TABLE homework ADD COLUMN classroom_url VARCHAR(500) DEFAULT NULL");
-    } catch (e) {
-      // Column may already exist
-    }
-
+    // 13. Homework
     if (class10Math) {
+      const class10SecA = sectionIds['Class 10']['Section A'];
       const [[existingHw1]] = await connection.query(
         "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
         [class10SecA, class10Math, 'Quadratic Equations Worksheet']
@@ -447,32 +546,21 @@ async function seed() {
         await connection.query(`
           INSERT INTO homework (section_id, subject_id, title, description, classroom_url, assigned_by, assigned_date, due_date, session_id) 
           VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njky', ?, ?, ?, ?)
-        `, [class10SecA, class10Math, teacherUserIds[0], todayStr, todayStr, sessionId]);
+        `, [class10SecA, class10Math, teacherUserIds['teacher@thomson.edu'], todayStr, todayStr, sessionId]);
       }
-    }
-
-    if (class10Phy) {
-      const [[existingHw2]] = await connection.query(
-        "SELECT id FROM homework WHERE section_id = ? AND subject_id = ? AND title = ?",
-        [class10SecA, class10Phy, 'Ray Diagrams & Refraction Worksheet']
-      );
-      if (!existingHw2) {
-        await connection.query(`
-          INSERT INTO homework (section_id, subject_id, title, description, classroom_url, assigned_by, assigned_date, due_date, session_id) 
-          VALUES (?, ?, 'Ray Diagrams & Refraction Worksheet', 'Draw ray diagrams for concave and convex mirrors.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njkz', ?, ?, ?, ?)
-        `, [class10SecA, class10Phy, teacherUserIds[1], todayStr, todayStr, sessionId]);
-      }
+    } else {
+      console.warn("Missing Mathematics subject ID for Class 10 homework seeding.");
     }
 
     console.log('\n======================================================');
-    console.log(' SUCCESS: Extended Demo Database Seed Completed!');
+    console.log(' SUCCESS: Detailed Mock Database Seed Completed!');
     console.log('======================================================');
     console.log('Demo Login Credentials (Default Password: Thomson2026!)');
     console.log('------------------------------------------------------');
     console.log('1. Super Admin:  superadmin@thomson.edu  / Thomson2026!');
     console.log('2. Admin:        admin@thomson.edu       / Thomson2026!');
     console.log('3. Cashier:      cashier@thomson.edu     / Thomson2026!');
-    console.log('4. Teacher:      teacher@thomson.edu     / Thomson2026!');
+    console.log('4. Class 10 Teacher: teacher@thomson.edu / Thomson2026!');
     console.log('5. Student:      student@thomson.edu     / Thomson2026!');
     console.log('======================================================\n');
 

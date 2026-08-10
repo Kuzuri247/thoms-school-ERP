@@ -1,8 +1,21 @@
 // backend/modules/attendance/attendance.service.js
 const pool = require('../../config/db');
 
+const isSundayDate = (dStr) => {
+  if (!dStr) return false;
+  const parts = String(dStr).split('T')[0].split('-');
+  if (parts.length === 3) {
+    const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    return dt.getDay() === 0;
+  }
+  return new Date(dStr).getDay() === 0;
+};
+
 const markBulk = async (sectionId, date, records, markedBy) => {
   if (!records?.length) throw Object.assign(new Error('No records provided'), { status: 400 });
+  if (isSundayDate(date)) {
+    throw Object.assign(new Error('Attendance cannot be marked on Sundays.'), { status: 400 });
+  }
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
