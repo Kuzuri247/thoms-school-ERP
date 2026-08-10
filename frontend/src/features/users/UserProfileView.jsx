@@ -180,7 +180,9 @@ const UserProfileView = () => {
       setProfile(apiProfile);
       populateFormFields(apiProfile);
       if (apiProfile.profile_type === "student" || apiProfile.role === "student") {
-        fetchStudentRemarks(apiProfile.student_db_id || apiProfile.id);
+        const reqId = apiProfile.student_db_id || apiProfile.id;
+        const opts = apiProfile.student_db_id ? {} : { by: "user_id" };
+        fetchStudentRemarks(reqId, opts);
       }
     } else if (
       authUser &&
@@ -189,7 +191,9 @@ const UserProfileView = () => {
       setProfile(authUser);
       populateFormFields(authUser);
       if (authUser.profile_type === "student" || authUser.role === "student") {
-        fetchStudentRemarks(authUser.student_db_id || authUser.id);
+        const reqId = authUser.student_db_id || authUser.id;
+        const opts = authUser.student_db_id ? {} : { by: "user_id" };
+        fetchStudentRemarks(reqId, opts);
       }
     } else if (error) {
       setProfile(null);

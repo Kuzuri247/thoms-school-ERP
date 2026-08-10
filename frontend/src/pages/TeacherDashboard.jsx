@@ -231,15 +231,19 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   } = useRemarksStore();
 
   useEffect(() => {
+    let isActive = true;
+    const reqSectionId = selectedClass?.section_id;
+
     if (
-      selectedClass?.section_id &&
+      reqSectionId &&
       (activeTab === "remarks" || selectedClass?.is_class_teacher)
     ) {
       fetchSectionRemarks(
-        selectedClass.section_id,
+        reqSectionId,
         remarkMonth,
         remarkYear,
       ).then((roster) => {
+        if (!isActive || selectedClass?.section_id !== reqSectionId) return;
         const initRem = {};
         const initTags = {};
         (roster || []).forEach((item) => {
@@ -250,6 +254,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
         setLocalTags(initTags);
       });
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [selectedClass, remarkMonth, remarkYear, activeTab]);
 
   const handleToggleTag = (studentId, tag) => {

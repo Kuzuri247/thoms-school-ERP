@@ -12,11 +12,12 @@ export const useRemarksStore = create((set, get) => ({
   successMessage: null,
 
   // Fetch monthly remarks history for a student (for UserProfileView)
-  fetchStudentRemarks: async (studentId) => {
+  fetchStudentRemarks: async (studentId, options = {}) => {
     if (!studentId) return [];
     set({ loading: true, error: null });
     try {
-      const { data } = await api.get(`/remarks/student/${studentId}`);
+      const url = options.by === "user_id" ? `/remarks/student/${studentId}?by=user_id` : `/remarks/student/${studentId}`;
+      const { data } = await api.get(url);
       const list = data?.data || [];
       set((state) => ({
         remarksByStudent: {

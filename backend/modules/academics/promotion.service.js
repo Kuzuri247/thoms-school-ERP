@@ -11,18 +11,6 @@ const promoteStudentsAnnualCycle = async (options = {}) => {
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
-    // Ensure status column ENUMs support 'graduated'
-    try {
-      await conn.query(
-        "ALTER TABLE students MODIFY COLUMN status ENUM('active','inactive','transferred','left','graduated') DEFAULT 'active'",
-      );
-    } catch (e) {}
-    try {
-      await conn.query(
-        "ALTER TABLE users MODIFY COLUMN status ENUM('active','inactive','suspended','graduated') DEFAULT 'active'",
-      );
-    } catch (e) {}
-
     // 1. Fetch all classes ordered by numeric_value
     const [classes] = await conn.query(
       "SELECT id, name, numeric_value FROM classes ORDER BY numeric_value ASC",
@@ -84,22 +72,22 @@ const promoteStudentsAnnualCycle = async (options = {}) => {
       targetSessionId = newSessionRes.insertId;
     }
 
-    // 4. Check if any class standard is vacant (has 0 eligible active students)
+    // 4. Check if any class standard lower than highest numeric class is vacant (has 0 eligible active students)
     const [classCounts] = await conn.query(
-      `SELECT c.id, c.name, COUNT(s.id) AS student_count
+      `SELECT c.id, c.name, c.numeric_value, COUNT(s.id) AS student_count
        FROM classes c
        LEFT JOIN sections sec ON sec.class_id = c.id
        LEFT JOIN students s ON s.section_id = sec.id AND s.status = 'active' AND (s.session_id IS NULL OR s.session_id != ?)
-       GROUP BY c.id, c.name`,
+       GROUP BY c.id, c.name, c.numeric_value`,
       [targetSessionId],
     );
 
-    const vacantClasses = classCounts.filter((cc) => Number(cc.student_count) === 0);
+    const vacantClasses = classCounts.filter(
+      (cc) => Number(cc.numeric_value) < maxNumericClass && Number(cc.student_count) === 0
+    );
+
     if (vacantClasses.length > 0) {
-      const lkgVacant = vacantClasses.some((vc) => vc.name === "LKG");
-      const msg = lkgVacant
-        ? `Promotion blocked: Class 'LKG' is vacant with 0 students. All classes must have enrolled students before annual promotion can be executed.`
-        : `Promotion blocked: Class (${vacantClasses.map((vc) => vc.name).join(", ")}) has 0 eligible students remaining for promotion in this session cycle.`;
+      const msg = `Promotion blocked: Class (${vacantClasses.map((vc) => vc.name).join(", ")}) is vacant with 0 students. All classes must have enrolled students before annual promotion can be executed.`;
       await conn.rollback();
       return {
         success: false,
@@ -122,7 +110,7 @@ const promoteStudentsAnnualCycle = async (options = {}) => {
       await conn.rollback();
       return {
         success: false,
-        message: "No eligible students remaining for promotion in this session cycle.",
+        message: `Annual Student Grade Advancement for Academic Session ${newSessionName} has already been executed. Promotion can only be run once per academic year cycle.`,
       };
     }
 

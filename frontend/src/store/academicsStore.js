@@ -12,11 +12,11 @@ export const useAcademicsStore = create((set, get) => ({
   error: null,
 
   // Execute Annual April 1st Grade Advancement (Promotion)
-  executeAnnualPromotion: async () => {
+  executeAnnualPromotion: async (password) => {
     if (get().promoting) return;
     set({ promoting: true, error: null, promotionResult: null });
     try {
-      const { data } = await api.post("/admin/promote-students");
+      const { data } = await api.post("/admin/promote-students", { password });
       if (data?.success) {
         set({
           promotionResult: data?.data || data,

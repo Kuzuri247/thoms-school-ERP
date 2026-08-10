@@ -69,7 +69,7 @@ router.get('/classes/:classId/students', verifyToken, authorize(ROLES.TEACHER, R
       FROM students s
       JOIN sections sec ON s.section_id = sec.id
       WHERE (sec.class_id = ? OR sec.id = ?) AND (s.status IS NULL OR s.status = 'active')
-      ORDER BY CAST(s.roll_no AS UNSIGNED) ASC, s.last_name ASC, s.first_name ASC
+      ORDER BY CAST(COALESCE(s.roll_no, s.admission_no) AS UNSIGNED) ASC, s.last_name ASC, s.first_name ASC
     `, [classId, classId]);
 
     res.json({ success: true, data: rows });

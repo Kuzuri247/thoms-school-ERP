@@ -249,11 +249,18 @@ router.post('/attendance', [verifyToken, authorize(ROLES.TEACHER, ROLES.ADMIN, R
             return res.status(400).json({ success: false, message: 'Date and attendance data are required' });
         }
         const parts = String(date).split('T')[0].split('-');
-        if (parts.length === 3) {
-            const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-            if (dt.getDay() === 0) {
-                return res.status(400).json({ success: false, message: 'Attendance cannot be marked on Sundays' });
-            }
+        if (parts.length !== 3 || !parts.every((p) => /^\d+$/.test(p))) {
+            return res.status(400).json({ success: false, message: 'Invalid attendance date format' });
+        }
+        const yr = parseInt(parts[0], 10);
+        const mo = parseInt(parts[1], 10);
+        const dy = parseInt(parts[2], 10);
+        const dt = new Date(yr, mo - 1, dy);
+        if (dt.getFullYear() !== yr || dt.getMonth() !== mo - 1 || dt.getDate() !== dy) {
+            return res.status(400).json({ success: false, message: 'Invalid attendance date' });
+        }
+        if (dt.getDay() === 0) {
+            return res.status(400).json({ success: false, message: 'Attendance cannot be marked on Sundays' });
         }
         for (const [userId, status] of Object.entries(attendanceData)) {
             const [[student]] = await pool.query('SELECT id, section_id FROM students WHERE user_id = ?', [userId]);
@@ -344,15 +351,30 @@ router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, RO
 // Get graduated students / Alumni list (Admin / Super Admin)
 router.get('/graduates', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
-        const [rows] = await pool.query(`
+        const { session_id, page = 1, limit = 100 } = req.query;
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const limitNum = Math.min(500, Math.max(1, parseInt(limit, 10) || 100));
+        const offset = (pageNum - 1) * limitNum;
+
+        let sql = `
             SELECT s.id AS student_id, s.user_id, s.admission_no, s.roll_no, s.first_name, s.last_name,
-                   s.gender, s.status, u.email, u.phone, 'Graduated' AS class_name, 'Alumni' AS section_name
+                   s.gender, s.status, s.session_id, u.email, u.phone, 'Graduated' AS class_name, 'Alumni' AS section_name
             FROM students s
             JOIN users u ON s.user_id = u.id
-            WHERE s.status = 'graduated' OR u.status = 'graduated'
-            ORDER BY s.last_name ASC, s.first_name ASC
-        `);
-        res.json({ success: true, data: rows });
+            WHERE (s.status = 'graduated' OR u.status = 'graduated')
+        `;
+        const params = [];
+
+        if (session_id) {
+            sql += ` AND s.session_id = ?`;
+            params.push(session_id);
+        }
+
+        sql += ` ORDER BY s.last_name ASC, s.first_name ASC LIMIT ? OFFSET ?`;
+        params.push(limitNum, offset);
+
+        const [rows] = await pool.query(sql, params);
+        res.json({ success: true, data: rows, page: pageNum, limit: limitNum });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

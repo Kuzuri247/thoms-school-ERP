@@ -38,6 +38,8 @@ async function seed() {
     console.log('Purging legacy data...');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     try {
+      await connection.query('TRUNCATE TABLE marks');
+      await connection.query('TRUNCATE TABLE exams');
       await connection.query('TRUNCATE TABLE attendance');
       await connection.query('TRUNCATE TABLE timetables');
       await connection.query('TRUNCATE TABLE homework');
@@ -190,21 +192,31 @@ async function seed() {
         const subjId = subjectIdsByClass[clsName] ? subjectIdsByClass[clsName][t.subject] : null;
 
         if (secId && subjId) {
-          await connection.query(`
-            INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher) 
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE is_class_teacher=VALUES(is_class_teacher), subject_id=VALUES(subject_id)
-          `, [uId, secId, subjId, sessionId, isHomeroom ? 1 : 0]);
+          const [existingAssig] = await connection.query(
+            "SELECT id FROM teacher_assignments WHERE section_id = ? AND subject_id = ? AND session_id = ?",
+            [secId, subjId, sessionId]
+          );
+          if (existingAssig.length === 0) {
+            await connection.query(`
+              INSERT INTO teacher_assignments (teacher_user_id, section_id, subject_id, session_id, is_class_teacher) 
+              VALUES (?, ?, ?, ?, ?)
+              ON DUPLICATE KEY UPDATE is_class_teacher=VALUES(is_class_teacher)
+            `, [uId, secId, subjId, sessionId, isHomeroom ? 1 : 0]);
+          }
         }
 
         if (isHomeroom) {
-          classTeacherInfoByClass[clsName] = {
-            uId,
-            fname: t.fname,
-            lname: t.lname,
-            subjectName: t.subject,
-            subjectId: subjId,
-          };
+          if (subjId) {
+            classTeacherInfoByClass[clsName] = {
+              uId,
+              fname: t.fname,
+              lname: t.lname,
+              subjectName: t.subject,
+              subjectId: subjId,
+            };
+          } else {
+            console.warn(`Missing subject '${t.subject}' for class teacher of ${clsName}`);
+          }
         }
       }
     }
@@ -329,11 +341,16 @@ async function seed() {
       }
     }
 
-    // 7. Attendance Records (Past 10 Days)
+    // 7. Attendance Records (Past 10 Days - Excluding Sundays)
     for (let dayOffset = 0; dayOffset < 10; dayOffset++) {
       const d = new Date();
       d.setDate(d.getDate() - dayOffset);
-      const dateStr = d.toISOString().split('T')[0];
+      if (d.getDay() === 0) continue; // Skip Sundays
+
+      const yr = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const dy = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yr}-${mo}-${dy}`;
 
       for (const st of studentDbIds) {
         const status = (st.id + dayOffset) % 7 === 0 ? 'absent' : (st.id + dayOffset) % 5 === 0 ? 'late' : 'present';
@@ -345,7 +362,7 @@ async function seed() {
       }
     }
 
-    // 8. Timetable Schedules across ALL Standards (7 Periods Mon-Sat)
+    // 8. Timetable Schedules across ALL Standards (7 Periods Mon-Fri)
     // CRITICAL USER REQUIREMENT:
     // Period 1 MUST BE the Class Teacher teaching their own subject in their own homeroom class!
     const timeSlots = [
@@ -358,6 +375,8 @@ async function seed() {
       { period: 6, start: '12:45:00', end: '13:30:00' },
       { period: 7, start: '13:30:00', end: '14:15:00' },
     ];
+
+    const occupiedTeacherSlots = new Set(); // `${day}_${period}_${teacher_user_id}`
 
     for (const [clsName, cId] of Object.entries(classIds)) {
       const secId = sectionIds[clsName]['Section A'];
@@ -379,7 +398,7 @@ async function seed() {
             subject_id: classTeacherInfo.subjectId,
           };
 
-          for (let day = 1; day <= 6; day++) {
+          for (let day = 1; day <= 5; day++) {
             for (let pIdx = 0; pIdx < timeSlots.length; pIdx++) {
               const slot = timeSlots[pIdx];
               let assignment;
@@ -388,13 +407,16 @@ async function seed() {
                 // Period 1: Class Teacher & Class Teacher Subject
                 assignment = period1Assignment;
               } else {
-                // Other periods: pick from assigned subject teachers
+                // Other periods: pick from assigned subject teachers avoiding teacher schedule conflict
                 const otherAssigns = assignedRows.filter(a => a.teacher_user_id !== classTeacherInfo.uId);
                 const poolList = otherAssigns.length > 0 ? otherAssigns : assignedRows;
-                assignment = poolList[(pIdx + day) % poolList.length];
+                let chosen = poolList.find(candidate => !occupiedTeacherSlots.has(`${day}_${slot.period}_${candidate.teacher_user_id}`));
+                if (!chosen) chosen = poolList[(pIdx + day) % poolList.length];
+                assignment = chosen;
               }
 
               if (assignment && assignment.subject_id) {
+                occupiedTeacherSlots.add(`${day}_${slot.period}_${assignment.teacher_user_id}`);
                 await connection.query(`
                   INSERT INTO timetables (section_id, subject_id, teacher_user_id, day_of_week, period_no, start_time, end_time, session_id) 
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -520,6 +542,8 @@ async function seed() {
           VALUES (?, ?, 'Quadratic Equations Worksheet', 'Solve problems 1 to 25 from Exercise 4.2 in NCERT textbook.', 'https://classroom.google.com/c/MzkxOTk2MTQ0Njky', ?, ?, ?, ?)
         `, [class10SecA, class10Math, teacherUserIds['teacher@thomson.edu'], todayStr, todayStr, sessionId]);
       }
+    } else {
+      console.warn("Missing Mathematics subject ID for Class 10 homework seeding.");
     }
 
     console.log('\n======================================================');

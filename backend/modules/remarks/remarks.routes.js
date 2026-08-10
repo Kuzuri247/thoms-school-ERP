@@ -9,18 +9,29 @@ const { ROLES } = require("../../config/constants");
  */
 function parseTags(tags) {
   if (!tags) return [];
-  if (Array.isArray(tags)) return tags;
+  const normalize = (arr) =>
+    Array.isArray(arr)
+      ? arr
+          .filter((t) => typeof t === "string")
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
+      : [];
+
+  if (Array.isArray(tags)) return normalize(tags);
   if (typeof tags === "string") {
     const trimmed = tags.trim();
     if (trimmed.startsWith("[")) {
       try {
         const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return normalize(parsed);
       } catch (e) {
         // Fallback to comma split below
       }
     }
-    return trimmed.split(",").map((t) => t.trim()).filter(Boolean);
+    return trimmed
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
   }
   return [];
 }
