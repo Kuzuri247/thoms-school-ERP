@@ -470,7 +470,7 @@ const Layout = () => {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate("/class-directory?openPromotion=true")}
+                onClick={() => navigate("/admin/classes?openPromotion=true")}
                 className="px-3.5 py-1.5 bg-white text-amber-900 font-extrabold text-xs rounded-xl shadow-xs hover:bg-amber-50 transition cursor-pointer"
               >
                 Review & Run Grade Advancement

@@ -101,7 +101,7 @@ const AdminClassDirectoryView = () => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showAddStudentModal, showAddClassModal]);
+  }, [showAddStudentModal, showAddClassModal, showPromotionModal, showPasswordAuthModal]);
 
   const location = useLocation();
 
@@ -302,8 +302,13 @@ const AdminClassDirectoryView = () => {
               </button>
               <button
                 onClick={() => {
+                  const isGraduated =
+                    selectedClass?.class_id === GRADUATED_SENTINEL_ID ||
+                    selectedClass?.class_id === GRADUATED_PSEUDO_CLASS.class_id;
                   const initialClassId =
-                    selectedClass?.class_id || classesData[0]?.class_id || "";
+                    (!isGraduated && selectedClass?.class_id) ||
+                    classesData[0]?.class_id ||
+                    "";
                   setStudentForm({
                     ...EMPTY_STUDENT_FORM,
                     class_id: initialClassId,
@@ -1128,15 +1133,6 @@ const AdminClassDirectoryView = () => {
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
-                  <div className="flex items-center gap-2 text-emerald-600 font-extrabold">
-                    <User className="w-4 h-4" />
-                    <span>Surname Roll Numbers</span>
-                  </div>
-                  <p className="text-slate-600 text-[11px] font-medium leading-relaxed">
-                    Roll numbers in newly promoted classes are automatically re-assigned sequentially (1, 2, 3...) sorted by student surnames.
-                  </p>
-                </div>
 
                 <div className="p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
                   <div className="flex items-center gap-2 text-blue-600 font-extrabold">

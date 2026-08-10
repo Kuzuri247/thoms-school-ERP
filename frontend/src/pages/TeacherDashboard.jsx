@@ -242,11 +242,12 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
         reqSectionId,
         remarkMonth,
         remarkYear,
-      ).then((roster) => {
+      ).then((res) => {
         if (!isActive || selectedClass?.section_id !== reqSectionId) return;
+        const roster = res?.success ? res.data : (Array.isArray(res) ? res : []);
         const initRem = {};
         const initTags = {};
-        (roster || []).forEach((item) => {
+        roster.forEach((item) => {
           initRem[item.student_id] = item.remark || "";
           initTags[item.student_id] = Array.isArray(item.tags) ? item.tags : [];
         });

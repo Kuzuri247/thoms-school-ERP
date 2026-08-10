@@ -824,7 +824,13 @@ const UserProfileView = () => {
                 </h3>
 
                 <StudentRemarksCard
-                  remarks={remarksByStudent[profile.student_db_id || profile.id] || []}
+                  remarks={
+                    remarksByStudent[
+                      profile.student_db_id
+                        ? `student:${profile.student_db_id}`
+                        : `user:${profile.id}`
+                    ] || []
+                  }
                 />
               </div>
             </div>

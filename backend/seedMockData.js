@@ -202,6 +202,12 @@ async function seed() {
               VALUES (?, ?, ?, ?, ?)
               ON DUPLICATE KEY UPDATE is_class_teacher=VALUES(is_class_teacher)
             `, [uId, secId, subjId, sessionId, isHomeroom ? 1 : 0]);
+          } else if (isHomeroom) {
+            await connection.query(`
+              UPDATE teacher_assignments 
+              SET teacher_user_id = ?, is_class_teacher = 1 
+              WHERE id = ?
+            `, [uId, existingAssig[0].id]);
           }
         }
 
@@ -408,11 +414,11 @@ async function seed() {
                 assignment = period1Assignment;
               } else {
                 // Other periods: pick from assigned subject teachers avoiding teacher schedule conflict
+                const isAvailable = candidate => !occupiedTeacherSlots.has(`${day}_${slot.period}_${candidate.teacher_user_id}`);
                 const otherAssigns = assignedRows.filter(a => a.teacher_user_id !== classTeacherInfo.uId);
-                const poolList = otherAssigns.length > 0 ? otherAssigns : assignedRows;
-                let chosen = poolList.find(candidate => !occupiedTeacherSlots.has(`${day}_${slot.period}_${candidate.teacher_user_id}`));
-                if (!chosen) chosen = poolList[(pIdx + day) % poolList.length];
-                assignment = chosen;
+                let chosen = otherAssigns.find(isAvailable);
+                if (!chosen) chosen = assignedRows.find(isAvailable);
+                assignment = chosen || null;
               }
 
               if (assignment && assignment.subject_id) {
