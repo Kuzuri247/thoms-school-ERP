@@ -210,6 +210,31 @@ const AdminClassDirectoryView = () => {
     e.preventDefault();
     if (!studentForm.first_name.trim() || isSubmittingStudent) return;
 
+    if (!studentForm.email || !studentForm.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentForm.email.trim())) {
+      setFormError("Please enter a valid primary student email address.");
+      return;
+    }
+
+    if (studentForm.phone && studentForm.phone.trim().length !== 10) {
+      setFormError("Student phone number must be strictly 10 digits.");
+      return;
+    }
+
+    if (studentForm.father_phone && studentForm.father_phone.trim().length !== 10) {
+      setFormError("Father phone number must be strictly 10 digits.");
+      return;
+    }
+
+    if (studentForm.mother_phone && studentForm.mother_phone.trim().length !== 10) {
+      setFormError("Mother phone number must be strictly 10 digits.");
+      return;
+    }
+
+    if (studentForm.guardian_phone && studentForm.guardian_phone.trim().length !== 10) {
+      setFormError("Guardian phone number must be strictly 10 digits.");
+      return;
+    }
+
     const chosenClassId = studentForm.class_id || selectedClass?.class_id;
 
     try {
@@ -225,9 +250,15 @@ const AdminClassDirectoryView = () => {
       if (rawData) {
         const newStuData = {
           ...rawData,
+          first_name: studentForm.first_name.trim(),
+          last_name: studentForm.last_name ? studentForm.last_name.trim() : "",
+          full_name: `${studentForm.first_name.trim()} ${studentForm.last_name ? studentForm.last_name.trim() : ""}`.trim(),
+          email: studentForm.email.trim(),
+          phone: studentForm.phone || "",
           father_name: studentForm.father_name || rawData.father_name || "",
           father_occupation: studentForm.father_occupation || rawData.father_occupation || "",
           profile_pic: studentForm.profile_pic || rawData.profile_pic || "",
+          status: "active",
         };
 
         const targetClass =
@@ -248,7 +279,7 @@ const AdminClassDirectoryView = () => {
       setTimeout(() => setFormSuccess(""), 3500);
     } catch (err) {
       console.error("Failed to add student:", err);
-      setFormError(err.response?.data?.message || "Failed to add student to database.");
+      setFormError(err.response?.data?.message || "Failed to add student.");
     } finally {
       setIsSubmittingStudent(false);
     }
@@ -788,7 +819,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">First Name *</label>
                     <input
                       type="text"
-                      placeholder="e.g. Aarav"
+                      placeholder="Aarav"
                       value={studentForm.first_name}
                       onChange={(e) =>
                         setStudentForm({
@@ -804,7 +835,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Last Name *</label>
                     <input
                       type="text"
-                      placeholder="e.g. Sharma"
+                      placeholder="Sharma"
                       value={studentForm.last_name}
                       onChange={(e) =>
                         setStudentForm({
@@ -817,10 +848,11 @@ const AdminClassDirectoryView = () => {
                     />
                   </div>
                   <div>
-                    <label className="block mb-1">Student Email</label>
+                    <label className="block mb-1">Student Primary Email *</label>
                     <input
                       type="email"
-                      placeholder="e.g. student@thomson.edu"
+                      required
+                      placeholder="aarav.sharma@thomson.edu"
                       value={studentForm.email}
                       onChange={(e) =>
                         setStudentForm({
@@ -836,7 +868,7 @@ const AdminClassDirectoryView = () => {
                     <input
                       type="tel"
                       maxLength={10}
-                      placeholder="e.g. 9876543210"
+                      placeholder="9876543210"
                       value={studentForm.phone}
                       onChange={(e) =>
                         setStudentForm({
@@ -851,7 +883,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Admission No</label>
                     <input
                       type="text"
-                      placeholder="e.g. TS-2026-003"
+                      placeholder="TS-2026-003"
                       value={studentForm.admission_no}
                       onChange={(e) =>
                         setStudentForm({
@@ -866,7 +898,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Roll No (Digits Only)</label>
                     <input
                       type="text"
-                      placeholder="e.g. 103"
+                      placeholder="103"
                       value={studentForm.roll_no}
                       onChange={(e) =>
                         setStudentForm({
@@ -907,7 +939,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Full Permanent Address</label>
                     <textarea
                       rows="2"
-                      placeholder="Enter house no, street, city and pin code..."
+                      placeholder="House No. 14, Ring Road, City"
                       value={studentForm.address}
                       onChange={(e) =>
                         setStudentForm({
@@ -915,7 +947,7 @@ const AdminClassDirectoryView = () => {
                           address: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none resize-none"
                     />
                   </div>
                 </div>
@@ -931,7 +963,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Father's Name</label>
                     <input
                       type="text"
-                      placeholder="Father full name"
+                      placeholder="Ramesh Sharma"
                       value={studentForm.father_name}
                       onChange={(e) =>
                         setStudentForm({
@@ -947,7 +979,7 @@ const AdminClassDirectoryView = () => {
                     <input
                       type="tel"
                       maxLength={10}
-                      placeholder="e.g. 9876543210"
+                      placeholder="9876543210"
                       value={studentForm.father_phone}
                       onChange={(e) =>
                         setStudentForm({
@@ -962,7 +994,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Father Occupation</label>
                     <input
                       type="text"
-                      placeholder="Occupation"
+                      placeholder="Business Executive"
                       value={studentForm.father_occupation}
                       onChange={(e) =>
                         setStudentForm({
@@ -978,7 +1010,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Mother's Name</label>
                     <input
                       type="text"
-                      placeholder="Mother full name"
+                      placeholder="Sunita Sharma"
                       value={studentForm.mother_name}
                       onChange={(e) =>
                         setStudentForm({
@@ -994,7 +1026,7 @@ const AdminClassDirectoryView = () => {
                     <input
                       type="tel"
                       maxLength={10}
-                      placeholder="e.g. 9876543210"
+                      placeholder="9876543210"
                       value={studentForm.mother_phone}
                       onChange={(e) =>
                         setStudentForm({
@@ -1009,7 +1041,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Mother Occupation</label>
                     <input
                       type="text"
-                      placeholder="Occupation"
+                      placeholder="Homemaker / Teacher"
                       value={studentForm.mother_occupation}
                       onChange={(e) =>
                         setStudentForm({
@@ -1025,7 +1057,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Guardian Name</label>
                     <input
                       type="text"
-                      placeholder="Guardian name"
+                      placeholder="Vikram Sharma"
                       value={studentForm.guardian_name}
                       onChange={(e) =>
                         setStudentForm({
@@ -1041,7 +1073,7 @@ const AdminClassDirectoryView = () => {
                     <input
                       type="tel"
                       maxLength={10}
-                      placeholder="e.g. 9876543210"
+                      placeholder="9876543210"
                       value={studentForm.guardian_phone}
                       onChange={(e) =>
                         setStudentForm({
@@ -1056,7 +1088,7 @@ const AdminClassDirectoryView = () => {
                     <label className="block mb-1">Relationship</label>
                     <input
                       type="text"
-                      placeholder="e.g. Uncle / Grandfather"
+                      placeholder="Uncle / Grandfather"
                       value={studentForm.guardian_relation}
                       onChange={(e) =>
                         setStudentForm({

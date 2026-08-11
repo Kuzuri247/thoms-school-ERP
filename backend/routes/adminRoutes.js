@@ -13,7 +13,34 @@ const { generateAdmissionNo, generateRollNo } = require('../utils/identifierGene
 router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     let conn;
     try {
-        let { email, password, role, class_name, section, full_name, phone, gender, department, designation, status, is_class_teacher, class_id, subject_name } = req.body;
+        let {
+            email, password, role, class_name, section, full_name, phone, gender,
+            department, designation, qualification, joining_date, address, dob, date_of_birth,
+            emergency_contact, status, is_class_teacher, class_id, subject_name
+        } = req.body;
+
+        if (!full_name || !full_name.trim()) {
+            return res.status(400).json({ success: false, message: 'Full name is required' });
+        }
+
+        const trimmedEmail = (email || '').trim();
+        if (!trimmedEmail) {
+            return res.status(400).json({ success: false, message: 'Primary email address is required' });
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+            return res.status(400).json({ success: false, message: 'Invalid primary email address format' });
+        }
+
+        const trimmedPhone = (phone || '').trim();
+        if (!trimmedPhone || !/^\d{10}$/.test(trimmedPhone)) {
+            return res.status(400).json({ success: false, message: 'Contact phone number must be exactly 10 digits' });
+        }
+
+        const trimmedEmergency = (emergency_contact || '').trim();
+        if (trimmedEmergency && !/^\d{10}$/.test(trimmedEmergency)) {
+            return res.status(400).json({ success: false, message: 'Emergency contact phone number must be exactly 10 digits' });
+        }
+
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
@@ -28,25 +55,45 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
         const rawPassword = isTempPassword ? crypto.randomBytes(6).toString('hex') : password.trim();
         const hashedPassword = await bcrypt.hash(rawPassword, 8);
 
-        const randNum = Math.floor(1000 + Math.random() * 9000);
-        const finalEmail = email && email.trim() ? email.trim() : `${(full_name || 'user').toLowerCase().replace(/[^a-z]/g, '')}${randNum}@stthomas.edu`;
+        const finalEmail = trimmedEmail;
 
         const [result] = await conn.query(
             'INSERT INTO users (email, password, role, class, section, full_name, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [finalEmail, hashedPassword, effectiveRole, class_name || null, section || null, full_name || null, phone || null, gender || 'Male', status || 'Active']
+            [finalEmail, hashedPassword, effectiveRole, class_name || null, section || null, full_name.trim(), trimmedPhone, gender || 'Male', 'active']
         );
         const newUserId = result.insertId;
+        const empCode = `TS-EMP-${String(newUserId).padStart(3, '0')}`;
 
         // If staff role, insert into staff_profiles
         if (['teacher', 'admin', 'cashier', 'staff'].includes(effectiveRole)) {
-            const fname = full_name ? full_name.split(' ')[0] : 'Staff';
-            const lname = full_name ? full_name.split(' ').slice(1).join(' ') : '';
-            const empCode = `TS-EMP-${String(newUserId).padStart(3, '0')}`;
+            const fname = full_name.trim().split(' ')[0] || 'Staff';
+            const lname = full_name.trim().split(' ').slice(1).join(' ') || '';
+            const dobVal = dob || date_of_birth || null;
+            const joinDateVal = joining_date || new Date().toISOString().split('T')[0];
+
             await conn.query(
-                `INSERT INTO staff_profiles (user_id, employee_code, first_name, last_name, gender, department, designation, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                 ON DUPLICATE KEY UPDATE gender = VALUES(gender), department = VALUES(department), designation = VALUES(designation)`,
-                [newUserId, empCode, fname, lname, gender || 'Male', department || 'General Staff', designation || effectiveRole, 'Active']
+                `INSERT INTO staff_profiles (
+                    user_id, employee_code, first_name, last_name, gender, date_of_birth,
+                    phone, emergency_contact, address, designation, department, joining_date, qualification, status
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                     first_name = VALUES(first_name),
+                     last_name = VALUES(last_name),
+                     gender = VALUES(gender),
+                     date_of_birth = VALUES(date_of_birth),
+                     phone = VALUES(phone),
+                     emergency_contact = VALUES(emergency_contact),
+                     address = VALUES(address),
+                     designation = VALUES(designation),
+                     department = VALUES(department),
+                     joining_date = VALUES(joining_date),
+                     qualification = VALUES(qualification),
+                     status = VALUES(status)`,
+                [
+                    newUserId, empCode, fname, lname, gender || 'Male', dobVal,
+                    trimmedPhone, trimmedEmergency || null, address || null,
+                    designation || effectiveRole, department || 'General Staff', joinDateVal, qualification || null, 'active'
+                ]
             );
         }
 
@@ -94,17 +141,21 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
 
         res.status(201).json({
           success: true,
-          message: 'User created successfully',
+          message: 'Staff account provisioned successfully',
           id: newUserId,
           temp_password: isTempPassword ? rawPassword : undefined,
           data: {
             id: newUserId,
-            full_name,
+            full_name: full_name.trim(),
             email: finalEmail,
-            role,
+            role: effectiveRole,
             department: department || 'General Staff',
-            phone,
-            status: 'Active'
+            designation: designation || effectiveRole,
+            employee_code: empCode,
+            phone: trimmedPhone,
+            gender: gender || 'Male',
+            qualification: qualification || null,
+            status: 'active'
           }
         });
     } catch (error) {
@@ -112,7 +163,7 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
         console.error('Error creating user:', error);
         res.status(error.code === 'ER_DUP_ENTRY' ? 409 : 500).json({
             success: false,
-            message: error.code === 'ER_DUP_ENTRY' ? 'User with this email already exists' : error.message
+            message: error.code === 'ER_DUP_ENTRY' ? 'User with this email address already exists' : error.message
         });
     } finally {
         if (conn) conn.release();
@@ -141,7 +192,39 @@ router.get('/classes-with-teachers', [verifyToken, authorize(ROLES.ADMIN, ROLES.
 // Get all users (Admin and Super Admin)
 router.get('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT id, email, full_name, role, gender, phone, status, class as class_name, section, created_at FROM users ORDER BY created_at DESC');
+        const [rows] = await pool.query(`
+            SELECT u.id, u.email, u.full_name, u.role, u.gender, u.phone, u.status,
+                   u.class as class_name, u.section, u.created_at,
+                   sp.employee_code, sp.department, sp.designation, sp.qualification, sp.joining_date,
+                   (
+                     SELECT GROUP_CONCAT(
+                       DISTINCT CONCAT(c.name, ' - ', sec.name, IF(ta.is_class_teacher = 1, ' (Class Teacher)', ''))
+                       ORDER BY ta.is_class_teacher DESC, c.numeric_value ASC
+                       SEPARATOR ', '
+                     )
+                     FROM teacher_assignments ta
+                     JOIN sections sec ON ta.section_id = sec.id
+                     JOIN classes c ON sec.class_id = c.id
+                     WHERE ta.teacher_user_id = u.id
+                   ) AS assigned_classes,
+                   (
+                     SELECT GROUP_CONCAT(DISTINCT CONCAT(c.name, ' - ', sec.name) ORDER BY c.numeric_value ASC SEPARATOR ', ')
+                     FROM teacher_assignments ta
+                     JOIN sections sec ON ta.section_id = sec.id
+                     JOIN classes c ON sec.class_id = c.id
+                     WHERE ta.teacher_user_id = u.id AND ta.is_class_teacher = 1
+                   ) AS homeroom_class,
+                   (
+                     SELECT GROUP_CONCAT(DISTINCT CONCAT(c.name, ' - ', sec.name) ORDER BY c.numeric_value ASC SEPARATOR ', ')
+                     FROM teacher_assignments ta
+                     JOIN sections sec ON ta.section_id = sec.id
+                     JOIN classes c ON sec.class_id = c.id
+                     WHERE ta.teacher_user_id = u.id AND (ta.is_class_teacher IS NULL OR ta.is_class_teacher = 0)
+                   ) AS subject_classes
+            FROM users u
+            LEFT JOIN staff_profiles sp ON sp.user_id = u.id
+            ORDER BY u.created_at DESC
+        `);
         res.status(200).json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -404,23 +487,33 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
             return res.status(400).json({ success: false, message: 'First name is required' });
         }
 
-        if (email && email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-            return res.status(400).json({ success: false, message: 'Invalid email address format' });
+        const trimmedEmail = (email || '').trim();
+        if (!trimmedEmail) {
+            return res.status(400).json({ success: false, message: 'Primary student email address is required' });
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+            return res.status(400).json({ success: false, message: 'Invalid primary email address format' });
+        }
+
+        const trimmedPhone = (phone || '').trim();
+        if (trimmedPhone && !/^\d{10}$/.test(trimmedPhone)) {
+            return res.status(400).json({ success: false, message: 'Student phone number must be exactly 10 digits' });
+        }
+        if (father_phone && father_phone.trim() && !/^\d{10}$/.test(father_phone.trim())) {
+            return res.status(400).json({ success: false, message: 'Father phone number must be exactly 10 digits' });
+        }
+        if (mother_phone && mother_phone.trim() && !/^\d{10}$/.test(mother_phone.trim())) {
+            return res.status(400).json({ success: false, message: 'Mother phone number must be exactly 10 digits' });
+        }
+        if (guardian_phone && guardian_phone.trim() && !/^\d{10}$/.test(guardian_phone.trim())) {
+            return res.status(400).json({ success: false, message: 'Guardian phone number must be exactly 10 digits' });
         }
 
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
         const fullName = `${first_name.trim()} ${last_name ? last_name.trim() : ''}`.trim();
-        const randNum = Math.floor(1000 + Math.random() * 9000);
-        const stuEmail = email && email.trim() ? email.trim() : `${first_name.toLowerCase().replace(/[^a-z]/g, '')}${randNum}@student.stthomas.edu`;
-
-        // Check duplicate email
-        const [existing] = await conn.query('SELECT id FROM users WHERE email = ?', [stuEmail]);
-        let finalEmail = stuEmail;
-        if (existing.length > 0) {
-            finalEmail = `${first_name.toLowerCase().replace(/[^a-z]/g, '')}${Date.now()}@student.stthomas.edu`;
-        }
+        const finalEmail = trimmedEmail;
 
         const tempPassword = crypto.randomBytes(6).toString('hex');
         const hashedPassword = await bcrypt.hash(tempPassword, 8);
