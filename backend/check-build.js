@@ -2,38 +2,37 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-function getAllJsFiles(dir, fileList = []) {
+function getFiles(dir, files_ = []) {
   const files = fs.readdirSync(dir);
-  for (const file of files) {
-    if (file === 'node_modules' || file === '.git') continue;
-    const filePath = path.join(dir, file);
-    const stat = fs.statSync(filePath);
-    if (stat.isDirectory()) {
-      getAllJsFiles(filePath, fileList);
-    } else if (file.endsWith('.js')) {
-      fileList.push(filePath);
+  for (const i in files) {
+    const name = path.join(dir, files[i]);
+    if (fs.statSync(name).isDirectory()) {
+      if (!name.includes('node_modules') && !name.includes('.git')) {
+        getFiles(name, files_);
+      }
+    } else if (name.endsWith('.js')) {
+      files_.push(name);
     }
   }
-  return fileList;
+  return files_;
 }
 
-const backendDir = __dirname;
-const jsFiles = getAllJsFiles(backendDir);
-console.log(`Verifying syntax for ${jsFiles.length} backend JavaScript files...`);
+console.log('Checking syntax for all backend files...');
+const jsFiles = getFiles(path.join(__dirname, '.'));
+let syntaxErrors = 0;
 
-let hasError = false;
 for (const file of jsFiles) {
   try {
     execSync(`node -c "${file}"`, { stdio: 'pipe' });
   } catch (err) {
-    console.error(`Syntax error in ${file}:\n${err.stderr ? err.stderr.toString() : err.message}`);
-    hasError = true;
+    console.error(`❌ Syntax Error in ${file}:`, err.message);
+    syntaxErrors++;
   }
 }
 
-if (hasError) {
-  console.error("Backend build check failed due to syntax errors.");
-  process.exit(1);
+if (syntaxErrors === 0) {
+  console.log(`✅ All ${jsFiles.length} backend files passed syntax check cleanly!`);
 } else {
-  console.log("✓ Backend build check succeeded: All backend JavaScript files passed syntax verification.");
+  console.error(`❌ Found ${syntaxErrors} file(s) with syntax errors.`);
+  process.exit(1);
 }

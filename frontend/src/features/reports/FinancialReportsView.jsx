@@ -119,8 +119,8 @@ const FinancialReportsView = () => {
           Failed to load financial report: {error?.response?.data?.message || error?.message || 'Server error'}
         </div>
       ) : (
-        <>
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 w-full sm:w-auto overflow-x-auto">
+        <div className="space-y-6">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 w-full sm:w-auto overflow-x-auto">
           {[
             { id: 'all', label: 'All Audits' },
             { id: 'collection', label: 'Inflows' },
@@ -139,7 +139,6 @@ const FinancialReportsView = () => {
             </button>
           ))}
         </div>
-      </div>
 
       {/* Financial Executive Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -285,9 +284,10 @@ const FinancialReportsView = () => {
             </table>
           </div>
         </div>
-      </>
       )}
     </div>
+  )}
+</div>
   );
 };
 
