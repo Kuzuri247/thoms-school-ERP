@@ -9,6 +9,7 @@ const pool = require('../config/db');
 
 const { generateAdmissionNo, generateRollNo } = require('../utils/identifierGenerator');
 const { assignClassTeacher, assignSubjectTeacher } = require('../modules/staff/teacherAssignment.service');
+const { generateMonthlyFeesForStudent } = require('../utils/feeEngine');
 
 // Shared helper to resolve section_id for a given class_id
 async function resolveSectionId(conn, classId) {
@@ -203,6 +204,54 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
                     }
                 }
             }
+        }
+
+        // If student role, create student profile & 12-month CBSE fees
+        if (effectiveRole === 'student') {
+            const [[activeSession]] = await conn.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+            const sessionId = activeSession?.id || 1;
+
+            let sectionId = req.body.section_id || null;
+            if (!sectionId && class_id) {
+                sectionId = await resolveSectionId(conn, class_id);
+            }
+
+            const fname = full_name.trim().split(' ')[0] || 'Student';
+            const lname = full_name.trim().split(' ').slice(1).join(' ') || '';
+            const admNo = req.body.admission_no || (await generateAdmissionNo(conn));
+            const rollNoVal = req.body.roll_no || (await generateRollNo(conn, sectionId));
+
+            const optsBus = Boolean(req.body.opts_bus_service);
+            const busSlab = req.body.bus_distance_slab || null;
+            const busFeeVal = parseFloat(req.body.bus_quarterly_fee || 0);
+
+            const [stuRes] = await conn.query(
+                `INSERT INTO students (
+                    user_id, admission_no, roll_no, first_name, last_name, section_id, session_id,
+                    opts_bus_service, bus_distance_slab, bus_quarterly_fee, status
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+                [
+                    newUserId, admNo, rollNoVal, fname, lname, sectionId, sessionId,
+                    optsBus, busSlab, busFeeVal
+                ]
+            );
+
+            const studentId = stuRes.insertId;
+
+            if (req.body.father_name && req.body.father_name.trim()) {
+                await conn.query(
+                    `INSERT INTO guardians (student_id, relation, full_name, phone)
+                     VALUES (?, 'father', ?, ?)`,
+                    [studentId, req.body.father_name.trim(), trimmedEmergency || trimmedPhone]
+                );
+            }
+
+            await generateMonthlyFeesForStudent(conn, studentId, {
+                optsBusService: optsBus,
+                busDistanceSlab: busSlab,
+                busQuarterlyFee: busFeeVal,
+                tuitionFee: req.body.tuition_fee || 3500,
+            });
         }
 
         await conn.commit();
@@ -697,13 +746,31 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         const finalAdmissionNo = admission_no && admission_no.trim() ? admission_no.trim() : generateAdmissionNo(userId, sessionYear);
         const finalRollNo = roll_no && roll_no.trim() ? roll_no.trim() : generateRollNo(userId);
 
+        const optsBus = Boolean(req.body.opts_bus_service);
+        const busSlab = req.body.bus_distance_slab || null;
+        const busFeeVal = parseFloat(req.body.bus_quarterly_fee || 0);
+
         // 3. Insert into students table
         const [stuResult] = await conn.query(
-            `INSERT INTO students (user_id, section_id, admission_no, roll_no, first_name, last_name, gender, date_of_birth, address, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, targetSectionId, finalAdmissionNo, finalRollNo, first_name.trim(), last_name ? last_name.trim() : null, gender || 'Male', dob || null, address || null, 'active']
+            `INSERT INTO students (
+                user_id, section_id, admission_no, roll_no, first_name, last_name, gender, date_of_birth, address,
+                opts_bus_service, bus_distance_slab, bus_quarterly_fee, status
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            [
+                userId, targetSectionId, finalAdmissionNo, finalRollNo, first_name.trim(), last_name ? last_name.trim() : null,
+                gender || 'Male', dob || null, address || null,
+                optsBus, busSlab, busFeeVal
+            ]
         );
         const studentId = stuResult.insertId;
+
+        // Generate 12 CBSE monthly fees for student
+        await generateMonthlyFeesForStudent(conn, studentId, {
+            optsBusService: optsBus,
+            busDistanceSlab: busSlab,
+            busQuarterlyFee: busFeeVal,
+            tuitionFee: req.body.tuition_fee || 3500,
+        });
 
         // 4. Insert Guardians if provided
         const fatherNameVal = father_name && father_name.trim() ? father_name.trim() : null;

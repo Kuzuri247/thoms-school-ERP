@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import useAuthStore from "../../store/authStore";
 import { useAcademicsStore } from "../../store/academicsStore";
-
+import { BUS_DISTANCE_SLABS, getBusFeeForSlab } from "../../constants/academicConstants";
 
 const DEMO_CLASSES = [
   { class_id: 101, class_name: "Class 10", numeric_value: 10 },
@@ -51,6 +51,10 @@ const EMPTY_STUDENT_FORM = {
   guardian_name: "",
   guardian_phone: "",
   guardian_relation: "",
+  opts_bus_service: false,
+  bus_distance_slab: "0-2 KM",
+  bus_quarterly_fee: 3825,
+  tuition_fee: 3500,
 };
 
 const AdminClassDirectoryView = () => {
@@ -1172,6 +1176,74 @@ const AdminClassDirectoryView = () => {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Section 4: Transport Service & Fee Setup */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 border-b border-indigo-50 pb-1 flex items-center justify-between">
+                  <span>4. Transport Service & Fee Setup</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Optional School Bus Service</span>
+                </h4>
+
+                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="opts_bus_service_cb"
+                    checked={studentForm.opts_bus_service || false}
+                    onChange={(e) =>
+                      setStudentForm({
+                        ...studentForm,
+                        opts_bus_service: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="opts_bus_service_cb" className="text-xs font-bold text-slate-800 cursor-pointer">
+                    Opt-in for School Transport / Bus Service
+                  </label>
+                </div>
+
+                {studentForm.opts_bus_service && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl animate-fadeIn">
+                    <div>
+                      <label className="block mb-1 font-bold text-slate-700">Distance Slab (KM)</label>
+                      <select
+                        value={studentForm.bus_distance_slab || "0-2 KM"}
+                        onChange={(e) => {
+                          const selectedSlab = e.target.value;
+                          const fee = getBusFeeForSlab ? getBusFeeForSlab(selectedSlab) : 3825;
+                          setStudentForm({
+                            ...studentForm,
+                            bus_distance_slab: selectedSlab,
+                            bus_quarterly_fee: fee,
+                          });
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none font-bold text-slate-800"
+                      >
+                        {BUS_DISTANCE_SLABS.map((s) => (
+                          <option key={s.slab} value={s.slab}>
+                            {s.slab} (₹{s.quarterlyFee.toLocaleString()}/quarter)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block mb-1 font-bold text-slate-700">Quarterly Bus Fee (₹)</label>
+                      <input
+                        type="number"
+                        value={studentForm.bus_quarterly_fee || 3825}
+                        onChange={(e) =>
+                          setStudentForm({
+                            ...studentForm,
+                            bus_quarterly_fee: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none font-bold text-indigo-700"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {formError && (

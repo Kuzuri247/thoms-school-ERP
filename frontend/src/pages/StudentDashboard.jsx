@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { extractYouTubeId } from "../utils/youtube";
 import useAuthStore from "../store/authStore";
 import api from "../api/axios";
+import FeeLockoutScreen from "../features/fees/FeeLockoutScreen";
 import {
   User,
   Clock,
@@ -45,6 +46,9 @@ const StudentDashboard = ({ activeTab = "home" }) => {
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
 
+  const [isRestricted, setIsRestricted] = useState(false);
+  const [monthlyFeeData, setMonthlyFeeData] = useState(null);
+
   useEffect(() => {
     fetchStudentData();
   }, []);
@@ -52,6 +56,20 @@ const StudentDashboard = ({ activeTab = "home" }) => {
   const fetchStudentData = async () => {
     try {
       setLoading(true);
+      const mFeeRes = await api.get("/payments/monthly-fees/my-fees").catch((err) => {
+        if (err.response?.status === 403 && err.response?.data?.error === "ACCESS_RESTRICTED") {
+          setIsRestricted(true);
+        }
+        return { data: { data: null } };
+      });
+
+      if (mFeeRes.data?.data?.lockoutStatus?.is_access_restricted) {
+        setIsRestricted(true);
+      } else {
+        setIsRestricted(false);
+      }
+      setMonthlyFeeData(mFeeRes.data?.data || null);
+
       const [workRes, noticesRes, feeRes, attRes, elearnRes] =
         await Promise.all([
           api
@@ -71,13 +89,16 @@ const StudentDashboard = ({ activeTab = "home" }) => {
             .catch(() => ({ data: { data: [] } })),
         ]);
 
+      const rawFeeData = feeRes.data?.data;
+      const normalizedFees = Array.isArray(rawFeeData)
+        ? rawFeeData
+        : (rawFeeData?.monthlyFees || []);
       setWorkItems(workRes.data?.data || []);
       setWorkNotices(noticesRes.data?.data || []);
-      setFees(feeRes.data?.data || []);
+      setFees(normalizedFees);
       setAttendanceSummary(attRes.data?.data || null);
       setElearningItems(elearnRes.data?.data || []);
 
-      // Fetch parameterless student timetable from /v1/timetable/my-class
       const ttRes = await api
         .get("/v1/timetable/my-class")
         .catch(() => ({ data: { data: [] } }));
@@ -88,6 +109,10 @@ const StudentDashboard = ({ activeTab = "home" }) => {
       setLoading(false);
     }
   };
+
+  if (isRestricted) {
+    return <FeeLockoutScreen onUnlocked={() => { setIsRestricted(false); fetchStudentData(); }} />;
+  }
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -122,12 +147,13 @@ const StudentDashboard = ({ activeTab = "home" }) => {
     }
   };
 
-  // Determine overall fee status badge from fee records
-  const pendingAmount = fees.reduce((acc, f) => {
+  // Determine overall fee status badge from fee records safely
+  const feesList = Array.isArray(fees) ? fees : (fees?.monthlyFees || []);
+  const pendingAmount = feesList.reduce((acc, f) => {
     const due =
       f.due_amount !== undefined
         ? Number(f.due_amount)
-        : Number(f.total_amount || 0) - Number(f.paid_amount || 0);
+        : Number(f.total_due || f.total_amount || 0) - Number(f.amount_paid || f.paid_amount || 0);
     return acc + Math.max(0, due);
   }, 0);
   const feeStatusBadge =
