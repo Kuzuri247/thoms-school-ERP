@@ -30,7 +30,9 @@ import {
   AlertCircle,
   User,
   Tv,
+  MessageSquareText,
 } from "lucide-react";
+
 import useAuthStore from "../store/authStore";
 import {
   isSuperAdmin as checkIsSuperAdmin,
@@ -60,6 +62,7 @@ const Layout = () => {
   const [adminMsgContent, setAdminMsgContent] = useState("");
   const [adminMsgSuccess, setAdminMsgSuccess] = useState("");
   const [adminMsgError, setAdminMsgError] = useState("");
+  const [dismissedMarchReminder, setDismissedMarchReminder] = useState(false);
   const subjectInputRef = useRef(null);
 
   const fetchNotices = React.useCallback(() => {
@@ -452,6 +455,37 @@ const Layout = () => {
         </div>
       </header>
 
+      {/* --- MARCH END ANNUAL PROMOTION REMINDER BANNER FOR SUPER ADMIN & ADMIN --- */}
+      {(checkIsSuperAdmin(user) || checkIsAdmin(user)) &&
+        ((new Date().getMonth() === 2 && new Date().getDate() >= 24) || location.search.includes("simulateMarch=true")) &&
+        !dismissedMarchReminder && (
+          <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-orange-600 text-white px-4 py-2.5 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-md animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <Sparkles className="w-4 h-4 text-amber-100" />
+              </div>
+              <span>
+                <strong className="underline">End of Academic Session Reminder:</strong> Annual Student Grade Advancement (Promotion) for session rollover is due in late March.
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate("/admin/classes?openPromotion=true")}
+                className="px-3.5 py-1.5 bg-white text-amber-900 font-extrabold text-xs rounded-xl shadow-xs hover:bg-amber-50 transition cursor-pointer"
+              >
+                Review & Run Grade Advancement
+              </button>
+              <button
+                onClick={() => setDismissedMarchReminder(true)}
+                className="text-white/80 hover:text-white p-1 transition cursor-pointer"
+                title="Dismiss Reminder"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
       {adminMsgSuccess && (
         <div className="fixed top-20 right-6 z-50 p-4 bg-emerald-600 text-white font-extrabold text-xs rounded-2xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
           <Check className="w-5 h-5 text-white" />
@@ -682,7 +716,14 @@ const Layout = () => {
                 >
                   <Tv className="w-4 h-4" /> E-Learning
                 </Link>
+                <Link
+                  to="/teacher/remarks"
+                  className={navLinkClass("/teacher/remarks")}
+                >
+                  <MessageSquareText className="w-4 h-4" /> Monthly Remarks
+                </Link>
               </>
+
             )}
 
             {/* Student Exclusive Portal (Visible ONLY to Students) */}

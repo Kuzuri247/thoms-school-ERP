@@ -149,14 +149,14 @@ const AdminHomeworkView = () => {
       {/* Filter & Search Toolbar */}
       <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-4">
         {/* Search */}
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+        <div className="relative flex items-center w-full md:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
           <input
             type="text"
             placeholder="Search homework title, teacher, description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-500 shadow-xs"
+            className="w-full pl-9 pr-3.5 py-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
           />
         </div>
 
@@ -235,7 +235,7 @@ const AdminHomeworkView = () => {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            {hw.subject_name || "General"}
+                            {hw.subject_name || "Subject"}
                           </span>
                           <h3 className="text-sm font-extrabold text-slate-900 mt-1.5">
                             {hw.title}

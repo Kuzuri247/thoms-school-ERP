@@ -18,6 +18,15 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /* Universal Input & Search Field Fixes */
+  input, select, textarea {
+    color: #0f172a;
+  }
+  input::placeholder, select::placeholder, textarea::placeholder {
+    color: #64748b;
+    opacity: 1;
+  }
 }
 
 .stripe-pattern {

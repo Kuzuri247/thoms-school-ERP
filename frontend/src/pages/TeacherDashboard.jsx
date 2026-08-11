@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { MONTH_NAMES, PREDEFINED_TAGS, NEGATIVE_TAGS } from "../constants/remarksConstants";
 import { extractYouTubeId } from "../utils/youtube";
 import useAuthStore from "../store/authStore";
 import api from "../api/axios";
@@ -20,13 +21,11 @@ import {
   ExternalLink,
   Tv,
   Video,
-  Play,
   Lock,
   Unlock,
-  ShieldAlert,
-  Layers,
-  UserCheck,
+  MessageSquareText,
 } from "lucide-react";
+import { useRemarksStore } from "../store/remarksStore";
 
 const daysOfWeek = [
   "Monday",
@@ -46,20 +45,7 @@ const STANDARD_PERIOD_TIMES = {
   6: { start_time: "12:45", end_time: "13:30" },
   7: { start_time: "13:30", end_time: "14:15" },
 };
-const monthNames = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+
 
 function useModalFocus(isOpen, onClose) {
   const modalRef = React.useRef(null);
@@ -76,7 +62,7 @@ function useModalFocus(isOpen, onClose) {
       setTimeout(() => {
         if (modalRef.current) {
           const focusable = modalRef.current.querySelectorAll(
-            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
           );
           if (focusable.length) {
             focusable[0].focus();
@@ -94,8 +80,8 @@ function useModalFocus(isOpen, onClose) {
         if (e.key === "Tab" && modalRef.current) {
           const focusable = Array.from(
             modalRef.current.querySelectorAll(
-              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-            )
+              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
           );
           if (focusable.length === 0) return;
           const first = focusable[0];
@@ -114,7 +100,10 @@ function useModalFocus(isOpen, onClose) {
       document.addEventListener("keydown", handleKeyDown);
       return () => {
         document.removeEventListener("keydown", handleKeyDown);
-        if (triggerRef.current && typeof triggerRef.current.focus === "function") {
+        if (
+          triggerRef.current &&
+          typeof triggerRef.current.focus === "function"
+        ) {
           triggerRef.current.focus();
         }
       };
@@ -151,9 +140,11 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [attendanceCalendar, setAttendanceCalendar] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState({});
   const [attendanceFilterTab, setAttendanceFilterTab] = useState("all"); // 'all', 'present', 'absent'
-  const [attendanceSubmittedToday, setAttendanceSubmittedToday] = useState(false);
+  const [attendanceSubmittedToday, setAttendanceSubmittedToday] =
+    useState(false);
   const [savingAttendance, setSavingAttendance] = useState(false);
-  const [showConfirmAttendanceModal, setShowConfirmAttendanceModal] = useState(false);
+  const [showConfirmAttendanceModal, setShowConfirmAttendanceModal] =
+    useState(false);
 
   // Attendance Calendar Month & Year State
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
@@ -191,9 +182,13 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const [allTeachers, setAllTeachers] = useState([]);
   const [showTtModal, setShowTtModal] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
+  const [savingTtSlot, setSavingTtSlot] = useState(false);
 
   const ttModalRef = useModalFocus(showTtModal, () => setShowTtModal(false));
-  const confirmAttendanceModalRef = useModalFocus(showConfirmAttendanceModal, () => setShowConfirmAttendanceModal(false));
+  const confirmAttendanceModalRef = useModalFocus(
+    showConfirmAttendanceModal,
+    () => setShowConfirmAttendanceModal(false),
+  );
   const [ttFormData, setTtFormData] = useState({
     day_of_week: "Monday",
     period_number: 1,
@@ -205,10 +200,94 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   });
   const [ttMessage, setTtMessage] = useState(null);
   const [ttError, setTtError] = useState(null);
-  const [savingTtSlot, setSavingTtSlot] = useState(false);
+  // Remarks State - Strictly locked to current month & year
+  const now = new Date();
+  const remarkMonth = now.getMonth() + 1;
+  const remarkYear = now.getFullYear();
+  const currentMonthName = MONTH_NAMES[now.getMonth()];
+
+  const [localRemarks, setLocalRemarks] = useState({});
+  const [localTags, setLocalTags] = useState({});
+  const {
+    fetchSectionRemarks,
+    saveBatchRemarks,
+    loadingSection: loadingRemarks,
+    saving: savingRemarks,
+    successMessage: remarkSuccessMsg,
+    error: remarkErrMsg,
+    clearStatus: clearRemarkStatus,
+  } = useRemarksStore();
+
+  useEffect(() => {
+    let isActive = true;
+    const reqSectionId = selectedClass?.section_id;
+
+    if (reqSectionId && activeTab === "remarks") {
+      setLocalRemarks({});
+      setLocalTags({});
+      fetchSectionRemarks(
+        reqSectionId,
+        remarkMonth,
+        remarkYear,
+      ).then((res) => {
+        if (!isActive || selectedClass?.section_id !== reqSectionId) return;
+        if (!res?.success || !Array.isArray(res.data) || res.data.length === 0) {
+          setLocalRemarks({});
+          setLocalTags({});
+          return;
+        }
+        const roster = res.data;
+        const initRem = {};
+        const initTags = {};
+        roster.forEach((item) => {
+          initRem[item.student_id] = item.remark || "";
+          initTags[item.student_id] = Array.isArray(item.tags) ? item.tags : [];
+        });
+        setLocalRemarks(initRem);
+        setLocalTags(initTags);
+      }).catch(() => {
+        if (!isActive || selectedClass?.section_id !== reqSectionId) return;
+        setLocalRemarks({});
+        setLocalTags({});
+      });
+    }
+
+    return () => {
+      isActive = false;
+    };
+  }, [selectedClass, remarkMonth, remarkYear, activeTab]);
+
+  const handleToggleTag = (studentId, tag) => {
+    setLocalTags((prev) => {
+      const existing = prev[studentId] || [];
+      const updated = existing.includes(tag)
+        ? existing.filter((t) => t !== tag)
+        : [...existing, tag];
+      return { ...prev, [studentId]: updated };
+    });
+  };
+
+  const handleSaveRemarks = async () => {
+    if (!selectedClass?.section_id) return;
+    const allStudentIds = Array.from(
+      new Set([...Object.keys(localRemarks), ...Object.keys(localTags)]),
+    );
+    const remarkList = allStudentIds.map((student_id) => ({
+      student_id: Number(student_id),
+      remark: localRemarks[student_id] || "",
+      tags: localTags[student_id] || [],
+    }));
+    await saveBatchRemarks({
+      section_id: selectedClass.section_id,
+      month: remarkMonth,
+      year: remarkYear,
+      remarks: remarkList,
+    });
+  };
 
   useEffect(() => {
     fetchTeacherClasses();
+
     fetchTeacherTimetable();
     fetchTeacherHomeworks();
     fetchTeacherElearning();
@@ -244,14 +323,18 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     setClassTimetable([]);
     setIsClassTeacherForTt(false);
     try {
-      const res = await api.get(`/v1/timetable/class/${classId}/section/${sectionId}`);
+      const res = await api.get(
+        `/v1/timetable/class/${classId}/section/${sectionId}`,
+      );
       setClassTimetable(res.data?.data || []);
       setIsClassTeacherForTt(res.data?.is_class_teacher || false);
     } catch (err) {
       console.error("Failed to fetch section timetable:", err);
       setClassTimetable([]);
       setIsClassTeacherForTt(false);
-      setTtError(err.response?.data?.message || "Failed to fetch section timetable");
+      setTtError(
+        err.response?.data?.message || "Failed to fetch section timetable",
+      );
     }
   };
 
@@ -266,7 +349,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
   const fetchTtMetadata = async (classId = null) => {
     try {
-      const subUrl = classId ? `/v1/timetable/subjects?class_id=${classId}` : "/v1/timetable/subjects";
+      const subUrl = classId
+        ? `/v1/timetable/subjects?class_id=${classId}`
+        : "/v1/timetable/subjects";
       const [subRes, teachRes] = await Promise.all([
         api.get(subUrl).catch(() => ({ data: { data: [] } })),
         api.get("/v1/timetable/teachers").catch(() => ({ data: { data: [] } })),
@@ -279,15 +364,25 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   };
 
   // Bidirectional Subject & Teacher Filtering for Timetable Editor Modal
-  const selectedTeacher = allTeachers.find((t) => String(t.id) === String(ttFormData.teacher_id));
-  const selectedSubject = allSubjects.find((s) => String(s.id) === String(ttFormData.subject_id));
+  const selectedTeacher = allTeachers.find(
+    (t) => String(t.id) === String(ttFormData.teacher_id),
+  );
+  const selectedSubject = allSubjects.find(
+    (s) => String(s.id) === String(ttFormData.subject_id),
+  );
 
   const filteredSubjects = React.useMemo(() => {
-    if (!selectedTeacher || !selectedTeacher.subject_ids || selectedTeacher.subject_ids.length === 0) {
+    if (
+      !selectedTeacher ||
+      !selectedTeacher.subject_ids ||
+      selectedTeacher.subject_ids.length === 0
+    ) {
       return allSubjects;
     }
     return allSubjects.filter((sub) => {
-      const nameMatch = selectedTeacher.subject_names?.includes(sub.name.trim().toLowerCase());
+      const nameMatch = selectedTeacher.subject_names?.includes(
+        sub.name.trim().toLowerCase(),
+      );
       const idMatch = selectedTeacher.subject_ids?.includes(sub.id);
       return idMatch || nameMatch;
     });
@@ -312,15 +407,28 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     let nextSubjId = ttFormData.subject_id;
 
     if (tObj && tObj.subject_ids && tObj.subject_ids.length > 0) {
-      const currentSubj = allSubjects.find((s) => String(s.id) === String(ttFormData.subject_id));
-      const isValid = currentSubj && (tObj.subject_ids.includes(currentSubj.id) || tObj.subject_names?.includes(currentSubj.name.trim().toLowerCase()));
+      const currentSubj = allSubjects.find(
+        (s) => String(s.id) === String(ttFormData.subject_id),
+      );
+      const isValid =
+        currentSubj &&
+        (tObj.subject_ids.includes(currentSubj.id) ||
+          tObj.subject_names?.includes(currentSubj.name.trim().toLowerCase()));
       if (!isValid) {
-        const firstMatch = allSubjects.find((s) => tObj.subject_ids.includes(s.id) || tObj.subject_names?.includes(s.name.trim().toLowerCase()));
+        const firstMatch = allSubjects.find(
+          (s) =>
+            tObj.subject_ids.includes(s.id) ||
+            tObj.subject_names?.includes(s.name.trim().toLowerCase()),
+        );
         nextSubjId = firstMatch ? firstMatch.id : "";
       }
     }
 
-    setTtFormData({ ...ttFormData, teacher_id: newTeacherId, subject_id: nextSubjId });
+    setTtFormData({
+      ...ttFormData,
+      teacher_id: newTeacherId,
+      subject_id: nextSubjId,
+    });
   };
 
   const handleSubjectChange = (e) => {
@@ -330,28 +438,54 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
     if (sObj) {
       const sName = sObj.name.trim().toLowerCase();
-      const currentTeacher = allTeachers.find((t) => String(t.id) === String(ttFormData.teacher_id));
-      if (currentTeacher && currentTeacher.subject_ids && currentTeacher.subject_ids.length > 0) {
-        const isQualified = currentTeacher.subject_ids.includes(sObj.id) || currentTeacher.subject_names?.includes(sName);
+      const currentTeacher = allTeachers.find(
+        (t) => String(t.id) === String(ttFormData.teacher_id),
+      );
+      if (
+        currentTeacher &&
+        currentTeacher.subject_ids &&
+        currentTeacher.subject_ids.length > 0
+      ) {
+        const isQualified =
+          currentTeacher.subject_ids.includes(sObj.id) ||
+          currentTeacher.subject_names?.includes(sName);
         if (!isQualified) {
-          const qualifiedTeacher = allTeachers.find((t) => t.subject_ids?.includes(sObj.id) || t.subject_names?.includes(sName));
+          const qualifiedTeacher = allTeachers.find(
+            (t) =>
+              t.subject_ids?.includes(sObj.id) ||
+              t.subject_names?.includes(sName),
+          );
           nextTeacherId = qualifiedTeacher ? qualifiedTeacher.id : "";
         }
       }
     }
 
-    setTtFormData({ ...ttFormData, subject_id: newSubjId, teacher_id: nextTeacherId });
+    setTtFormData({
+      ...ttFormData,
+      subject_id: newSubjId,
+      teacher_id: nextTeacherId,
+    });
   };
 
-  const handleOpenTtModal = (slot = null, defaultDay = "Monday", defaultPeriod = 1) => {
+  const handleOpenTtModal = (
+    slot = null,
+    defaultDay = "Monday",
+    defaultPeriod = 1,
+  ) => {
     setTtError(null);
     setTtMessage(null);
-    const pNum = Number(slot?.period_number || slot?.period_no || defaultPeriod || 1);
-    const pTimes = STANDARD_PERIOD_TIMES[pNum] || { start_time: "08:30", end_time: "09:15" };
+    const pNum = Number(
+      slot?.period_number || slot?.period_no || defaultPeriod || 1,
+    );
+    const pTimes = STANDARD_PERIOD_TIMES[pNum] || {
+      start_time: "08:30",
+      end_time: "09:15",
+    };
 
     if (slot) {
       setEditingSlot(slot);
-      const dayName = daysOfWeek[slot.day_of_week - 1] || defaultDay || "Monday";
+      const dayName =
+        daysOfWeek[slot.day_of_week - 1] || defaultDay || "Monday";
       setTtFormData({
         day_of_week: dayName,
         period_number: pNum,
@@ -391,7 +525,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     setTtMessage(null);
 
     const pNum = Number(ttFormData.period_number || 1);
-    const pTimes = STANDARD_PERIOD_TIMES[pNum] || { start_time: "08:30", end_time: "09:15" };
+    const pTimes = STANDARD_PERIOD_TIMES[pNum] || {
+      start_time: "08:30",
+      end_time: "09:15",
+    };
 
     try {
       const payload = {
@@ -403,8 +540,12 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
             period_number: pNum,
             start_time: pTimes.start_time,
             end_time: pTimes.end_time,
-            subject_id: ttFormData.is_break ? null : (ttFormData.subject_id || null),
-            teacher_id: ttFormData.is_break ? null : (ttFormData.teacher_id || null),
+            subject_id: ttFormData.is_break
+              ? null
+              : ttFormData.subject_id || null,
+            teacher_id: ttFormData.is_break
+              ? null
+              : ttFormData.teacher_id || null,
             is_break: ttFormData.is_break,
           },
         ],
@@ -414,13 +555,18 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
       if (res.data?.success) {
         setTtMessage("Slot saved successfully!");
         setShowTtModal(false);
-        fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
+        fetchClassTimetable(
+          selectedTtClass.class_id,
+          selectedTtClass.section_id,
+        );
         fetchMySchedule();
       } else {
         setTtError(res.data?.message || "Failed to save timetable slot");
       }
     } catch (err) {
-      setTtError(err.response?.data?.message || "Failed to save timetable slot");
+      setTtError(
+        err.response?.data?.message || "Failed to save timetable slot",
+      );
     } finally {
       setSavingTtSlot(false);
     }
@@ -428,12 +574,16 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
   const handleDeleteTtSlot = async (periodId) => {
     if (!selectedTtClass) return;
-    if (!window.confirm("Are you sure you want to remove this timetable slot?")) return;
+    if (!window.confirm("Are you sure you want to remove this timetable slot?"))
+      return;
     try {
       const res = await api.delete(`/v1/timetable/period/${periodId}`);
       if (res.data?.success) {
         setShowTtModal(false);
-        fetchClassTimetable(selectedTtClass.class_id, selectedTtClass.section_id);
+        fetchClassTimetable(
+          selectedTtClass.class_id,
+          selectedTtClass.section_id,
+        );
         fetchMySchedule();
       }
     } catch (err) {
@@ -450,14 +600,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   }, [selectedClass]);
 
-  useEffect(() => {
-    if (activeTab === "attendance" && classes.length > 0) {
-      const homeroomClasses = classes.filter((c) => c.is_class_teacher);
-      if (homeroomClasses.length > 0 && (!selectedClass || !selectedClass.is_class_teacher)) {
-        setSelectedClass(homeroomClasses[0]);
-      }
-    }
-  }, [activeTab, classes]);
+
 
   const fetchTeacherClasses = async () => {
     try {
@@ -550,12 +693,16 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
 
     if (newHwDueDate < minDueDateStr) {
-      alert(`Homework due date must be at least 1 day ahead from today (tomorrow, ${minDueDateStr}, or later).`);
+      alert(
+        `Homework due date must be at least 1 day ahead from today (tomorrow, ${minDueDateStr}, or later).`,
+      );
       return;
     }
 
     if (newHwDueDate > maxDueDateStr) {
-      alert(`Homework due date cannot be more than 4 months in advance (up to ${maxDueDateStr}).`);
+      alert(
+        `Homework due date cannot be more than 4 months in advance (up to ${maxDueDateStr}).`,
+      );
       return;
     }
 
@@ -630,7 +777,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   };
 
   const handleDeleteElearning = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this E Learning video?")) return;
+    if (
+      !window.confirm("Are you sure you want to delete this E Learning video?")
+    )
+      return;
     try {
       await api.delete(`/elearning/${id}`);
       setElearningMaterials((prev) => prev.filter((item) => item.id !== id));
@@ -641,10 +791,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   };
 
-
-
   const handleDeleteHomework = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this homework?")) return;
+    if (!window.confirm("Are you sure you want to delete this homework?"))
+      return;
     try {
       await api.delete(`/homework/${id}`);
       setTeacherHomeworks((prev) => prev.filter((h) => h.id !== id));
@@ -723,8 +872,6 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   };
 
-
-
   const totalStudentsCount = students.length;
   const presentStudentsList = students.filter(
     (s) => attendanceRecords[s.id] === "present",
@@ -751,7 +898,24 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     if (r.date) calendarDataMap[r.date] = r;
   });
 
-  const visibleClasses = activeTab === "attendance" ? classes.filter((c) => c.is_class_teacher) : classes;
+  useEffect(() => {
+    if (activeTab === "attendance" || activeTab === "remarks") {
+      const homeroomClasses = classes.filter((c) => c.is_class_teacher);
+      const isStillValid = homeroomClasses.some(
+        (c) =>
+          (c.section_id && c.section_id === selectedClass?.section_id) ||
+          c.name === selectedClass?.name,
+      );
+      if (!isStillValid && homeroomClasses.length > 0) {
+        setSelectedClass(homeroomClasses[0]);
+      }
+    }
+  }, [activeTab, classes, selectedClass]);
+
+  const visibleClasses =
+    activeTab === "attendance" || activeTab === "remarks"
+      ? classes.filter((c) => c.is_class_teacher)
+      : classes;
 
   return (
     <div className="space-y-6 pb-12">
@@ -773,13 +937,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
             <div className="p-4 bg-white rounded-2xl border border-slate-200 text-xs text-slate-400 font-medium">
               {activeTab === "attendance"
                 ? "No homeroom class assigned to your account. Attendance registration is reserved for Class Teachers."
-                : "No assigned classes found."}
+                : activeTab === "remarks"
+                  ? "No homeroom class assigned to your account. Remarks registration is reserved for Class Teachers."
+                  : "No assigned classes found."}
             </div>
           ) : (
-                visibleClasses.map((cls) => (
-                  <div
-                    key={cls.section_id || cls.id || cls.name}
-                    onClick={() => setSelectedClass(cls)}
+            visibleClasses.map((cls) => (
+              <div
+                key={cls.section_id || cls.id || cls.name}
+                onClick={() => setSelectedClass(cls)}
                 className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                   selectedClass?.name === cls.name
                     ? "bg-teal-50 border-teal-300 shadow-xs ring-2 ring-teal-500/20"
@@ -813,7 +979,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     Subject: {cls.subject}
                   </span>
                   <span className="text-slate-500 text-[11px] font-bold">
-                    Role: {cls.is_class_teacher ? "Class Teacher (Homeroom)" : `Subject Teacher (${cls.subject})`}
+                    Role:{" "}
+                    {cls.is_class_teacher
+                      ? "Class Teacher (Homeroom)"
+                      : `Subject Teacher (${cls.subject})`}
                   </span>
                 </div>
               </div>
@@ -867,6 +1036,157 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                 </div>
               )}
 
+              {activeTab === "remarks" && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <MessageSquareText className="w-5 h-5 text-indigo-600" />{" "}
+                        Class Student Monthly Remarks
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-500 mt-1">
+                        Post & update monthly performance remarks for students
+                        of {selectedClass?.name || "assigned homeroom"}.
+                      </p>
+                    </div>
+                    {selectedClass?.is_class_teacher && (
+                      <button
+                        onClick={handleSaveRemarks}
+                        disabled={loadingRemarks}
+                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 transition flex items-center gap-2 cursor-pointer"
+                      >
+                        <Save className="w-4 h-4" />
+                        {loadingRemarks ? "Saving..." : "Save Monthly Remarks"}
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedClass?.is_class_teacher && remarkSuccessMsg && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />{" "}
+                        {remarkSuccessMsg}
+                      </div>
+                      <button
+                        onClick={clearRemarkStatus}
+                        className="text-emerald-600 hover:underline"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedClass?.is_class_teacher && remarkErrMsg && (
+                    <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 font-bold text-xs rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-600" />{" "}
+                        {remarkErrMsg}
+                      </div>
+                      <button
+                        onClick={clearRemarkStatus}
+                        className="text-rose-600 hover:underline"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedClass?.is_class_teacher && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 to-violet-50 p-4 rounded-2xl border border-indigo-100/80 text-xs">
+                      <div className="flex items-center gap-2 font-black text-indigo-950">
+                        <span className="px-3 py-1 bg-indigo-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-xs">
+                          Current Month: {currentMonthName} {remarkYear}
+                        </span>
+                        <span className="text-slate-500 font-medium text-[11px]">
+                          (Monthly evaluations are locked to current month.
+                          Updates apply immediately.)
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!selectedClass?.is_class_teacher ? (
+                    <div className="p-6 bg-amber-50 rounded-2xl border border-amber-200 text-xs font-bold text-amber-800 text-center">
+                      Monthly Student Remarks entry is exclusively reserved for
+                      assigned Class Teachers (Homeroom).
+                    </div>
+                  ) : students.length === 0 ? (
+                    <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-400 text-center">
+                      No active students found in this homeroom section.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {students.map((stu) => (
+                        <div
+                          key={stu.id}
+                          className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-black text-xs flex items-center justify-center border border-indigo-100">
+                                {stu.roll || stu.roll_no || "#"}
+                              </span>
+                              <div>
+                                <h4 className="font-extrabold text-sm text-slate-900">
+                                  {stu.name ||
+                                    `${stu.first_name} ${stu.last_name}`}
+                                </h4>
+                                <p className="text-[10px] text-slate-400 font-mono font-medium">
+                                  Adm No: {stu.admission_no || "N/A"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Behavioral / Performance Tag Chips */}
+                          <div>
+                            <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
+                              Quick Behavioral / Performance Tags:
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {PREDEFINED_TAGS.map((tag) => {
+                                const selected = (
+                                  localTags[stu.id] || []
+                                ).includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => handleToggleTag(stu.id, tag)}
+                                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition flex items-center gap-1 cursor-pointer ${
+                                      selected
+                                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                                    }`}
+                                  >
+                                    {selected && <Check className="w-3 h-3" />}
+                                    {tag}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <textarea
+                            rows={2}
+                            placeholder={`Enter additional monthly note for ${stu.name || `${stu.first_name || ""} ${stu.last_name || ""}`.trim() || "student"}...`}
+                            value={localRemarks[stu.id] || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLocalRemarks((prev) => ({
+                                ...prev,
+                                [stu.id]: val,
+                              }));
+                            }}
+                            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:border-indigo-500 outline-none transition resize-none"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeTab === "attendance" && (
                 <div className="space-y-6 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
@@ -884,13 +1204,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                         {attendanceSubmittedToday ? (
                           <>
                             <span className="px-3 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                              <Check className="w-4 h-4 text-emerald-600" /> Attendance Submitted Today
+                              <Check className="w-4 h-4 text-emerald-600" />{" "}
+                              Attendance Submitted Today
                             </span>
                             <button
                               onClick={() => setAttendanceSubmittedToday(false)}
                               className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                             >
-                              <Edit3 className="w-3.5 h-3.5 text-teal-600" /> Amend Attendance
+                              <Edit3 className="w-3.5 h-3.5 text-teal-600" />{" "}
+                              Amend Attendance
                             </button>
                           </>
                         ) : (
@@ -903,7 +1225,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 : "bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20 cursor-pointer"
                             }`}
                           >
-                            <Save className="w-4 h-4" /> Submit Today's Attendance
+                            <Save className="w-4 h-4" /> Submit Today's
+                            Attendance
                           </button>
                         )}
                       </div>
@@ -1003,7 +1326,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                               <tr>
                                 <th className="py-3 px-4">Roll</th>
                                 <th className="py-3 px-4">Student Name</th>
-                                <th className="py-3 px-4 text-center">Mark Status</th>
+                                <th className="py-3 px-4 text-center">
+                                  Mark Status
+                                </th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -1018,7 +1343,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 </tr>
                               ) : (
                                 filteredStudentsForAttendance.map((s) => (
-                                  <tr key={s.id} className="hover:bg-slate-50/60">
+                                  <tr
+                                    key={s.id}
+                                    className="hover:bg-slate-50/60"
+                                  >
                                     <td className="py-3 px-4 font-mono font-bold text-slate-700">
                                       {s.roll}
                                     </td>
@@ -1031,12 +1359,14 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                           {
                                             key: "present",
                                             label: "Present",
-                                            activeClass: "bg-emerald-600 text-white font-extrabold shadow-2xs",
+                                            activeClass:
+                                              "bg-emerald-600 text-white font-extrabold shadow-2xs",
                                           },
                                           {
                                             key: "absent",
                                             label: "Absent",
-                                            activeClass: "bg-rose-600 text-white font-extrabold shadow-2xs",
+                                            activeClass:
+                                              "bg-rose-600 text-white font-extrabold shadow-2xs",
                                           },
                                         ].map((st) => (
                                           <button
@@ -1084,7 +1414,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                               <ChevronLeft className="w-4 h-4" />
                             </button>
                             <span className="text-xs font-black text-slate-800 min-w-[110px] text-center">
-                              {monthNames[calMonth - 1]} {calYear}
+                              {MONTH_NAMES[calMonth - 1]} {calYear}
                             </span>
                             <button
                               type="button"
@@ -1099,27 +1429,45 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
                           <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200 text-center font-extrabold text-[10px] uppercase tracking-wider text-slate-500 py-2.5">
-                            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                            <div>Sun</div>
+                            <div>Mon</div>
+                            <div>Tue</div>
+                            <div>Wed</div>
+                            <div>Thu</div>
+                            <div>Fri</div>
+                            <div>Sat</div>
                           </div>
                           <div className="grid grid-cols-7 divide-x divide-y divide-slate-100">
-                            {Array.from({ length: firstDayOfWeek }).map((_, idx) => (
-                              <div key={`empty-${idx}`} className="h-22 bg-slate-50/40 p-1.5" />
-                            ))}
-                            {Array.from({ length: daysInMonth }).map((_, dayIdx) => {
-                              const dayNum = dayIdx + 1;
-                              const dateStr = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-                              const record = calendarDataMap[dateStr];
-                              return (
-                                <div key={dateStr} className="h-22 p-2 flex flex-col justify-between">
-                                  <span className="text-xs font-black text-slate-800">{dayNum}</span>
-                                  {record && (
-                                    <span className="text-[9px] font-bold text-teal-700 bg-teal-50 px-1 rounded">
-                                      {record.present_percentage}%
+                            {Array.from({ length: firstDayOfWeek }).map(
+                              (_, idx) => (
+                                <div
+                                  key={`empty-${idx}`}
+                                  className="h-22 bg-slate-50/40 p-1.5"
+                                />
+                              ),
+                            )}
+                            {Array.from({ length: daysInMonth }).map(
+                              (_, dayIdx) => {
+                                const dayNum = dayIdx + 1;
+                                const dateStr = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+                                const record = calendarDataMap[dateStr];
+                                return (
+                                  <div
+                                    key={dateStr}
+                                    className="h-22 p-2 flex flex-col justify-between"
+                                  >
+                                    <span className="text-xs font-black text-slate-800">
+                                      {dayNum}
                                     </span>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                    {record && (
+                                      <span className="text-[9px] font-bold text-teal-700 bg-teal-50 px-1 rounded">
+                                        {record.present_percentage}%
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              },
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1128,16 +1476,19 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                 </div>
               )}
 
-
-
               {activeTab === "timetable" && (
                 <div className="space-y-6 animate-in fade-in duration-200">
                   {ttMessage && (
                     <div className="p-3.5 bg-teal-50 border border-teal-200 rounded-2xl text-xs font-bold text-teal-800 flex items-center justify-between shadow-2xs">
                       <div className="flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" /> {ttMessage}
+                        <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" />{" "}
+                        {ttMessage}
                       </div>
-                      <button type="button" onClick={() => setTtMessage(null)} className="text-teal-600 hover:text-teal-800 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setTtMessage(null)}
+                        className="text-teal-600 hover:text-teal-800 p-0.5"
+                      >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -1147,10 +1498,12 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                       <div>
                         <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                          <Clock className="w-5 h-5 text-teal-600" /> Timetable & Teaching Workstation
+                          <Clock className="w-5 h-5 text-teal-600" /> Timetable
+                          & Teaching Workstation
                         </h2>
                         <p className="text-xs font-semibold text-slate-500 mt-1">
-                          Manage homeroom class timetables or view subject teaching schedules.
+                          Manage homeroom class timetables or view subject
+                          teaching schedules.
                         </p>
                       </div>
 
@@ -1185,24 +1538,37 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     {timetableTabMode === "class" && (
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
                         <div className="flex items-center gap-3 w-full sm:w-auto">
-                          <label htmlFor="assigned-tt-class-select" className="text-xs font-extrabold text-slate-700 whitespace-nowrap">
+                          <label
+                            htmlFor="assigned-tt-class-select"
+                            className="text-xs font-extrabold text-slate-700 whitespace-nowrap"
+                          >
                             Select Class:
                           </label>
                           <select
                             id="assigned-tt-class-select"
-                            value={selectedTtClass ? `${selectedTtClass.class_id}_${selectedTtClass.section_id}` : ""}
+                            value={
+                              selectedTtClass
+                                ? `${selectedTtClass.class_id}_${selectedTtClass.section_id}`
+                                : ""
+                            }
                             onChange={(e) => {
                               const [cId, sId] = e.target.value.split("_");
                               const found = assignedTtClasses.find(
-                                (item) => String(item.class_id) === cId && String(item.section_id) === sId
+                                (item) =>
+                                  String(item.class_id) === cId &&
+                                  String(item.section_id) === sId,
                               );
                               if (found) setSelectedTtClass(found);
                             }}
                             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white"
                           >
                             {assignedTtClasses.map((c) => (
-                              <option key={`tt-cls-${c.class_id}-${c.section_id}`} value={`${c.class_id}_${c.section_id}`}>
-                                {c.name} {c.is_class_teacher ? "★ Homeroom" : ""}
+                              <option
+                                key={`tt-cls-${c.class_id}-${c.section_id}`}
+                                value={`${c.class_id}_${c.section_id}`}
+                              >
+                                {c.name}{" "}
+                                {c.is_class_teacher ? "★ Homeroom" : ""}
                               </option>
                             ))}
                           </select>
@@ -1212,11 +1578,13 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                           {/* RBAC Badge */}
                           {isClassTeacherForTt ? (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold text-teal-800 bg-teal-50 border border-teal-200">
-                              <Unlock className="w-3.5 h-3.5 text-teal-600" /> Class Teacher (Full Edit Control)
+                              <Unlock className="w-3.5 h-3.5 text-teal-600" />{" "}
+                              Class Teacher (Full Edit Control)
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold text-slate-600 bg-slate-100 border border-slate-200">
-                              <Lock className="w-3.5 h-3.5 text-slate-500" /> Read-Only: Subject Class
+                              <Lock className="w-3.5 h-3.5 text-slate-500" />{" "}
+                              Read-Only: Subject Class
                             </span>
                           )}
 
@@ -1243,8 +1611,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   </div>
 
                   {/* Mode 1: Class Timetable Grid */}
-                  {timetableTabMode === "class" && (
-                    assignedTtClasses.length === 0 ? (
+                  {timetableTabMode === "class" &&
+                    (assignedTtClasses.length === 0 ? (
                       <div className="p-8 bg-slate-50 border border-slate-200/80 rounded-2xl text-center text-slate-500 font-semibold text-xs">
                         No assigned classes available for timetable viewing.
                       </div>
@@ -1252,12 +1620,17 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {daysOfWeek.map((day, dayIdx) => {
                           const dayNum = dayIdx + 1;
-                          const daySlots = classTimetable.filter((t) => Number(t.day_of_week) === dayNum);
+                          const daySlots = classTimetable.filter(
+                            (t) => Number(t.day_of_week) === dayNum,
+                          );
 
                           const defaultPeriods = [1, 2, 3, 4, 5, 6, 7];
 
                           return (
-                            <div key={day} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                            <div
+                              key={day}
+                              className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5"
+                            >
                               <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
                                 <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
                                   {day}
@@ -1269,31 +1642,57 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                               <div className="space-y-2">
                                 {defaultPeriods.map((periodNum) => {
-                                  const item = daySlots.find((t) => Number(t.period_no) === periodNum || Number(t.period_number) === periodNum);
+                                  const item = daySlots.find(
+                                    (t) =>
+                                      Number(t.period_no) === periodNum ||
+                                      Number(t.period_number) === periodNum,
+                                  );
 
                                   return (
-                                    <React.Fragment key={`slot-${dayNum}-${periodNum}`}>
+                                    <React.Fragment
+                                      key={`slot-${dayNum}-${periodNum}`}
+                                    >
                                       <div
-                                        role={isClassTeacherForTt ? "button" : undefined}
-                                        tabIndex={isClassTeacherForTt ? 0 : undefined}
+                                        role={
+                                          isClassTeacherForTt
+                                            ? "button"
+                                            : undefined
+                                        }
+                                        tabIndex={
+                                          isClassTeacherForTt ? 0 : undefined
+                                        }
                                         aria-label={`Period ${periodNum} ${item?.subject_name || (item?.is_break ? "Free Period" : "Not Scheduled")}`}
                                         onKeyDown={(e) => {
-                                          if (isClassTeacherForTt && (e.key === "Enter" || e.key === " ")) {
+                                          if (
+                                            isClassTeacherForTt &&
+                                            (e.key === "Enter" || e.key === " ")
+                                          ) {
                                             e.preventDefault();
-                                            handleOpenTtModal(item, day, periodNum);
+                                            handleOpenTtModal(
+                                              item,
+                                              day,
+                                              periodNum,
+                                            );
                                           }
                                         }}
                                         className={`relative group p-2.5 rounded-xl border transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 ${
-                                          isClassTeacherForTt ? "cursor-pointer" : ""
+                                          isClassTeacherForTt
+                                            ? "cursor-pointer"
+                                            : ""
                                         } ${
                                           item?.is_break
                                             ? "bg-amber-50/70 border-amber-200"
                                             : item
-                                            ? "bg-white border-slate-200 shadow-2xs hover:border-teal-300"
-                                            : "bg-slate-100/60 border-dashed border-slate-200 hover:border-slate-300"
+                                              ? "bg-white border-slate-200 shadow-2xs hover:border-teal-300"
+                                              : "bg-slate-100/60 border-dashed border-slate-200 hover:border-slate-300"
                                         }`}
                                         onClick={() => {
-                                          if (isClassTeacherForTt) handleOpenTtModal(item, day, periodNum);
+                                          if (isClassTeacherForTt)
+                                            handleOpenTtModal(
+                                              item,
+                                              day,
+                                              periodNum,
+                                            );
                                         }}
                                       >
                                         {/* Top Row: Period & Subject on Left, Time on Right */}
@@ -1308,7 +1707,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                               </span>
                                             ) : item ? (
                                               <span className="text-xs font-black text-teal-800">
-                                                {item.subject_name || "General"}
+                                                {item.subject_name || "Academics"}
                                               </span>
                                             ) : (
                                               <span className="text-xs font-semibold text-slate-400 italic">
@@ -1325,13 +1724,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                         </div>
 
                                         {/* Bottom Row: Teacher Name */}
-                                        {item && !item.is_break && item.teacher_name && (
-                                          <div className="mt-1 pt-1 border-t border-slate-100/80">
-                                            <span className="text-[10px] text-slate-600 font-semibold block truncate">
-                                              {item.teacher_name}
-                                            </span>
-                                          </div>
-                                        )}
+                                        {item &&
+                                          !item.is_break &&
+                                          item.teacher_name && (
+                                            <div className="mt-1 pt-1 border-t border-slate-100/80">
+                                              <span className="text-[10px] text-slate-600 font-semibold block truncate">
+                                                {item.teacher_name}
+                                              </span>
+                                            </div>
+                                          )}
                                       </div>
 
                                       {/* Recess Banner after Period 3 */}
@@ -1350,18 +1751,22 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                           );
                         })}
                       </div>
-                    )
-                  )}
+                    ))}
 
                   {/* Mode 2: My Teaching Load View */}
                   {timetableTabMode === "my-schedule" && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {daysOfWeek.map((day, dayIdx) => {
                         const dayNum = dayIdx + 1;
-                        const teacherSlots = mySchedule.filter((t) => Number(t.day_of_week) === dayNum);
+                        const teacherSlots = mySchedule.filter(
+                          (t) => Number(t.day_of_week) === dayNum,
+                        );
 
                         return (
-                          <div key={`my-sched-${day}`} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
+                          <div
+                            key={`my-sched-${day}`}
+                            className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5"
+                          >
                             <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
                               <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
                                 {day}
@@ -1378,17 +1783,22 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 </div>
                               ) : (
                                 teacherSlots.map((item) => (
-                                  <div key={`tslot-${item.id}`} className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs">
+                                  <div
+                                    key={`tslot-${item.id}`}
+                                    className="p-2.5 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs"
+                                  >
                                     <div>
                                       <span className="text-xs font-black text-slate-900 block">
-                                        P{item.period_no}: {item.class_name} - {item.section_name}
+                                        P{item.period_no}: {item.class_name} -{" "}
+                                        {item.section_name}
                                       </span>
                                       <span className="text-[10px] font-bold text-teal-700 block">
-                                        {item.subject_name || "General"}
+                                        {item.subject_name || "Academics"}
                                       </span>
                                     </div>
                                     <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                                      {item.start_time?.slice(0, 5)} - {item.end_time?.slice(0, 5)}
+                                      {item.start_time?.slice(0, 5)} -{" "}
+                                      {item.end_time?.slice(0, 5)}
                                     </span>
                                   </div>
                                 ))
@@ -1415,9 +1825,14 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     >
                       <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5">
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                          <h3 id="tt-modal-title" className="text-lg font-black text-slate-900 flex items-center gap-2">
+                          <h3
+                            id="tt-modal-title"
+                            className="text-lg font-black text-slate-900 flex items-center gap-2"
+                          >
                             <Clock className="w-5 h-5 text-teal-600" />
-                            {editingSlot ? "Edit Period Slot" : "Add / Upsert Period Slot"}
+                            {editingSlot
+                              ? "Edit Period Slot"
+                              : "Add / Upsert Period Slot"}
                           </h3>
                           <button
                             type="button"
@@ -1430,49 +1845,81 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                         {ttError && (
                           <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" /> {ttError}
+                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />{" "}
+                            {ttError}
                           </div>
                         )}
                         {ttMessage && (
                           <div className="p-3 bg-teal-50 border border-teal-200 rounded-2xl text-xs font-bold text-teal-800 flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" /> {ttMessage}
+                            <CheckCircle className="w-4 h-4 shrink-0 text-teal-600" />{" "}
+                            {ttMessage}
                           </div>
                         )}
 
-                        <form onSubmit={handleSaveTtSlot} className="space-y-4 text-xs">
+                        <form
+                          onSubmit={handleSaveTtSlot}
+                          className="space-y-4 text-xs"
+                        >
                           {/* Read-Only Period & Time Info */}
                           <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
                             <span className="text-sm font-black text-slate-900">
                               Period {ttFormData.period_number}
                             </span>
                             <span className="text-xs font-mono font-black text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1 rounded-xl">
-                              {STANDARD_PERIOD_TIMES[ttFormData.period_number]?.start_time} - {STANDARD_PERIOD_TIMES[ttFormData.period_number]?.end_time}
+                              {
+                                STANDARD_PERIOD_TIMES[ttFormData.period_number]
+                                  ?.start_time
+                              }{" "}
+                              -{" "}
+                              {
+                                STANDARD_PERIOD_TIMES[ttFormData.period_number]
+                                  ?.end_time
+                              }
                             </span>
                           </div>
 
                           <div>
-                            <label className="font-extrabold text-slate-700 block mb-1">Day of Week</label>
+                            <label className="font-extrabold text-slate-700 block mb-1">
+                              Day of Week
+                            </label>
                             <select
                               value={ttFormData.day_of_week}
-                              onChange={(e) => setTtFormData({ ...ttFormData, day_of_week: e.target.value })}
+                              onChange={(e) =>
+                                setTtFormData({
+                                  ...ttFormData,
+                                  day_of_week: e.target.value,
+                                })
+                              }
                               disabled={Boolean(editingSlot)}
                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               {daysOfWeek.map((d) => (
-                                <option key={`opt-${d}`} value={d}>{d}</option>
+                                <option key={`opt-${d}`} value={d}>
+                                  {d}
+                                </option>
                               ))}
                             </select>
                           </div>
 
                           <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-2xl flex items-center justify-between">
                             <div>
-                              <span className="font-extrabold text-amber-900 block">Mark as Free Period</span>
-                              <span className="text-[10px] text-amber-700 font-medium">Mark period as free period without subject assignment</span>
+                              <span className="font-extrabold text-amber-900 block">
+                                Mark as Free Period
+                              </span>
+                              <span className="text-[10px] text-amber-700 font-medium">
+                                Mark period as free period without subject
+                                assignment
+                              </span>
                             </div>
                             <input
                               type="checkbox"
                               checked={ttFormData.is_break}
-                              onChange={(e) => setTtFormData({ ...ttFormData, is_break: e.target.checked })}
+                              onChange={(e) =>
+                                setTtFormData({
+                                  ...ttFormData,
+                                  is_break: e.target.checked,
+                                })
+                              }
                               className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
                             />
                           </div>
@@ -1480,7 +1927,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                           {!ttFormData.is_break && (
                             <>
                               <div>
-                                <label className="font-extrabold text-slate-700 block mb-1">Assigned Teacher</label>
+                                <label className="font-extrabold text-slate-700 block mb-1">
+                                  Assigned Teacher
+                                </label>
                                 <select
                                   value={ttFormData.teacher_id}
                                   onChange={handleTeacherChange}
@@ -1488,13 +1937,17 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 >
                                   <option value="">Select Teacher</option>
                                   {filteredTeachers.map((t) => (
-                                    <option key={`t-opt-${t.id}`} value={t.id}>{t.full_name} ({t.email})</option>
+                                    <option key={`t-opt-${t.id}`} value={t.id}>
+                                      {t.full_name} ({t.email})
+                                    </option>
                                   ))}
                                 </select>
                               </div>
 
                               <div>
-                                <label className="font-extrabold text-slate-700 block mb-1">Subject</label>
+                                <label className="font-extrabold text-slate-700 block mb-1">
+                                  Subject
+                                </label>
                                 <select
                                   value={ttFormData.subject_id}
                                   onChange={handleSubjectChange}
@@ -1502,7 +1955,12 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 >
                                   <option value="">Select Subject</option>
                                   {filteredSubjects.map((sub) => (
-                                    <option key={`sub-opt-${sub.id}`} value={sub.id}>{sub.name}</option>
+                                    <option
+                                      key={`sub-opt-${sub.id}`}
+                                      value={sub.id}
+                                    >
+                                      {sub.name}
+                                    </option>
                                   ))}
                                 </select>
                               </div>
@@ -1513,7 +1971,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                             {editingSlot && (
                               <button
                                 type="button"
-                                onClick={() => handleDeleteTtSlot(editingSlot.id)}
+                                onClick={() =>
+                                  handleDeleteTtSlot(editingSlot.id)
+                                }
                                 className="mr-auto px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl flex items-center gap-1.5 transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -1546,40 +2006,60 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
                     <div>
                       <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <BookText className="w-5 h-5 text-teal-600" /> Class Homework Workstation
+                        <BookText className="w-5 h-5 text-teal-600" /> Class
+                        Homework Workstation
                       </h2>
                       <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Post homework for homeroom classes and subject teaching classes.
+                        Post homework for homeroom classes and subject teaching
+                        classes.
                       </p>
                     </div>
                   </div>
 
                   {hwMessage && (
                     <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-600" /> {hwMessage}
+                      <CheckCircle className="w-4 h-4 text-emerald-600" />{" "}
+                      {hwMessage}
                     </div>
                   )}
 
                   {/* Create Homework Form */}
-                  <form onSubmit={handlePostHomework} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                  <form
+                    onSubmit={handlePostHomework}
+                    className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4"
+                  >
                     <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-teal-600" /> Assign New Homework
+                      <Plus className="w-4 h-4 text-teal-600" /> Assign New
+                      Homework
                     </h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Target Class & Subject</label>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          Target Class & Subject
+                        </label>
                         <select
-                          value={selectedClass ? `${selectedClass.id}-${selectedClass.section_id}` : ""}
+                          value={
+                            selectedClass
+                              ? `${selectedClass.id}-${selectedClass.section_id}`
+                              : ""
+                          }
                           onChange={(e) => {
                             const [cId, sId] = e.target.value.split("-");
-                            const found = classes.find(c => String(c.id) === cId && String(c.section_id) === sId);
+                            const found = classes.find(
+                              (c) =>
+                                String(c.id) === cId &&
+                                String(c.section_id) === sId,
+                            );
                             if (found) setSelectedClass(found);
                           }}
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
                         >
                           {classes.map((cls) => (
-                            <option key={`${cls.id}-${cls.section_id}`} value={`${cls.id}-${cls.section_id}`}>
+                            <option
+                              key={`${cls.id}-${cls.section_id}`}
+                              value={`${cls.id}-${cls.section_id}`}
+                            >
                               {cls.name} ({cls.subject} - {cls.role})
                             </option>
                           ))}
@@ -1587,7 +2067,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Due Date</label>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          Due Date
+                        </label>
                         <input
                           type="date"
                           required
@@ -1598,13 +2080,16 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
                         />
                         <span className="text-[10px] text-slate-500 font-semibold block mt-1">
-                          Allowed: Tomorrow ({minDueDateStr}) up to 4 months ahead ({maxDueDateStr})
+                          Allowed: Tomorrow ({minDueDateStr}) up to 4 months
+                          ahead ({maxDueDateStr})
                         </span>
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Homework Title</label>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Homework Title
+                      </label>
                       <input
                         type="text"
                         required
@@ -1616,7 +2101,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Instructions / Description</label>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Instructions / Description
+                      </label>
                       <textarea
                         rows="3"
                         placeholder="Detail the problems, page numbers, or submission requirements..."
@@ -1628,7 +2115,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                     <div>
                       <label className="text-xs font-bold text-slate-700 block mb-1 flex items-center gap-1">
-                        Google Classroom Link <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                        Google Classroom Link{" "}
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          (Optional)
+                        </span>
                       </label>
                       <input
                         type="url"
@@ -1645,7 +2135,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                         disabled={postingHw}
                         className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
                       >
-                        <Save className="w-4 h-4" /> {postingHw ? "Assigning..." : "Publish Homework"}
+                        <Save className="w-4 h-4" />{" "}
+                        {postingHw ? "Assigning..." : "Publish Homework"}
                       </button>
                     </div>
                   </form>
@@ -1657,21 +2148,38 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     </h3>
 
                     {loadingHomeworks ? (
-                      <p className="text-xs text-slate-400 font-medium text-center py-4">Loading homework assignments...</p>
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">
+                        Loading homework assignments...
+                      </p>
                     ) : teacherHomeworks.length === 0 ? (
-                      <p className="text-xs text-slate-400 font-medium text-center py-4">You have not posted any homework assignments yet.</p>
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">
+                        You have not posted any homework assignments yet.
+                      </p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {teacherHomeworks.map((hw) => {
-                          const pct = hw.total_students > 0 ? Math.round(((hw.completed_count || 0) / hw.total_students) * 100) : 0;
+                          const pct =
+                            hw.total_students > 0
+                              ? Math.round(
+                                  ((hw.completed_count || 0) /
+                                    hw.total_students) *
+                                    100,
+                                )
+                              : 0;
                           return (
-                            <div key={hw.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                            <div
+                              key={hw.id}
+                              className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3"
+                            >
                               <div className="flex items-start justify-between gap-2">
                                 <div>
                                   <span className="text-[10px] font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100 uppercase">
-                                    {hw.class_name} {hw.section_name} • {hw.subject_name || "General"}
+                                    {hw.class_name} {hw.section_name} •{" "}
+                                    {hw.subject_name || "Subject"}
                                   </span>
-                                  <h4 className="text-sm font-bold text-slate-900 mt-1">{hw.title}</h4>
+                                  <h4 className="text-sm font-bold text-slate-900 mt-1">
+                                    {hw.title}
+                                  </h4>
                                 </div>
                                 <button
                                   onClick={() => handleDeleteHomework(hw.id)}
@@ -1682,7 +2190,11 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                 </button>
                               </div>
 
-                              {hw.description && <p className="text-xs text-slate-600 font-medium line-clamp-2">{hw.description}</p>}
+                              {hw.description && (
+                                <p className="text-xs text-slate-600 font-medium line-clamp-2">
+                                  {hw.description}
+                                </p>
+                              )}
 
                               {hw.classroom_url && (
                                 <a
@@ -1697,9 +2209,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                               )}
 
                               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 pt-2 border-t border-slate-100">
-                                <span>Due: {hw.due_date ? new Date(hw.due_date).toLocaleDateString() : "N/A"}</span>
+                                <span>
+                                  Due:{" "}
+                                  {hw.due_date
+                                    ? new Date(hw.due_date).toLocaleDateString()
+                                    : "N/A"}
+                                </span>
                                 <span className="font-bold text-teal-700">
-                                  {hw.completed_count || 0}/{hw.total_students || 0} Done ({pct}%)
+                                  {hw.completed_count || 0}/
+                                  {hw.total_students || 0} Done ({pct}%)
                                 </span>
                               </div>
                             </div>
@@ -1716,40 +2234,55 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
                       <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                        <Tv className="w-5 h-5 text-indigo-600" /> E Learning Video Portal
+                        <Tv className="w-5 h-5 text-indigo-600" /> E Learning
+                        Video Portal
                       </h2>
                       <p className="text-xs font-semibold text-slate-500 mt-1">
-                        Share YouTube learning video topics directly with students in your assigned classes.
+                        Share YouTube learning video topics directly with
+                        students in your assigned classes.
                       </p>
                     </div>
                   </div>
 
                   {elearningMessage && (
                     <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-emerald-600" /> {elearningMessage}
+                      <CheckCircle className="w-4 h-4 text-emerald-600" />{" "}
+                      {elearningMessage}
                     </div>
                   )}
 
                   {/* Share Video Form */}
-                  <form onSubmit={handlePostElearning} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                  <form
+                    onSubmit={handlePostElearning}
+                    className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4"
+                  >
                     <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-indigo-600" /> Share New E Learning Video Topic
+                      <Plus className="w-4 h-4 text-indigo-600" /> Share New E
+                      Learning Video Topic
                     </h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Target Assigned Class</label>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          Target Assigned Class
+                        </label>
                         <select
                           value={selectedClass?.section_id || ""}
                           onChange={(e) => {
-                            const found = classes.find((c) => String(c.section_id) === String(e.target.value));
+                            const found = classes.find(
+                              (c) =>
+                                String(c.section_id) === String(e.target.value),
+                            );
                             if (found) setSelectedClass(found);
                           }}
                           className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
                         >
                           <option value="">-- Select Class --</option>
                           {classes.map((cls) => (
-                            <option key={cls.section_id || cls.name} value={cls.section_id}>
+                            <option
+                              key={cls.section_id || cls.name}
+                              value={cls.section_id}
+                            >
                               {cls.name} ({cls.subject})
                             </option>
                           ))}
@@ -1757,7 +2290,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold text-slate-700 block mb-1">Topic / Video Title *</label>
+                        <label className="text-xs font-bold text-slate-700 block mb-1">
+                          Topic / Video Title *
+                        </label>
                         <input
                           type="text"
                           required
@@ -1770,7 +2305,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     </div>
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">YouTube Link / URL *</label>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        YouTube Link / URL *
+                      </label>
                       <input
                         type="url"
                         required
@@ -1783,7 +2320,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
 
                     {extractYouTubeId(newYoutubeUrl) && (
                       <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2">
-                        <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block">Live Video Preview</span>
+                        <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider block">
+                          Live Video Preview
+                        </span>
                         <div className="aspect-video w-full max-w-sm rounded-lg overflow-hidden border border-slate-200">
                           <iframe
                             src={`https://www.youtube.com/embed/${extractYouTubeId(newYoutubeUrl)}`}
@@ -1796,7 +2335,9 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     )}
 
                     <div>
-                      <label className="text-xs font-bold text-slate-700 block mb-1">Topic Notes / Instructions (Optional)</label>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Topic Notes / Instructions (Optional)
+                      </label>
                       <textarea
                         rows={2}
                         placeholder="Watch lines 02:15 to 08:30 carefully for tomorrow's discussion..."
@@ -1812,7 +2353,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                         disabled={postingVideo}
                         className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 transition flex items-center gap-1.5 cursor-pointer"
                       >
-                        <Video className="w-4 h-4" /> {postingVideo ? "Sharing..." : "Publish E Learning Video"}
+                        <Video className="w-4 h-4" />{" "}
+                        {postingVideo
+                          ? "Sharing..."
+                          : "Publish E Learning Video"}
                       </button>
                     </div>
                   </form>
@@ -1824,30 +2368,47 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                     </h3>
 
                     {loadingElearning ? (
-                      <p className="text-xs text-slate-400 font-medium text-center py-4">Loading shared video topics...</p>
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">
+                        Loading shared video topics...
+                      </p>
                     ) : elearningMaterials.length === 0 ? (
-                      <p className="text-xs text-slate-400 font-medium text-center py-4">You have not shared any E Learning video topics yet.</p>
+                      <p className="text-xs text-slate-400 font-medium text-center py-4">
+                        You have not shared any E Learning video topics yet.
+                      </p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {elearningMaterials.map((mat) => {
-                          const ytId = mat.youtube_video_id || extractYouTubeId(mat.youtube_url);
+                          const ytId =
+                            mat.youtube_video_id ||
+                            extractYouTubeId(mat.youtube_url);
                           return (
-                            <div key={mat.id} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 flex flex-col justify-between">
+                            <div
+                              key={mat.id}
+                              className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3 flex flex-col justify-between"
+                            >
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                   <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 uppercase">
                                     {mat.class_name} {mat.section_name}
                                   </span>
                                   <button
-                                    onClick={() => handleDeleteElearning(mat.id)}
+                                    onClick={() =>
+                                      handleDeleteElearning(mat.id)
+                                    }
                                     className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
                                     title="Delete Video Topic"
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
-                                <h4 className="text-sm font-extrabold text-slate-900 leading-tight">{mat.title}</h4>
-                                {mat.description && <p className="text-xs text-slate-600 font-medium line-clamp-2">{mat.description}</p>}
+                                <h4 className="text-sm font-extrabold text-slate-900 leading-tight">
+                                  {mat.title}
+                                </h4>
+                                {mat.description && (
+                                  <p className="text-xs text-slate-600 font-medium line-clamp-2">
+                                    {mat.description}
+                                  </p>
+                                )}
                               </div>
 
                               {ytId ? (
@@ -1866,12 +2427,14 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline mt-2"
                                 >
-                                  <ExternalLink className="w-3.5 h-3.5" /> Watch on YouTube
+                                  <ExternalLink className="w-3.5 h-3.5" /> Watch
+                                  on YouTube
                                 </a>
                               )}
 
                               <div className="text-[10px] text-slate-400 font-semibold pt-2 border-t border-slate-100">
-                                Posted on: {new Date(mat.created_at).toLocaleDateString()}
+                                Posted on:{" "}
+                                {new Date(mat.created_at).toLocaleDateString()}
                               </div>
                             </div>
                           );
@@ -1896,7 +2459,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
             <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-teal-600" /> Confirm Today's Attendance
+                  <CheckCircle className="w-5 h-5 text-teal-600" /> Confirm
+                  Today's Attendance
                 </h3>
                 <button
                   onClick={() => setShowConfirmAttendanceModal(false)}
@@ -1906,15 +2470,26 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                 </button>
               </div>
               <div className="space-y-3 text-xs font-semibold text-slate-700">
-                <p>Review the summary for <strong>{selectedClass?.name}</strong> on <strong>{todayStr}</strong>:</p>
+                <p>
+                  Review the summary for <strong>{selectedClass?.name}</strong>{" "}
+                  on <strong>{todayStr}</strong>:
+                </p>
                 <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                   <div className="text-center p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <span className="text-[10px] font-extrabold uppercase text-emerald-700 block">Present</span>
-                    <span className="text-xl font-black text-emerald-900">{presentCount}</span>
+                    <span className="text-[10px] font-extrabold uppercase text-emerald-700 block">
+                      Present
+                    </span>
+                    <span className="text-xl font-black text-emerald-900">
+                      {presentCount}
+                    </span>
                   </div>
                   <div className="text-center p-2 bg-rose-50 border border-rose-200 rounded-xl">
-                    <span className="text-[10px] font-extrabold uppercase text-rose-700 block">Absent</span>
-                    <span className="text-xl font-black text-rose-900">{absentCount}</span>
+                    <span className="text-[10px] font-extrabold uppercase text-rose-700 block">
+                      Absent
+                    </span>
+                    <span className="text-xl font-black text-rose-900">
+                      {absentCount}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1930,7 +2505,8 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                   disabled={savingAttendance}
                   className="px-5 py-2 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition shadow-md flex items-center gap-1.5 cursor-pointer text-xs"
                 >
-                  <Save className="w-4 h-4" /> {savingAttendance ? "Saving..." : "Confirm & Submit"}
+                  <Save className="w-4 h-4" />{" "}
+                  {savingAttendance ? "Saving..." : "Confirm & Submit"}
                 </button>
               </div>
             </div>

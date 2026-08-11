@@ -73,7 +73,13 @@ app.use(
 app.use("/api/staff", require("./modules/staff/teacherAssignment.routes"));
 app.use("/api/notices", require("./modules/notices/notices.route"));
 app.use("/api/elearning", require("./modules/elearning/elearning.routes"));
-app.use("/api/communication", require("./modules/communication/communication.routes"));
+app.use(
+  "/api/communication",
+  require("./modules/communication/communication.routes"),
+);
+app.use("/api/remarks", require("./modules/remarks/remarks.routes"));
+app.use("/api/admin", require("./modules/academics/promotion.routes"));
+
 
 app.get("/", async (req, res) => {
   try {
@@ -84,13 +90,11 @@ app.get("/", async (req, res) => {
       db: "connected",
     });
   } catch (err) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Database connection failed",
-        error: err.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Database connection failed",
+      error: err.message,
+    });
   }
 });
 

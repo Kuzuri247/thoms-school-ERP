@@ -129,11 +129,16 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
       [req.user.id]
     );
 
+    const formatTeacherRole = (isClassTeacher, subjectName = '') => {
+      if (isClassTeacher) return 'Class Teacher (Homeroom)';
+      return subjectName ? `Subject Teacher (${subjectName})` : 'Subject Teacher';
+    };
+
     const sectionMap = new Map();
 
     for (const r of rows) {
       const existing = sectionMap.get(r.section_id);
-      const subjName = r.subject_name || 'General';
+      const subjName = r.subject_name || '';
       const subjObj = r.subject_id ? { id: r.subject_id, name: subjName } : null;
 
       if (!existing) {
@@ -144,13 +149,13 @@ router.get('/assigned-classes', verifyToken, authorize(ROLES.TEACHER, ROLES.ADMI
           section_name: r.section_name,
           name: `${r.class_name} - ${r.section_name}`,
           is_class_teacher: Boolean(r.is_class_teacher),
-          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : `Subject Teacher (${subjName})`,
+          role: formatTeacherRole(Boolean(r.is_class_teacher), subjName),
           subjects: subjObj ? [subjObj] : [],
         });
       } else {
         if (r.is_class_teacher) {
           existing.is_class_teacher = true;
-          existing.role = 'Class Teacher (Homeroom)';
+          existing.role = formatTeacherRole(true, subjName);
         }
         if (subjObj && !existing.subjects.some(s => s.id === subjObj.id)) {
           existing.subjects.push(subjObj);
