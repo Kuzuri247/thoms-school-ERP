@@ -16,7 +16,7 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
         let {
             email, password, role, class_name, section, full_name, phone, gender,
             department, designation, qualification, joining_date, address, dob, date_of_birth,
-            emergency_contact, status, is_class_teacher, class_id, subject_name
+            emergency_contact, status, is_class_teacher, class_id, subject_name, subject_assignments
         } = req.body;
 
         if (!full_name || !full_name.trim()) {
@@ -97,43 +97,79 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
             );
         }
 
-        // If teacher role with class_id assignment
-        if (effectiveRole === 'teacher' && class_id) {
-            // 1. Resolve section_id
-            const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [class_id]);
-            let targetSectionId;
-            if (secRows.length > 0) {
-                targetSectionId = secRows[0].id;
-            } else {
-                const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [class_id, 'A']);
-                targetSectionId = newSec.insertId;
-            }
-
-            // 2. Resolve subject_id if subject_name provided
-            let subjectId = null;
-            if (subject_name && subject_name.trim()) {
-                const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [subject_name.trim()]);
-                if (subRows.length > 0) {
-                    subjectId = subRows[0].id;
-                } else {
-                    const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [subject_name.trim(), subject_name.trim().slice(0, 4).toUpperCase()]);
-                    subjectId = newSub.insertId;
-                }
-            }
-
+        // If teacher role with class assignments
+        if (effectiveRole === 'teacher') {
             const { assignClassTeacher, assignSubjectTeacher } = require('../modules/staff/teacherAssignment.service');
             const [[activeSession]] = await conn.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
             const sessionId = activeSession?.id || 1;
 
-            if (is_class_teacher) {
-                // Switch any existing class teacher to subject teacher & assign new teacher as Class Teacher
-                await assignClassTeacher(newUserId, targetSectionId, sessionId, conn);
-                if (subjectId) {
+            // Handle primary homeroom class assignment if selected
+            if (class_id) {
+                // 1. Resolve section_id
+                const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [class_id]);
+                let targetSectionId;
+                if (secRows.length > 0) {
+                    targetSectionId = secRows[0].id;
+                } else {
+                    const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [class_id, 'A']);
+                    targetSectionId = newSec.insertId;
+                }
+
+                // 2. Resolve subject_id if subject_name provided
+                let subjectId = null;
+                if (subject_name && subject_name.trim()) {
+                    const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [subject_name.trim()]);
+                    if (subRows.length > 0) {
+                        subjectId = subRows[0].id;
+                    } else {
+                        const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [subject_name.trim(), subject_name.trim().slice(0, 4).toUpperCase()]);
+                        subjectId = newSub.insertId;
+                    }
+                }
+
+                if (is_class_teacher) {
+                    // Switch any existing class teacher to subject teacher & assign new teacher as Class Teacher
+                    await assignClassTeacher(newUserId, targetSectionId, sessionId, conn);
+                    if (subjectId) {
+                        await conn.query(
+                            'UPDATE teacher_assignments SET subject_id = ? WHERE teacher_user_id = ? AND section_id = ? AND session_id = ? AND is_class_teacher = 1',
+                            [subjectId, newUserId, targetSectionId, sessionId]
+                        );
+                    }
+                } else if (subjectId) {
+                    // Assign as Subject Teacher only when subjectId is present
                     await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
                 }
-            } else if (subjectId) {
-                // Assign as Subject Teacher only when subjectId is present
-                await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
+            }
+
+            // Process multiple additional subject assignments across other classes
+            if (Array.isArray(subject_assignments) && subject_assignments.length > 0) {
+                for (const sa of subject_assignments) {
+                    if (!sa.class_id || !sa.subject_name || !String(sa.subject_name).trim()) continue;
+
+                    const saClassId = sa.class_id;
+                    const saSubjName = String(sa.subject_name).trim();
+
+                    const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [saClassId]);
+                    let targetSectionId;
+                    if (secRows.length > 0) {
+                        targetSectionId = secRows[0].id;
+                    } else {
+                        const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [saClassId, 'A']);
+                        targetSectionId = newSec.insertId;
+                    }
+
+                    const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [saSubjName]);
+                    let subjectId;
+                    if (subRows.length > 0) {
+                        subjectId = subRows[0].id;
+                    } else {
+                        const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [saSubjName, saSubjName.slice(0, 4).toUpperCase()]);
+                        subjectId = newSub.insertId;
+                    }
+
+                    await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
+                }
             }
         }
 

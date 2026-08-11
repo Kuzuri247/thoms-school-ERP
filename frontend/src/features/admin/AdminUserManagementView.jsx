@@ -25,9 +25,37 @@ import {
   Mail,
   Award,
   BookOpen,
+  Plus,
 } from "lucide-react";
 import api from "../../api/axios";
 import useAuthStore from "../../store/authStore";
+
+const CBSE_SUBJECTS_LIST = [
+  "Mathematics",
+  "Science",
+  "Social Science",
+  "English Language & Literature",
+  "Hindi Course-A",
+  "Hindi Course-B",
+  "Physics",
+  "Chemistry",
+  "Biology",
+  "History",
+  "Geography",
+  "Political Science",
+  "Economics",
+  "Business Studies",
+  "Accountancy",
+  "Computer Science",
+  "Information Technology",
+  "Psychology",
+  "Sociology",
+  "Physical Education",
+  "Fine Arts",
+  "Music",
+  "Sanskrit",
+  "Environmental Studies (EVS)",
+];
 
 const AdminUserManagementView = ({ initialTab = "all" }) => {
   const { user: currentUser } = useAuthStore();
@@ -60,8 +88,27 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [teacherAssignmentType, setTeacherAssignmentType] = useState("class_teacher"); // 'class_teacher' | 'subject_teacher'
   const [targetClassId, setTargetClassId] = useState("");
   const [subjectName, setSubjectName] = useState("Mathematics");
+  const [additionalAssignments, setAdditionalAssignments] = useState([]);
   const [classesWithTeachers, setClassesWithTeachers] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
+
+  const handleAddAssignmentRow = (initialClassId = "") => {
+    const defaultClassId = initialClassId || (classesWithTeachers.length > 0 ? String(classesWithTeachers[0].class_id) : "");
+    setAdditionalAssignments((prev) => [
+      ...prev,
+      { id: String(Date.now()) + Math.random().toString(36).substr(2, 4), class_id: defaultClassId, subject_name: "Mathematics" },
+    ]);
+  };
+
+  const handleRemoveAssignmentRow = (rowId) => {
+    setAdditionalAssignments((prev) => prev.filter((r) => r.id !== rowId));
+  };
+
+  const handleAssignmentRowChange = (rowId, field, value) => {
+    setAdditionalAssignments((prev) =>
+      prev.map((r) => (r.id === rowId ? { ...r, [field]: value } : r))
+    );
+  };
 
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
@@ -130,6 +177,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     setGender("Male");
     setTeacherAssignmentType("class_teacher");
     setSubjectName("Mathematics");
+    setAdditionalAssignments([]);
     setErrorMsg("");
     setShowAddModal(true);
   };
@@ -158,14 +206,27 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       return;
     }
 
-    if (selectedRole === "teacher" && (!targetClassId || !String(targetClassId).trim())) {
-      setErrorMsg("Target class selection is required for teacher assignment.");
-      return;
+    if (selectedRole === "teacher") {
+      if (teacherAssignmentType === "class_teacher" && (!targetClassId || !String(targetClassId).trim())) {
+        setErrorMsg("Target homeroom class selection is required for Class Teacher role.");
+        return;
+      }
+      const validRows = additionalAssignments.filter(
+        (a) => a.class_id && a.subject_name && a.subject_name.trim()
+      );
+      if (teacherAssignmentType === "subject_teacher" && validRows.length === 0) {
+        setErrorMsg("Please add at least one class and subject assignment for the Subject Teacher.");
+        return;
+      }
     }
 
     try {
       setIsCreating(true);
       setErrorMsg("");
+
+      const validSubjectAssignments = additionalAssignments
+        .filter((a) => a.class_id && a.subject_name && a.subject_name.trim())
+        .map((a) => ({ class_id: a.class_id, subject_name: a.subject_name.trim() }));
 
       const payload = {
         email: email.trim(),
@@ -174,12 +235,13 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
         phone: phone.trim(),
         gender: gender || "Male",
         department:
-          department.trim() ||
-          (selectedRole === "teacher"
+          selectedRole === "teacher"
             ? "Academics"
             : selectedRole === "cashier"
-              ? "Accounts"
-              : "Administration"),
+              ? "Accounts & Finance"
+              : selectedRole === "admin"
+                ? "Administration"
+                : "General Staff",
         designation: designation.trim() || undefined,
         qualification: qualification.trim() || undefined,
         joining_date: joiningDate || undefined,
@@ -191,8 +253,9 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
           selectedRole === "teacher"
             ? teacherAssignmentType === "class_teacher"
             : false,
-        class_id: selectedRole === "teacher" ? targetClassId : null,
-        subject_name: selectedRole === "teacher" ? subjectName : null,
+        class_id: selectedRole === "teacher" && teacherAssignmentType === "class_teacher" ? targetClassId : null,
+        subject_name: selectedRole === "teacher" && teacherAssignmentType === "class_teacher" ? subjectName : null,
+        subject_assignments: selectedRole === "teacher" ? validSubjectAssignments : [],
       };
 
       await createUserMutation.mutateAsync(payload);
@@ -845,24 +908,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 border-b border-indigo-50 pb-1">
                       2. Employment & Professional Information
                     </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                          Department *
-                        </label>
-                        <select
-                          value={department}
-                          onChange={(e) => setDepartment(e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white cursor-pointer"
-                        >
-                          <option value="Administration">Administration</option>
-                          <option value="Academics">Academics</option>
-                          <option value="Accounts & Finance">Accounts & Finance</option>
-                          <option value="IT & Systems">IT & Systems</option>
-                          <option value="Facilities & Operations">Facilities & Operations</option>
-                        </select>
-                      </div>
-
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                           Designation / Job Title
@@ -961,25 +1007,6 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                         <GraduationCap className="w-4 h-4 text-indigo-600" /> Academic Teaching Assignment
                       </h4>
 
-                      {/* Taught Subject */}
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          Primary Taught Subject *
-                        </label>
-                        <select
-                          value={subjectName}
-                          onChange={(e) => setSubjectName(e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
-                        >
-                          <option value="Mathematics">Mathematics</option>
-                          <option value="Science">Science (Physics & Chemistry)</option>
-                          <option value="English">English Literature & Grammar</option>
-                          <option value="Social Studies">Social Studies (History & Civics)</option>
-                          <option value="Computer Science">Computer Science & IT</option>
-                          <option value="Hindi">Hindi Literature</option>
-                        </select>
-                      </div>
-
                       {/* Assignment Type Selector */}
                       <div>
                         <label className="block text-[11px] font-bold text-slate-600 mb-1.5">
@@ -1005,7 +1032,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                               Class Teacher (Homeroom)
                             </span>
                             <span className="text-[10px] text-slate-500 mt-1">
-                              In-charge & mentor of a grade section
+                              In-charge of homeroom class + optional subject teacher in other classes
                             </span>
                           </label>
 
@@ -1021,70 +1048,171 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                               name="teacherAssignmentType"
                               value="subject_teacher"
                               checked={teacherAssignmentType === "subject_teacher"}
-                              onChange={() => setTeacherAssignmentType("subject_teacher")}
+                              onChange={() => {
+                                setTeacherAssignmentType("subject_teacher");
+                                if (additionalAssignments.length === 0) {
+                                  handleAddAssignmentRow();
+                                }
+                              }}
                               className="sr-only"
                             />
                             <span className="font-extrabold text-xs text-slate-900">
                               Subject Teacher Only
                             </span>
                             <span className="text-[10px] text-slate-500 mt-1">
-                              Teaches subject across multiple classes
+                              Teaches subjects across multiple classes without homeroom duties
                             </span>
                           </label>
                         </div>
                       </div>
 
-                      {/* Select Target Class */}
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          Target Assigned Class Standard *
-                        </label>
-                        <select
-                          value={targetClassId}
-                          onChange={(e) => setTargetClassId(e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
-                        >
-                          {classesWithTeachers.map((c) => (
-                            <option key={c.class_id} value={c.class_id}>
-                              {c.class_name} Standard{" "}
-                              {c.class_teacher_name
-                                ? `(Current Class Teacher: ${c.class_teacher_name})`
-                                : "(No Class Teacher)"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Class Teacher Switching Banner */}
-                      {teacherAssignmentType === "class_teacher" &&
-                        currentClassInfo?.class_teacher_name && (
-                          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-semibold flex items-start gap-2.5 animate-in fade-in">
-                            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      {/* HOMEROOM CLASS TEACHER SPECIFIC FIELDS */}
+                      {teacherAssignmentType === "class_teacher" && (
+                        <div className="space-y-3 pt-1 border-t border-indigo-100/70">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <span className="font-extrabold block text-amber-950">
-                                Homeroom Replacement Notice
-                              </span>
-                              <p className="text-[11px] leading-relaxed mt-0.5 text-amber-800">
-                                <strong className="text-slate-900">
-                                  {currentClassInfo.class_teacher_name}
-                                </strong>{" "}
-                                is currently the Class Teacher of{" "}
-                                <strong className="text-slate-900">
-                                  {currentClassInfo.class_name}
-                                </strong>
-                                . Provisioning this new teacher will automatically switch{" "}
-                                <strong className="text-slate-900">
-                                  {currentClassInfo.class_teacher_name}
-                                </strong>{" "}
-                                to a <strong>Subject Teacher</strong> for this class and assign{" "}
-                                <strong className="text-slate-900">
-                                  {fullName || "this teacher"}
-                                </strong>{" "}
-                                as sole Class Teacher.
-                              </p>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                Homeroom Class Standard *
+                              </label>
+                              <select
+                                value={targetClassId}
+                                onChange={(e) => setTargetClassId(e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                              >
+                                {classesWithTeachers.map((c) => (
+                                  <option key={c.class_id} value={c.class_id}>
+                                    {c.class_name} Standard{" "}
+                                    {c.class_teacher_name
+                                      ? `(Current CT: ${c.class_teacher_name})`
+                                      : "(No Class Teacher)"}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                Homeroom Taught Subject *
+                              </label>
+                              <select
+                                value={subjectName}
+                                onChange={(e) => setSubjectName(e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                              >
+                                {CBSE_SUBJECTS_LIST.map((sub) => (
+                                  <option key={sub} value={sub}>
+                                    {sub}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                           </div>
+
+                          {/* Class Teacher Replacement Notice */}
+                          {currentClassInfo?.class_teacher_name && (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-semibold flex items-start gap-2 animate-in fade-in">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-extrabold block text-amber-950 text-[11px]">
+                                  Homeroom Replacement Notice
+                                </span>
+                                <p className="text-[10px] leading-relaxed mt-0.5 text-amber-800">
+                                  <strong className="text-slate-900">{currentClassInfo.class_teacher_name}</strong> is currently Class Teacher of <strong className="text-slate-900">{currentClassInfo.class_name}</strong>. Provisioning will assign <strong className="text-slate-900">{fullName || "this teacher"}</strong> as sole Class Teacher.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* DYNAMIC SUBJECT TEACHER ASSIGNMENTS FOR OTHER/MULTIPLE CLASSES */}
+                      <div className="pt-2 border-t border-indigo-100/70 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h5 className="text-[11px] font-extrabold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                              {teacherAssignmentType === "class_teacher"
+                                ? "Subject Teacher Assignments for Other Classes"
+                                : "Subject Teacher Assignments Across Classes"}
+                            </h5>
+                            <p className="text-[10px] text-slate-500 font-medium">
+                              {teacherAssignmentType === "class_teacher"
+                                ? "Specify other classes and subjects this teacher will teach for schedule allotment."
+                                : "Select classes and subjects assigned to this teacher for schedule allotment."}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddAssignmentRow()}
+                            className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-extrabold text-[11px] rounded-xl flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Add Class & Subject
+                          </button>
+                        </div>
+
+                        {additionalAssignments.length === 0 ? (
+                          <div className="p-3 bg-white rounded-xl border border-dashed border-slate-200 text-center text-[11px] text-slate-400 font-medium">
+                            {teacherAssignmentType === "class_teacher"
+                              ? "No additional subject classes added yet. Click '+ Add Class & Subject' above if this teacher teaches other classes."
+                              : "No classes added yet. Click '+ Add Class & Subject' above to assign classes & subjects."}
+                          </div>
+                        ) : (
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                            {additionalAssignments.map((row, index) => (
+                              <div
+                                key={row.id}
+                                className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs animate-in fade-in"
+                              >
+                                <span className="text-[10px] font-black text-slate-400 w-4 text-center">
+                                  #{index + 1}
+                                </span>
+
+                                {/* Class Select */}
+                                <div className="flex-1">
+                                  <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-0.5">Assigned Class</label>
+                                  <select
+                                    value={row.class_id}
+                                    onChange={(e) => handleAssignmentRowChange(row.id, "class_id", e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                                  >
+                                    {classesWithTeachers.map((c) => (
+                                      <option key={c.class_id} value={c.class_id}>
+                                        {c.class_name} Standard
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Subject Select */}
+                                <div className="flex-1">
+                                  <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-0.5">Assigned Subject</label>
+                                  <select
+                                    value={row.subject_name}
+                                    onChange={(e) => handleAssignmentRowChange(row.id, "subject_name", e.target.value)}
+                                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                                  >
+                                    {CBSE_SUBJECTS_LIST.map((sub) => (
+                                      <option key={sub} value={sub}>
+                                        {sub}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Delete Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAssignmentRow(row.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer mt-4"
+                                  title="Remove Class Assignment"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         )}
+                      </div>
                     </div>
                   )}
 
@@ -1095,11 +1223,14 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     <input
                       type="password"
                       autoComplete="new-password"
-                      placeholder="Leave blank for auto-generated password"
+                      placeholder="Leave blank to auto-generate (Default: Temp1234)"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                     />
+                    <p className="text-[10px] text-slate-400 mt-1 font-medium">
+                      If left blank, system generates a default password automatically (e.g. Temp1234).
+                    </p>
                   </div>
 
                   {errorMsg && (
