@@ -285,8 +285,12 @@ const AdminClassDirectoryView = () => {
   };
 
   const handleToggleStudentStatus = async (student) => {
-    const targetUserId = student.user_id || student.id;
     const currentStatus = (student.status || "active").toLowerCase();
+    if (["graduated", "left", "transferred"].includes(currentStatus)) {
+      return;
+    }
+
+    const targetUserId = student.user_id || student.id;
     const nextStatus = currentStatus === "active" ? "inactive" : "active";
 
     try {
@@ -440,6 +444,18 @@ const AdminClassDirectoryView = () => {
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
           <Check className="w-4 h-4 text-emerald-600" />
           {formSuccess}
+        </div>
+      )}
+
+      {formError && !showAddStudentModal && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-2xl flex items-center justify-between shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <X className="w-4 h-4 text-rose-600" />
+            <span>{formError}</span>
+          </div>
+          <button onClick={() => setFormError("")} className="text-rose-400 hover:text-rose-700 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -660,25 +676,33 @@ const AdminClassDirectoryView = () => {
                       </td>
 
                       <td className="px-4 py-3.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleStudentStatus(s);
-                          }}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition hover:scale-105 active:scale-95 cursor-pointer ${
-                            s.status === 'graduated'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : (s.status || 'active').toLowerCase() === 'inactive' || s.status === 'left' || s.status === 'transferred'
-                                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700'
-                                : 'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-rose-50 hover:text-rose-700'
-                          }`}
-                          title={`Current status: ${(s.status || "active").toUpperCase()}. Click to switch to ${(s.status || "active").toLowerCase() === "active" ? "INACTIVE" : "ACTIVE"}`}
-                        >
-                          {s.status === 'active' || !s.status ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          ) : null}
-                          {s.status ? s.status.toLowerCase() : "active"}
-                        </button>
+                        {(() => {
+                          const stLower = (s.status || "active").toLowerCase();
+                          const isFixedLifecycle = ["graduated", "left", "transferred"].includes(stLower);
+
+                          return (
+                            <button
+                              disabled={isFixedLifecycle}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleStudentStatus(s);
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition ${
+                                isFixedLifecycle
+                                  ? "bg-amber-50 text-amber-700 border-amber-200 cursor-default opacity-85"
+                                  : stLower === "inactive"
+                                    ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:scale-105 active:scale-95 cursor-pointer"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-rose-50 hover:text-rose-700 hover:scale-105 active:scale-95 cursor-pointer"
+                              }`}
+                              title={isFixedLifecycle ? `Lifecycle status: ${stLower.toUpperCase()} (Fixed)` : `Current status: ${stLower.toUpperCase()}. Click to switch to ${stLower === "active" ? "INACTIVE" : "ACTIVE"}`}
+                            >
+                              {stLower === 'active' ? (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              ) : null}
+                              {stLower}
+                            </button>
+                          );
+                        })()}
                       </td>
 
                       <td className="px-4 py-3.5 text-right">

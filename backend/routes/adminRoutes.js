@@ -281,24 +281,54 @@ router.put('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
 
         const [[existingUser]] = await conn.query('SELECT role, email, full_name, phone, gender, status FROM users WHERE id = ?', [req.params.id]);
         if (!existingUser) {
-            conn.release();
+            await conn.rollback();
             return res.status(404).json({ success: false, message: 'User account not found' });
         }
 
-        const newRole = role || existingUser.role;
-        const newStatus = status ? status.toLowerCase() : (existingUser.status || 'active');
-        const newEmail = email ? email.trim() : existingUser.email;
-        const newFullName = full_name ? full_name.trim() : existingUser.full_name;
-        const newPhone = phone !== undefined ? phone : existingUser.phone;
-        const newGender = gender || existingUser.gender;
+        // Target-role guard: Non-Super Admins cannot modify Super Admin accounts
+        if (req.user.role !== ROLES.SUPER_ADMIN && existingUser.role === ROLES.SUPER_ADMIN) {
+            await conn.rollback();
+            return res.status(403).json({ success: false, message: 'Only Super Admins can modify Super Admin accounts' });
+        }
 
+        const newRole = role || existingUser.role;
         if (req.user.role === ROLES.ADMIN && newRole === ROLES.SUPER_ADMIN) {
             await conn.rollback();
             return res.status(403).json({ success: false, message: 'Admins cannot assign elevated super_admin role' });
         }
 
-        if (password && password.trim()) {
-            const hashedPassword = await bcrypt.hash(password.trim(), 8);
+        // Coerce & validate status
+        const ALLOWED_STATUSES = ['active', 'inactive', 'suspended', 'on_leave', 'graduated', 'transferred', 'left'];
+        const rawStatus = status !== undefined && status !== null ? String(status).trim().toLowerCase() : '';
+        if (rawStatus && !ALLOWED_STATUSES.includes(rawStatus)) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: `Invalid status value. Must be one of: ${ALLOWED_STATUSES.join(', ')}` });
+        }
+        const newStatus = rawStatus || (existingUser.status || 'active').toLowerCase();
+
+        // Validate email format if provided
+        const newEmail = email !== undefined && email !== null ? String(email).trim() : existingUser.email;
+        if (email !== undefined && (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail))) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Invalid primary email address format' });
+        }
+
+        // Validate phone format if provided
+        let newPhone = existingUser.phone;
+        if (phone !== undefined) {
+            const trimmedP = phone !== null ? String(phone).trim() : '';
+            if (trimmedP && !/^\d{10}$/.test(trimmedP)) {
+                await conn.rollback();
+                return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+            }
+            newPhone = trimmedP || null;
+        }
+
+        const newFullName = full_name !== undefined && full_name !== null ? String(full_name).trim() : existingUser.full_name;
+        const newGender = gender || existingUser.gender;
+
+        if (password && String(password).trim()) {
+            const hashedPassword = await bcrypt.hash(String(password).trim(), 8);
             await conn.query(
                 'UPDATE users SET password = ?, role = ?, class = ?, section = ?, email = ?, full_name = ?, phone = ?, gender = ?, status = ? WHERE id = ?', 
                 [hashedPassword, newRole, class_name || null, section || null, newEmail, newFullName, newPhone, newGender, newStatus, req.params.id]
@@ -318,10 +348,10 @@ router.put('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         }
 
         await conn.commit();
-        res.status(200).json({ success: true, message: `Account status updated to ${newStatus}`, status: newStatus });
+        res.status(200).json({ success: true, message: 'User account updated successfully', status: newStatus });
     } catch (error) {
         if (conn) await conn.rollback();
-        console.error('Error updating user status:', error);
+        console.error('Error updating user profile:', error);
         res.status(500).json({ success: false, message: error.message });
     } finally {
         if (conn) conn.release();

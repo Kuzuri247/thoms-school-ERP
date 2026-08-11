@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useGetUsers, useCreateUser, useDeleteUser } from "./useAdmin";
+import { useGetUsers, useCreateUser, useUpdateUser, useDeleteUser } from "./useAdmin";
 import { getRoleBadgeStyle as getBadgeStyle } from "../../utils/roleUtils";
 import {
   Users,
@@ -31,6 +31,8 @@ import useAuthStore from "../../store/authStore";
 
 const AdminUserManagementView = ({ initialTab = "all" }) => {
   const { user: currentUser } = useAuthStore();
+  const updateUserMutation = useUpdateUser();
+  const [pendingToggleIds, setPendingToggleIds] = useState(new Set());
   const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
@@ -225,18 +227,26 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   };
 
   const handleToggleStatus = async (user) => {
+    if (pendingToggleIds.has(user.id)) return;
+
     const currentStatus = (user.status || "active").toLowerCase();
     const nextStatus = currentStatus === "active" ? "inactive" : "active";
 
+    setPendingToggleIds((prev) => new Set(prev).add(user.id));
     try {
-      await api.put(`/admin/users/${user.id}`, { status: nextStatus });
+      await updateUserMutation.mutateAsync({ id: user.id, status: nextStatus });
       setSuccessMsg(`Status for "${user.full_name || user.email}" updated to ${nextStatus.toUpperCase()}.`);
-      refetchUsers?.();
       setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
       console.error("Failed to toggle user status:", err);
       setErrorMsg(err.response?.data?.message || "Failed to update user status.");
       setTimeout(() => setErrorMsg(""), 3500);
+    } finally {
+      setPendingToggleIds((prev) => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
     }
   };
 
@@ -548,11 +558,12 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
 
                         return (
                           <button
+                            disabled={pendingToggleIds.has(u.id)}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleToggleStatus(u);
                             }}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition hover:scale-105 active:scale-95 cursor-pointer ${badgeBgClass}`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition hover:scale-105 active:scale-95 cursor-pointer ${badgeBgClass} ${pendingToggleIds.has(u.id) ? "opacity-50 cursor-not-allowed" : ""}`}
                             title={`Current status: ${statusVal.toUpperCase()}. Click to switch to ${isStatusActive ? "INACTIVE" : "ACTIVE"}`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
