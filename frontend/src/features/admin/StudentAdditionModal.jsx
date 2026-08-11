@@ -35,9 +35,16 @@ const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const getClassId = (c) => (c ? (c.id !== undefined ? String(c.id) : String(c.class_id || "")) : "");
+
   React.useEffect(() => {
-    if (classesList.length > 0 && !targetClassId) {
-      setTargetClassId(classesList[0]?.id || "");
+    if (classesList.length > 0) {
+      const firstId = getClassId(classesList[0]);
+      if (!targetClassId || !classesList.some((c) => getClassId(c) === String(targetClassId))) {
+        setTargetClassId(firstId);
+      }
+    } else if (!targetClassId) {
+      setTargetClassId("1");
     }
   }, [classesList, targetClassId]);
 
@@ -57,6 +64,17 @@ const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) 
     if (!fullName.trim()) return setError("Student full name is required");
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setError("Valid email address is required");
     if (!phone || !/^\d{10}$/.test(phone)) return setError("10-digit phone number is required");
+    if (!targetClassId) return setError("Please select a valid class for enrollment");
+
+    const parsedTuition = tuitionFee === "" || tuitionFee === null ? 3500 : Number(tuitionFee);
+    const parsedBusFee = optsBusService ? (busQuarterlyFee === "" || busQuarterlyFee === null ? 3825 : Number(busQuarterlyFee)) : 0;
+
+    if (!Number.isFinite(parsedTuition) || parsedTuition < 0) {
+      return setError("Tuition fee must be a valid non-negative number.");
+    }
+    if (optsBusService && (!Number.isFinite(parsedBusFee) || parsedBusFee < 0)) {
+      return setError("Bus fee must be a valid non-negative number.");
+    }
 
     try {
       setLoading(true);
@@ -70,10 +88,10 @@ const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) 
         gender,
         dob,
         class_id: targetClassId,
-        tuition_fee: parseFloat(tuitionFee) || 3500,
+        tuition_fee: parsedTuition,
         opts_bus_service: optsBusService,
         bus_distance_slab: optsBusService ? busDistanceSlab : null,
-        bus_quarterly_fee: optsBusService ? parseFloat(busQuarterlyFee) || 3825 : 0,
+        bus_quarterly_fee: parsedBusFee,
       };
 
       const res = await api.post("/admin/users", payload);
@@ -247,6 +265,7 @@ const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) 
                 </label>
                 <input
                   type="number"
+                  min="0"
                   value={tuitionFee}
                   onChange={(e) => setTuitionFee(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none"
@@ -305,6 +324,7 @@ const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) 
                   </label>
                   <input
                     type="number"
+                    min="0"
                     value={busQuarterlyFee}
                     onChange={(e) => setBusQuarterlyFee(e.target.value)}
                     className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 outline-none font-semibold text-blue-600 dark:text-blue-400"

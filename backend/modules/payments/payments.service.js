@@ -36,12 +36,18 @@ const createOrder = async (params, createdByUserId) => {
     monthCode = mFee.month_code;
 
     const paidAmt = parseFloat(mFee.amount_paid || 0);
+    const tuitionFeeVal = parseFloat(mFee.tuition_fee || 0);
+    const busFeeVal = parseFloat(mFee.bus_fee || 0);
+
+    const tuitionPaidAlloc = Math.min(paidAmt, tuitionFeeVal);
+    const busPaidAlloc = Math.max(0, paidAmt - tuitionFeeVal);
+
     if (noteFeeType === "BUS_FEE") {
-      dueAmount = Math.max(0, parseFloat(mFee.bus_fee) - paidAmt);
+      dueAmount = Math.max(0, busFeeVal - busPaidAlloc);
     } else if (noteFeeType === "TUITION_FEE") {
-      dueAmount = Math.max(0, parseFloat(mFee.tuition_fee) - paidAmt);
+      dueAmount = Math.max(0, tuitionFeeVal - tuitionPaidAlloc);
     } else {
-      dueAmount = Math.max(0, parseFloat(mFee.total_due) - paidAmt);
+      dueAmount = Math.max(0, parseFloat(mFee.total_due || 0) - paidAmt);
     }
 
     if (dueAmount <= 0) {
@@ -542,14 +548,15 @@ const collectCashMonthlyFee = async (
  */
 const overrideStudentRestriction = async (studentId, isAccessRestricted, idType = 'id') => {
   const column = (idType === 'user_id' || idType === 'userId') ? 'user_id' : 'id';
+  const val = (isAccessRestricted === null || isAccessRestricted === undefined) ? null : (Boolean(isAccessRestricted) ? 1 : 0);
   const [res] = await pool.query(
-    `UPDATE students SET is_access_restricted = ? WHERE ${column} = ?`,
-    [Boolean(isAccessRestricted), studentId]
+    `UPDATE students SET is_access_restricted_override = ?, is_access_restricted = COALESCE(?, is_access_restricted) WHERE ${column} = ?`,
+    [val, val, studentId]
   );
   if (res.affectedRows !== 1) {
     throw Object.assign(new Error(`Failed to override restriction: expected 1 row to change, but ${res.affectedRows} rows were updated.`), { status: 400 });
   }
-  return { success: true, is_access_restricted: Boolean(isAccessRestricted) };
+  return { success: true, is_access_restricted: val !== null ? Boolean(val) : false };
 };
 
 const getPendingDues = async (classId = null, feeCategory = null, limit = 100, offset = 0) => {
@@ -572,19 +579,24 @@ const getPendingDues = async (classId = null, feeCategory = null, limit = 100, o
 
   if (feeCategory && feeCategory !== 'All') {
     if (feeCategory === 'Tuition Fee') {
-      baseQuery += ` AND smf.tuition_fee > 0`;
+      baseQuery += ` AND smf.tuition_fee > LEAST(smf.amount_paid, smf.tuition_fee)`;
     } else if (feeCategory === 'Bus Fee') {
-      baseQuery += ` AND smf.bus_fee > 0`;
+      baseQuery += ` AND smf.bus_fee > GREATEST(0, smf.amount_paid - smf.tuition_fee)`;
     }
   }
 
   const countQuery = `SELECT COUNT(*) AS total_count ${baseQuery}`;
   const [[{ total_count }]] = await pool.query(countQuery, params);
 
+  const selectedCategoryParam = feeCategory || 'All';
   const dataQuery = `
     SELECT smf.*, 
            smf.total_due AS total_amount,
-           (smf.total_due - smf.amount_paid) AS pending_amount,
+           CASE
+             WHEN ? = 'Tuition Fee' THEN GREATEST(0, smf.tuition_fee - LEAST(smf.amount_paid, smf.tuition_fee))
+             WHEN ? = 'Bus Fee' THEN GREATEST(0, smf.bus_fee - GREATEST(0, smf.amount_paid - smf.tuition_fee))
+             ELSE (smf.total_due - smf.amount_paid)
+           END AS pending_amount,
            CASE
              WHEN smf.bus_fee > 0 AND smf.tuition_fee > 0 THEN 'Tuition + Bus Fee'
              WHEN smf.bus_fee > 0 THEN 'Bus Transport Fee'
@@ -598,7 +610,7 @@ const getPendingDues = async (classId = null, feeCategory = null, limit = 100, o
     LIMIT ? OFFSET ?
   `;
 
-  const [rows] = await pool.query(dataQuery, [...params, parsedLimit, parsedOffset]);
+  const [rows] = await pool.query(dataQuery, [selectedCategoryParam, selectedCategoryParam, ...params, parsedLimit, parsedOffset]);
   return { data: rows, totalCount: total_count, rows };
 };
 

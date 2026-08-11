@@ -134,7 +134,7 @@ router.post("/send", verifyToken, authorize(...canManage), async (req, res, next
       ? `Custom Phone List (${custom_recipients})`
       : recipient_group;
 
-    const status = is_scheduled ? "Scheduled" : "Recorded";
+    const status = is_scheduled ? "Scheduled" : "Sent";
     const count = typeof recipient_count === "number" && !isNaN(recipient_count) ? recipient_count : null;
 
     const id = await svc.createLog({

@@ -7,6 +7,12 @@ const pool = require('../../config/db');
  * Convert number to words (Indian Currency Format)
  */
 function numberToWordsINR(num) {
+  const val = Number(num);
+  if (!Number.isFinite(val)) return 'ZERO RUPEES ONLY';
+
+  const isNegative = val < 0;
+  const absVal = Math.abs(val);
+
   const a = [
     '', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN',
     'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'
@@ -22,12 +28,13 @@ function numberToWordsINR(num) {
     return inWords(Math.floor(n / 10000000)) + ' CRORE' + (n % 10000000 !== 0 ? ' ' + inWords(n % 10000000) : '');
   }
 
-  const rounded = Math.round(Number(num || 0) * 100) / 100;
-  const rupees = Math.floor(Math.abs(rounded));
-  const paise = Math.round((Math.abs(rounded) - rupees) * 100);
+  const rounded = Math.round(absVal * 100) / 100;
+  const rupees = Math.floor(rounded);
+  const paise = Math.round((rounded - rupees) * 100);
 
   let rupeeStr = rupees === 0 ? 'ZERO' : inWords(rupees);
-  let result = `${rupeeStr} RUPEES`;
+  let rupeeLabel = rupees === 1 ? 'RUPEE' : 'RUPEES';
+  let result = (isNegative ? 'MINUS ' : '') + `${rupeeStr} ${rupeeLabel}`;
   if (paise > 0) {
     result += ` AND ${inWords(paise)} PAISE`;
   }

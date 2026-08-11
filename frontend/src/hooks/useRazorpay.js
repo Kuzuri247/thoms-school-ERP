@@ -22,7 +22,7 @@ export const useRazorpay = () => {
     });
   };
 
-  const processPayment = async ({ feeRecordId, studentName, email, phone, onSuccess, onFailure }) => {
+  const processPayment = async ({ feeRecordId, monthId, monthCode, studentId, amount: paramAmount, studentName, email, phone, onSuccess, onFailure }) => {
     try {
       setLoading(true);
       setError('');
@@ -33,9 +33,11 @@ export const useRazorpay = () => {
       }
 
       // 1. Create order via Backend API
-      const { data: orderRes } = await api.post('/payments/create-order', {
-        fee_record_id: feeRecordId,
-      });
+      const orderPayload = feeRecordId
+        ? { fee_record_id: feeRecordId }
+        : { monthly_fee_id: monthId, month_code: monthCode, student_id: studentId, amount: paramAmount };
+
+      const { data: orderRes } = await api.post('/payments/create-order', orderPayload);
 
       if (!orderRes?.success || !orderRes?.data) {
         throw new Error(orderRes?.message || 'Failed to initiate payment order.');

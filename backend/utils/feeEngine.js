@@ -119,7 +119,17 @@ async function recalculateStudentFeeLockout(dbClient, studentId) {
   );
 
   const pendingMonthsCount = result?.pending_count || 0;
-  const isAccessRestricted = pendingMonthsCount >= 2;
+  const calculatedLockout = pendingMonthsCount >= 2;
+
+  // Check if student has manual override
+  const [[stRow]] = await client.query(
+    `SELECT is_access_restricted_override FROM students WHERE id = ?`,
+    [studentId]
+  );
+  const manualOverride = stRow?.is_access_restricted_override;
+  const effectiveLockout = manualOverride !== null && manualOverride !== undefined
+    ? Boolean(manualOverride)
+    : calculatedLockout;
 
   // 3. Update student table record
   await client.query(
@@ -127,11 +137,11 @@ async function recalculateStudentFeeLockout(dbClient, studentId) {
      SET is_access_restricted = ?,
          pending_months_count = ?
      WHERE id = ?`,
-    [isAccessRestricted, pendingMonthsCount, studentId]
+    [effectiveLockout, pendingMonthsCount, studentId]
   );
 
   return {
-    is_access_restricted: isAccessRestricted,
+    is_access_restricted: effectiveLockout,
     pending_months_count: pendingMonthsCount,
   };
 }

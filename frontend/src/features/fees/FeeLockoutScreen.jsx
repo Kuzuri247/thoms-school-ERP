@@ -53,6 +53,10 @@ const FeeLockoutScreen = ({ onUnlocked }) => {
     const amountDue = month.total_due - month.amount_paid;
 
     processPayment({
+      monthId: month.id,
+      monthCode: month.month_code,
+      studentId: student?.id,
+      amount: amountDue,
       feeRecordId: null,
       studentName: student?.full_name || `${student?.first_name || ''} ${student?.last_name || ''}`,
       email: user?.email || '',
@@ -69,11 +73,12 @@ const FeeLockoutScreen = ({ onUnlocked }) => {
     });
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const schoolTodayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
   const overdueMonths = monthlyFees.filter((m) => {
-    if (m.status === "OVERDUE") return true;
+    if (m.is_overdue || m.status === "OVERDUE") return true;
     if (m.status === "PENDING" || m.status === "PARTIAL") {
-      return m.due_date && m.due_date <= todayStr;
+      const formattedDueDate = m.due_date ? String(m.due_date).split('T')[0] : '';
+      return formattedDueDate && formattedDueDate <= schoolTodayStr;
     }
     return false;
   });

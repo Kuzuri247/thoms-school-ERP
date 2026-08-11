@@ -99,8 +99,8 @@ router.post('/override-restriction', verifyToken, authorize(ROLES.SUPER_ADMIN, R
     const result = await svc.overrideStudentRestriction(studentId, isAccessRestricted);
     const pool = require('../../config/db');
     await pool.query(
-      'INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)',
-      [req.user.id, 'OVERRIDE_FEE_RESTRICTION', JSON.stringify({ studentId, isAccessRestricted })]
+      'INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_data) VALUES (?, ?, ?, ?, ?)',
+      [req.user.id, 'OVERRIDE_FEE_RESTRICTION', 'student', studentId, JSON.stringify({ isAccessRestricted })]
     ).catch(console.error);
 
     res.json({ success: true, message: `Access restriction updated`, data: result });

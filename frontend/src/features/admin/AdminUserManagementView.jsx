@@ -476,13 +476,13 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       <div className="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-xs">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
-            <tr className="*flex *justify-center *items-center">
-              <th className="px-4 py-3.5">Staff Member & Code</th>
-              <th className="px-4 py-3.5">Primary Contact</th>
-              <th className="px-4 py-3.5">Assigned Role</th>
-              <th className="px-4 py-3.5">Responsibility</th>
-              <th className="px-4 py-3.5">Status</th>
-              <th className="px-4 py-3.5 text-right">Actions</th>
+            <tr>
+              <th className="px-4 py-3.5 text-left align-middle">Staff Member & Code</th>
+              <th className="px-4 py-3.5 text-left align-middle">Primary Contact</th>
+              <th className="px-4 py-3.5 text-left align-middle">Assigned Role</th>
+              <th className="px-4 py-3.5 text-left align-middle">Responsibility</th>
+              <th className="px-4 py-3.5 text-left align-middle">Status</th>
+              <th className="px-4 py-3.5 text-right align-middle">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -588,6 +588,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                             </span>
                           )}
                         </div>
+                      ) : u.role === "student" ? (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-block">
+                          Student ({u.class_name ? `${u.class_name} - ${u.section_name || ''}` : "Enrolled"})
+                        </span>
                       ) : (
                         <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 inline-block">
                           Non-Teaching Staff
@@ -660,7 +664,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                             <ChevronRight className="w-4 h-4" />
                           </button>
                         )}
-                        {String(u.id) !== String(currentUser?.id) && (
+                        {String(u.id) !== String(currentUser?.id) && u.role !== "student" && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

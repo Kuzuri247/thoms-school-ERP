@@ -22,7 +22,7 @@ const FinancialReportsView = () => {
 
   const currentMonthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
-  const { data: reportResp } = useGetFinancialReport(selectedDateRange);
+  const { data: reportResp, isLoading, isError, error } = useGetFinancialReport(selectedDateRange);
   const reportData = reportResp?.data || {};
 
   // Real Financial Aggregates from Database
@@ -108,7 +108,18 @@ const FinancialReportsView = () => {
             <option value="Current Month">Current Month ({currentMonthLabel})</option>
           </select>
         </div>
+      </div>
 
+      {isLoading ? (
+        <div className="p-12 bg-white rounded-3xl border border-slate-200 text-center text-slate-400 font-semibold text-xs animate-pulse">
+          Loading financial audit report...
+        </div>
+      ) : isError ? (
+        <div className="p-4 bg-rose-50 text-rose-700 border border-rose-200 rounded-2xl font-bold text-xs">
+          Failed to load financial report: {error?.response?.data?.message || error?.message || 'Server error'}
+        </div>
+      ) : (
+        <>
         <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 w-full sm:w-auto overflow-x-auto">
           {[
             { id: 'all', label: 'All Audits' },
@@ -274,6 +285,7 @@ const FinancialReportsView = () => {
             </table>
           </div>
         </div>
+      </>
       )}
     </div>
   );
