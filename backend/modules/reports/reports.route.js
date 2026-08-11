@@ -33,31 +33,41 @@ router.get('/financial', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, 
           return res.status(400).json({ success: false, message: 'Unsupported dateRange parameter' });
         }
 
-        let datePredicate = '';
+        let revenuePredicate = '';
+        let pendingDuesPredicate = "WHERE status IN ('PENDING', 'OVERDUE', 'PARTIAL')";
+
         if (dateRange === 'Current Month') {
-          datePredicate = 'WHERE (paid_at IS NOT NULL AND MONTH(paid_at) = MONTH(CURRENT_DATE()) AND YEAR(paid_at) = YEAR(CURRENT_DATE()))';
+          revenuePredicate = 'WHERE (paid_at IS NOT NULL AND MONTH(paid_at) = MONTH(CURRENT_DATE()) AND YEAR(paid_at) = YEAR(CURRENT_DATE()))';
+          pendingDuesPredicate = "WHERE status IN ('PENDING', 'OVERDUE', 'PARTIAL') AND ((due_date IS NOT NULL AND MONTH(due_date) = MONTH(CURRENT_DATE()) AND YEAR(due_date) = YEAR(CURRENT_DATE())) OR due_date <= CURRENT_DATE())";
         } else if (dateRange === 'This Academic Year') {
-          datePredicate = "WHERE academic_year = '2026-2027'";
+          revenuePredicate = "WHERE academic_year = '2026-2027'";
+          pendingDuesPredicate = "WHERE status IN ('PENDING', 'OVERDUE', 'PARTIAL') AND academic_year = '2026-2027'";
         }
 
         const [[revRow]] = await pool.query(
           `SELECT 
              COALESCE(SUM(amount_paid), 0) AS total_revenue,
-             COALESCE(SUM(CASE WHEN status = 'PAID' THEN tuition_fee ELSE 0 END), 0) AS tuition_inflow,
-             COALESCE(SUM(CASE WHEN status = 'PAID' THEN bus_fee ELSE 0 END), 0) AS bus_inflow
+             COALESCE(SUM(
+               CASE 
+                 WHEN status = 'PAID' THEN tuition_fee 
+                 ELSE LEAST(amount_paid, tuition_fee) 
+               END
+             ), 0) AS tuition_inflow,
+             COALESCE(SUM(
+               CASE 
+                 WHEN status = 'PAID' THEN bus_fee 
+                 ELSE GREATEST(0, amount_paid - tuition_fee) 
+               END
+             ), 0) AS bus_inflow
            FROM student_monthly_fees
-           ${datePredicate}`
+           ${revenuePredicate}`
         );
-
-        const dueWhere = datePredicate
-          ? `${datePredicate} AND status IN ('PENDING', 'OVERDUE', 'PARTIAL')`
-          : "WHERE status IN ('PENDING', 'OVERDUE', 'PARTIAL')";
 
         const [[dueRow]] = await pool.query(
           `SELECT 
              COALESCE(SUM(total_due - amount_paid), 0) AS pending_dues
            FROM student_monthly_fees
-           ${dueWhere}`
+           ${pendingDuesPredicate}`
         );
 
         const [[defRow]] = await pool.query(
@@ -78,17 +88,42 @@ router.get('/financial', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, 
         );
 
         let modeRows = [];
+        let paymentModeError = null;
         try {
+          const modeDateWhere = dateRange === 'Current Month'
+            ? `WHERE (smf.paid_at IS NOT NULL AND MONTH(smf.paid_at) = MONTH(CURRENT_DATE()) AND YEAR(smf.paid_at) = YEAR(CURRENT_DATE()))`
+            : dateRange === 'This Academic Year'
+            ? `WHERE smf.academic_year = '2026-2027'`
+            : ``;
+
           const [mRows] = await pool.query(
-            `SELECT COALESCE(payment_mode, 'Cash') AS mode,
-                    COALESCE(SUM(amount_paid), 0) AS amount,
-                    COUNT(*) AS transactions
-             FROM receipts
-             GROUP BY payment_mode`
+            `SELECT 
+               COALESCE(rp.method, 'Cash') AS mode,
+               COALESCE(SUM(
+                 CASE 
+                   WHEN rp.amount_paise IS NOT NULL THEN (rp.amount_paise / 100)
+                   WHEN smf.amount_paid IS NOT NULL THEN smf.amount_paid
+                   ELSE 0 
+                 END
+               ), 0) AS amount,
+               COUNT(r.id) AS transactions
+             FROM receipts r
+             LEFT JOIN student_monthly_fees smf ON r.monthly_fee_id = smf.id
+             LEFT JOIN razorpay_payments rp ON r.razorpay_payment_id = rp.razorpay_payment_id
+             ${modeDateWhere}
+             GROUP BY COALESCE(rp.method, 'Cash')`
           );
           modeRows = mRows;
         } catch (e) {
-          modeRows = [];
+          console.error('Error fetching payment mode aggregates:', e);
+          paymentModeError = e;
+        }
+
+        if (paymentModeError) {
+          return res.status(500).json({
+            success: false,
+            message: `Failed to fetch payment mode report section: ${paymentModeError.message}`,
+          });
         }
 
         const totalModeAmt = modeRows.reduce((acc, m) => acc + parseFloat(m.amount || 0), 0) || 1;

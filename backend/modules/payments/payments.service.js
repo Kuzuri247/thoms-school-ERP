@@ -46,8 +46,10 @@ const createOrder = async (params, createdByUserId) => {
       dueAmount = Math.max(0, busFeeVal - busPaidAlloc);
     } else if (noteFeeType === "TUITION_FEE") {
       dueAmount = Math.max(0, tuitionFeeVal - tuitionPaidAlloc);
-    } else {
+    } else if (noteFeeType === "TOTAL_FEE" || !noteFeeType) {
       dueAmount = Math.max(0, parseFloat(mFee.total_due || 0) - paidAmt);
+    } else {
+      throw Object.assign(new Error("Invalid fee type specified"), { status: 400 });
     }
 
     if (dueAmount <= 0) {
@@ -549,14 +551,26 @@ const collectCashMonthlyFee = async (
 const overrideStudentRestriction = async (studentId, isAccessRestricted, idType = 'id') => {
   const column = (idType === 'user_id' || idType === 'userId') ? 'user_id' : 'id';
   const val = (isAccessRestricted === null || isAccessRestricted === undefined) ? null : (Boolean(isAccessRestricted) ? 1 : 0);
+
+  if (val === null) {
+    const [[st]] = await pool.query(`SELECT id FROM students WHERE ${column} = ?`, [studentId]);
+    if (!st) {
+      throw Object.assign(new Error('Failed to override restriction: student profile not found.'), { status: 400 });
+    }
+    const { recalculateStudentFeeLockout } = require('../../utils/feeEngine');
+    await pool.query(`UPDATE students SET is_access_restricted_override = NULL WHERE id = ?`, [st.id]);
+    const lockout = await recalculateStudentFeeLockout(pool, st.id);
+    return { success: true, is_access_restricted: lockout.is_access_restricted };
+  }
+
   const [res] = await pool.query(
-    `UPDATE students SET is_access_restricted_override = ?, is_access_restricted = COALESCE(?, is_access_restricted) WHERE ${column} = ?`,
+    `UPDATE students SET is_access_restricted_override = ?, is_access_restricted = ? WHERE ${column} = ?`,
     [val, val, studentId]
   );
   if (res.affectedRows !== 1) {
     throw Object.assign(new Error(`Failed to override restriction: expected 1 row to change, but ${res.affectedRows} rows were updated.`), { status: 400 });
   }
-  return { success: true, is_access_restricted: val !== null ? Boolean(val) : false };
+  return { success: true, is_access_restricted: Boolean(val) };
 };
 
 const getPendingDues = async (classId = null, feeCategory = null, limit = 100, offset = 0) => {

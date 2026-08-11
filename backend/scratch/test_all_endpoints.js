@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'thomson_erp_access_secret_key_2026';
-const BASE_URL = 'http://localhost:5000';
+if (!ACCESS_SECRET) {
+  console.error('Error: Missing required JWT secret in environment.');
+  process.exit(1);
+}
+const BASE_URL = process.env.TEST_API_URL || 'http://localhost:5000';
 
 async function req(path, options = {}) {
   const url = `${BASE_URL}${path}`;
@@ -466,6 +470,11 @@ async function runAllTests() {
   console.log(`❌ Failed: ${failed}`);
   console.log('Success Rate:', Math.round((passed / results.length) * 100) + '%');
   console.log('================================================================\n');
+
+  if (failed > 0) {
+    console.error(`❌ TEST SUITE FAILED WITH ${failed} FAILURE(S).`);
+    process.exit(1);
+  }
 }
 
 runAllTests().catch(console.error);

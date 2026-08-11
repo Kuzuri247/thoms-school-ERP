@@ -14,8 +14,11 @@ console.log('1.50 (with paise):', backendConverter(1.50)); // Expected: ONE RUPE
 if (
   backendConverter(1) === 'ONE RUPEE ONLY' &&
   backendConverter(0) === 'ZERO RUPEES ONLY' &&
+  backendConverter(100) === 'ONE HUNDRED RUPEES ONLY' &&
   backendConverter(-50) === 'MINUS FIFTY RUPEES ONLY' &&
-  backendConverter(NaN) === 'ZERO RUPEES ONLY'
+  backendConverter(NaN) === 'ZERO RUPEES ONLY' &&
+  backendConverter(Infinity) === 'ZERO RUPEES ONLY' &&
+  backendConverter(1.50) === 'ONE RUPEE AND FIFTY PAISE ONLY'
 ) {
   console.log('\n✅ ALL NUMBER-TO-WORDS UNIT TESTS PASSED!');
 } else {
