@@ -77,6 +77,8 @@ export const useRazorpay = () => {
             console.error('Payment Verification Error:', vErr);
             setError(vErr.response?.data?.message || vErr.message);
             if (onFailure) onFailure(vErr);
+          } finally {
+            setLoading(false);
           }
         },
         modal: {
@@ -93,7 +95,6 @@ export const useRazorpay = () => {
       const msg = err.response?.data?.message || err.message || 'Payment initiation failed.';
       setError(msg);
       if (onFailure) onFailure(err);
-    } finally {
       setLoading(false);
     }
   };

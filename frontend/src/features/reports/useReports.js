@@ -11,11 +11,11 @@ export const useGetGlobalOverview = () => {
   });
 };
 
-export const useGetFinancialReport = () => {
+export const useGetFinancialReport = (dateRange) => {
   return useQuery({
-    queryKey: ['financialReport'],
+    queryKey: ['financialReport', dateRange],
     queryFn: async () => {
-      const { data } = await api.get('/reports/financial');
+      const { data } = await api.get('/reports/financial', { params: { dateRange } });
       return data;
     },
   });

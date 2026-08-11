@@ -44,4 +44,6 @@ ADD COLUMN month_code VARCHAR(10) NULL,
 ADD COLUMN razorpay_order_id VARCHAR(100) NULL,
 ADD COLUMN razorpay_signature VARCHAR(255) NULL,
 ADD COLUMN bank_ref_no VARCHAR(100) NULL,
-ADD COLUMN transaction_type VARCHAR(100) DEFAULT 'ONLINE TUTION FEE';
+ADD COLUMN transaction_type VARCHAR(100) DEFAULT 'ONLINE TUITION FEE',
+ADD INDEX idx_receipts_monthly_fee (monthly_fee_id),
+ADD CONSTRAINT fk_receipts_monthly_fee FOREIGN KEY (monthly_fee_id) REFERENCES student_monthly_fees(id) ON DELETE RESTRICT;

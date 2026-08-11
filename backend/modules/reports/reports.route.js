@@ -53,7 +53,7 @@ router.get('/financial', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, 
            FROM classes c
            JOIN sections sec ON sec.class_id = c.id
            JOIN students s ON s.section_id = sec.id
-           LEFT JOIN student_monthly_fees smf ON smf.student_id = s.id AND smf.status IN ('PENDING', 'OVERDUE')
+           LEFT JOIN student_monthly_fees smf ON smf.student_id = s.id AND smf.status IN ('PENDING', 'OVERDUE', 'PARTIAL')
            GROUP BY c.id, c.name
            ORDER BY c.numeric_value`
         );

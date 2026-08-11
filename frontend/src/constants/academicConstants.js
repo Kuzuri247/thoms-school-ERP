@@ -76,6 +76,8 @@ export const BUS_DISTANCE_SLABS = [
   { slab: "18-20 KM", quarterlyFee: 5175 },
 ];
 
+export const TRANSPORT_FEE_SLABS = BUS_DISTANCE_SLABS;
+
 export function getBusFeeForSlab(slab) {
   const found = BUS_DISTANCE_SLABS.find((s) => s.slab === slab);
   return found ? found.quarterlyFee : 3825;

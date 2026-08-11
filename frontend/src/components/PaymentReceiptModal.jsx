@@ -67,13 +67,8 @@ const PaymentReceiptModal = ({ receiptData, onClose }) => {
         <div className="border border-slate-900 p-4 sm:p-6 bg-white text-black font-sans text-xs space-y-4 printable-area">
           {/* Header Seal & School Title */}
           <div className="text-center space-y-1">
-            <div className="w-16 h-16 rounded-full border-2 border-indigo-900 mx-auto flex items-center justify-center bg-indigo-50 p-1">
-              <svg viewBox="0 0 100 100" className="w-full h-full text-indigo-950" fill="currentColor">
-                <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="4" />
-                <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="3,3" />
-                <path d="M50 20 L60 40 L82 40 L64 54 L71 75 L50 62 L29 75 L36 54 L18 40 L40 40 Z" fill="#1e1b4b" />
-                <text x="50" y="90" fontSize="8" textAnchor="middle" fontWeight="bold">VARANASI</text>
-              </svg>
+            <div className="w-16 h-16 rounded-full border border-slate-200 mx-auto flex items-center justify-center bg-white p-1">
+              <img src="/st_thomas_logo.png" alt="St. Thomas International School Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-base sm:text-lg font-black tracking-wide text-black uppercase font-serif">
               ST. THOMAS INTERNATIONAL SCHOOL
@@ -136,11 +131,6 @@ const PaymentReceiptModal = ({ receiptData, onClose }) => {
                 <tr className="border-b border-black">
                   <td className="py-2 px-3 font-bold uppercase border-r border-black">DATE OF TRANSACTION</td>
                   <td className="py-2 px-3 font-mono font-bold">{receiptData.date || '29-07-2026'} {receiptData.time || '16:38:09'}</td>
-                </tr>
-
-                <tr className="border-b border-black bg-slate-50/50">
-                  <td className="py-1.5 px-3 font-bold uppercase border-r border-black">FEE</td>
-                  <td className="py-1.5 px-3 font-bold"></td>
                 </tr>
 
                 <tr className="border-b border-black">

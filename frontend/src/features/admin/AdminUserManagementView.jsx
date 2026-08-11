@@ -313,8 +313,6 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       : [];
 
   const filteredUsers = displayUsers.filter((u) => {
-    if (u.role === "student") return false;
-
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       (u.full_name || "").toLowerCase().includes(term) ||
@@ -329,6 +327,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     if (activeTab === "teachers") return u.role === "teacher";
     if (activeTab === "cashiers") return u.role === "cashier";
     if (activeTab === "admins") return ["admin", "super_admin"].includes(u.role);
+    if (activeTab === "students") return u.role === "student";
     return true;
   });
 
@@ -337,10 +336,11 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   };
 
   const tabs = [
-    { id: "all", label: "All Staff" },
+    { id: "all", label: "All Directory" },
     { id: "teachers", label: "Teachers" },
     { id: "cashiers", label: "Fee Cashiers" },
     { id: "admins", label: "School Admins" },
+    { id: "students", label: "Students" },
   ];
 
   const totalStaff = displayUsers.filter((u) => u.role !== "student").length;
@@ -637,16 +637,29 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
 
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-1.5 items-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/profile/${u.id}`);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition cursor-pointer"
-                          title="View Profile"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                        {u.role === "student" ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStudentFeeId(u.student_id || u.id);
+                            }}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-xl flex items-center gap-1 transition cursor-pointer"
+                            title="View Student Fee Profile & Lockout Status"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" /> Fee Profile
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/profile/${u.id}`);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition cursor-pointer"
+                            title="View Profile"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        )}
                         {String(u.id) !== String(currentUser?.id) && (
                           <button
                             onClick={(e) => {

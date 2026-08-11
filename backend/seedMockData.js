@@ -2,7 +2,7 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { generateMonthlyFeesForStudent, recalculateStudentFeeLockout } = require('./utils/feeEngine');
+const { generateMonthlyFeesForStudent, recalculateStudentFeeLockout, getBusFeeForSlab } = require('./utils/feeEngine');
 
 const rawHost = process.env.DB_HOST || 'localhost';
 const cleanHost = rawHost.replace(/^(mysql:\/\/|https?:\/\/)/, '').split('/')[0].split(':')[0];
@@ -353,7 +353,7 @@ async function seed() {
         const secId = sectionIds[st.cls]['Section A'];
         const sId = await createStudent(uId, st.admn, st.fname, st.lname, st.roll, secId);
         if (sId) {
-          studentDbIds.push({ id: sId, userId: uId, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
+          studentDbIds.push({ id: sId, userId: uId, email: st.email, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
         }
       }
     }
@@ -514,8 +514,8 @@ async function seed() {
 
       // Opt-in transport for some students
       const optsBus = st.id % 2 === 0;
-      const busSlab = optsBus ? (st.id % 3 === 0 ? '2–4 KM' : '0–2 KM') : null;
-      const busFeeVal = optsBus ? (busSlab === '2–4 KM' ? 3975 : 3825) : 0;
+      const busSlab = optsBus ? (st.id % 3 === 0 ? '2-4 KM' : '0-2 KM') : null;
+      const busFeeVal = optsBus ? getBusFeeForSlab(busSlab) : 0;
 
       // Update student table transport options
       await connection.query(

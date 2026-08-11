@@ -67,15 +67,21 @@ router.get('/monthly-fees/my-fees', verifyToken, authorize(ROLES.STUDENT), async
 router.get('/monthly-fees/student/:studentId', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CASHIER, ROLES.STUDENT), async (req, res) => {
   try {
     const pool = require('../../config/db');
+    const [[student]] = await pool.query(
+      'SELECT id FROM students WHERE id = ? OR admission_no = ? OR user_id = ? LIMIT 1',
+      [req.params.studentId, req.params.studentId, req.params.studentId]
+    );
+    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
+
     if (req.user.role === ROLES.STUDENT) {
       const [[owns]] = await pool.query(
-        'SELECT id FROM students WHERE (id = ? OR admission_no = ?) AND user_id = ?',
-        [req.params.studentId, req.params.studentId, req.user.id]
+        'SELECT id FROM students WHERE id = ? AND user_id = ?',
+        [student.id, req.user.id]
       );
       if (!owns) return res.status(403).json({ success: false, message: 'Cannot access fee records of other students' });
     }
 
-    const result = await svc.getStudentMonthlyFees(req.user.id, req.params.studentId);
+    const result = await svc.getStudentMonthlyFees(req.user.id, student.id);
     res.json({ success: true, data: result });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -86,16 +92,31 @@ router.get('/monthly-fees/student/:studentId', verifyToken, authorize(ROLES.SUPE
 router.post('/override-restriction', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN), async (req, res) => {
   try {
     const { studentId, isAccessRestricted } = req.body;
+    if (!studentId || typeof isAccessRestricted !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Invalid payload: studentId and boolean isAccessRestricted are required' });
+    }
+
     const result = await svc.overrideStudentRestriction(studentId, isAccessRestricted);
+    const pool = require('../../config/db');
+    await pool.query(
+      'INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)',
+      [req.user.id, 'OVERRIDE_FEE_RESTRICTION', JSON.stringify({ studentId, isAccessRestricted })]
+    ).catch(console.error);
+
     res.json({ success: true, message: `Access restriction updated`, data: result });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 });
 
 // POST /api/payments/pay-monthly-fee - Admin/Cashier collect manual/cash payment for CBSE month
 router.post('/pay-monthly-fee', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CASHIER), async (req, res) => {
   try {
+    const amt = Number(req.body.amount);
+    if (req.body.amount !== undefined && (!Number.isFinite(amt) || amt <= 0)) {
+      return res.status(400).json({ success: false, message: 'Payment amount must be a positive number' });
+    }
+
     const result = await svc.collectCashMonthlyFee(req.body, req.user.id);
     res.status(201).json({ success: true, message: 'Monthly fee payment recorded successfully', data: result });
   } catch (err) {

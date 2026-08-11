@@ -72,10 +72,7 @@ const StudentFeeProfileView = ({ studentId, onBack }) => {
       });
 
       if (res.data?.success) {
-        setLockoutStatus((prev) => ({
-          ...prev,
-          is_access_restricted: targetState,
-        }));
+        fetchStudentFeeProfile();
       }
     } catch (err) {
       console.error("Failed to override restriction:", err);
@@ -92,13 +89,26 @@ const StudentFeeProfileView = ({ studentId, onBack }) => {
     e.preventDefault();
     if (!selectedMonth) return;
 
+    const val = parseFloat(cashAmount);
+    const maxBalance = parseFloat(selectedMonth.total_due || 0) - parseFloat(selectedMonth.amount_paid || 0);
+
+    if (!Number.isFinite(val) || val <= 0) {
+      alert("Please enter a valid positive payment amount.");
+      return;
+    }
+
+    if (val > maxBalance) {
+      alert(`Payment amount cannot exceed the outstanding balance of ₹${maxBalance}.`);
+      return;
+    }
+
     try {
       setSubmittingCash(true);
       const res = await api.post("/payments/pay-monthly-fee", {
         studentId: student?.id || studentId,
         monthCode: selectedMonth.month_code,
         monthId: selectedMonth.id,
-        amount: parseFloat(cashAmount),
+        amount: val,
         paymentMode: cashMode,
       });
 
@@ -247,6 +257,13 @@ const StudentFeeProfileView = ({ studentId, onBack }) => {
       </div>
 
       {/* CBSE 12-Month Table */}
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -335,10 +352,17 @@ const StudentFeeProfileView = ({ studentId, onBack }) => {
                   </tr>
                 );
               })}
+              {monthlyFees.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 text-center text-slate-400 font-semibold">
+                    No monthly fee records found for this student.
+                  </td>
+                </tr>
+              )}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
-      </div>
 
       {/* Cash Collection Modal */}
       {selectedMonth && (
@@ -358,6 +382,9 @@ const StudentFeeProfileView = ({ studentId, onBack }) => {
                 <input
                   type="number"
                   required
+                  min="1"
+                  max={selectedMonth ? selectedMonth.total_due - selectedMonth.amount_paid : undefined}
+                  step="0.01"
                   value={cashAmount}
                   onChange={(e) => setCashAmount(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:ring-2 focus:ring-emerald-500 outline-none"

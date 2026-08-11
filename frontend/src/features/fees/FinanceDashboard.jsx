@@ -45,7 +45,6 @@ const FinanceDashboard = () => {
 
   // Bus Transport Fee Desk State
   const [busSearchQuery, setBusSearchQuery] = useState('');
-  const [selectedRouteFilter, setSelectedRouteFilter] = useState('All');
 
   // Pending Dues Filters State
   const [selectedClassFilter, setSelectedClassFilter] = useState('All');
@@ -68,7 +67,8 @@ const FinanceDashboard = () => {
   const { data: financialData } = useGetFinancialReport();
   const { data: overviewData } = useGetGlobalOverview();
 
-  const pendingDues = pendingDuesData?.data || pendingDuesData || [];
+  const rawDues = pendingDuesData?.data || pendingDuesData;
+  const pendingDues = Array.isArray(rawDues) ? rawDues : Array.isArray(rawDues?.rows) ? rawDues.rows : [];
 
   const collectCashMutation = useCollectCashFee();
 
@@ -448,19 +448,6 @@ const FinanceDashboard = () => {
                   onChange={(e) => setBusSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
                 />
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-500">Route:</span>
-                <select
-                  value={selectedRouteFilter}
-                  onChange={(e) => setSelectedRouteFilter(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none"
-                >
-                  <option value="All">All Bus Routes</option>
-                  <option value="Route #1: Civil Lines - Model Town">Route #1: Civil Lines - Model Town</option>
-                  <option value="Route #2: Urban Estate - Cantt">Route #2: Urban Estate - Cantt</option>
-                </select>
               </div>
             </div>
 

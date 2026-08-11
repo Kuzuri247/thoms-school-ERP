@@ -20,7 +20,9 @@ const FinancialReportsView = () => {
   const [selectedDateRange, setSelectedDateRange] = useState('This Academic Year');
   const [selectedReportType, setSelectedReportType] = useState('all');
 
-  const { data: reportResp } = useGetFinancialReport();
+  const currentMonthLabel = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const { data: reportResp } = useGetFinancialReport(selectedDateRange);
   const reportData = reportResp?.data || {};
 
   // Real Financial Aggregates from Database
@@ -46,14 +48,18 @@ const FinancialReportsView = () => {
     { category: 'Transport & Bus Fleet Fees', amount: financialSummary.transportFeeInflow, percentage: `${busPct}%`, color: 'bg-amber-500' },
   ];
 
-  // Dynamic Payment Mode Breakdown
-  const paymentModeShare = [
-    { mode: 'Razorpay Online Gateway / Digital Intake', amount: financialSummary.totalRevenue, transactions: financialSummary.totalRevenue > 0 ? 'Active' : 0, percentage: '100%' },
-  ];
+  // Dynamic Payment Mode Breakdown (omit table when backend data is absent)
+  const paymentModeShare = Array.isArray(reportData.paymentModeShare)
+    ? reportData.paymentModeShare.map(p => ({
+        mode: p.mode || 'Online Gateway',
+        amount: Number(p.amount || 0),
+        transactions: Number(p.transactions || 0),
+        percentage: p.percentage || '0%',
+      }))
+    : null;
 
   // Dynamic Class-wise Dues Audit
   const classDuesAudit = reportData.classDuesAudit || [];
-  const expenseItems = [];
 
   return (
     <div className="space-y-6">
@@ -67,7 +73,7 @@ const FinancialReportsView = () => {
             Comprehensive Financial Audit & Reports Desk
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Complete financial inflow breakdown, payment gateway audits, pending dues defaulters, and school operational reports.
+            Complete financial inflow breakdown, payment gateway audits, pending dues defaulters, and school operational reports ({selectedDateRange}).
           </p>
         </div>
 
@@ -99,7 +105,7 @@ const FinancialReportsView = () => {
             className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none cursor-pointer"
           >
             <option value="This Academic Year">This Academic Year (2026-27)</option>
-            <option value="Current Month">Current Month (August 2026)</option>
+            <option value="Current Month">Current Month ({currentMonthLabel})</option>
           </select>
         </div>
 
@@ -185,37 +191,39 @@ const FinancialReportsView = () => {
           </div>
 
           {/* Payment Gateway Mode Breakdown */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-emerald-600" /> Payment Intake Mode Audit
-              </h3>
-              <span className="text-[11px] font-bold text-slate-400">Audit Summary</span>
-            </div>
+          {paymentModeShare && paymentModeShare.length > 0 && (
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-emerald-600" /> Payment Intake Mode Audit
+                </h3>
+                <span className="text-[11px] font-bold text-slate-400">Audit Summary</span>
+              </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200">
-                  <tr>
-                    <th className="py-2.5 px-3">Payment Mode</th>
-                    <th className="py-2.5 px-3 text-center">Txn Status</th>
-                    <th className="py-2.5 px-3 text-right">Total Collection</th>
-                    <th className="py-2.5 px-3 text-right">Share %</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
-                  {paymentModeShare.map((p, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{p.mode}</td>
-                      <td className="py-2.5 px-3 text-center text-slate-600">{p.transactions}</td>
-                      <td className="py-2.5 px-3 text-right font-black text-indigo-700">₹ {fmt(p.amount)}</td>
-                      <td className="py-2.5 px-3 text-right font-bold text-slate-500">{p.percentage}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="py-2.5 px-3">Payment Mode</th>
+                      <th className="py-2.5 px-3 text-center">Txn Count</th>
+                      <th className="py-2.5 px-3 text-right">Total Collection</th>
+                      <th className="py-2.5 px-3 text-right">Share %</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
+                    {paymentModeShare.map((p, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/70">
+                        <td className="py-2.5 px-3 font-bold text-slate-900">{p.mode}</td>
+                        <td className="py-2.5 px-3 text-center text-slate-600">{p.transactions}</td>
+                        <td className="py-2.5 px-3 text-right font-black text-indigo-700">₹ {fmt(p.amount)}</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-slate-500">{p.percentage}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 

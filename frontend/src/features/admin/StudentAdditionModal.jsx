@@ -17,8 +17,6 @@ import api from "../../api/axios";
 import { BUS_DISTANCE_SLABS, getBusFeeForSlab } from "../../constants/academicConstants";
 
 const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) => {
-  if (!isOpen) return null;
-
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -36,6 +34,14 @@ const StudentAdditionModal = ({ isOpen, onClose, onSuccess, classesList = [] }) 
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  React.useEffect(() => {
+    if (classesList.length > 0 && !targetClassId) {
+      setTargetClassId(classesList[0]?.id || "");
+    }
+  }, [classesList, targetClassId]);
+
+  if (!isOpen) return null;
 
   const handleSlabChange = (e) => {
     const selectedSlab = e.target.value;

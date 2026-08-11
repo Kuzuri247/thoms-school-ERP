@@ -19,6 +19,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
+import { TRANSPORT_FEE_SLABS } from '../../constants/academicConstants';
 
 // Initial Mock Bus Fleet
 const INITIAL_BUSES = [
@@ -459,25 +460,14 @@ const TransportManagementView = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-semibold text-slate-800 text-center">
-                {[
-                  { sno: 1, dist: '0–2', fee: 3825 },
-                  { sno: 2, dist: '2–4', fee: 3975 },
-                  { sno: 3, dist: '4–6', fee: 4125 },
-                  { sno: 4, dist: '6–8', fee: 4275 },
-                  { sno: 5, dist: '8–10', fee: 4425 },
-                  { sno: 6, dist: '10–12', fee: 4575 },
-                  { sno: 7, dist: '12–14', fee: 4725 },
-                  { sno: 8, dist: '14–16', fee: 4875 },
-                  { sno: 9, dist: '16–18', fee: 5025 },
-                  { sno: 10, dist: '18–20', fee: 5175 },
-                ].map((row) => (
-                  <tr key={row.sno} className="hover:bg-amber-50/50 transition-colors">
-                    <td className="py-3 px-4 font-extrabold text-slate-600">{row.sno}</td>
-                    <td className="py-3 px-6 text-left font-bold text-slate-900">{row.dist}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.fee.toLocaleString()}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.fee.toLocaleString()}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.fee.toLocaleString()}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.fee.toLocaleString()}</td>
+                {TRANSPORT_FEE_SLABS.map((row, idx) => (
+                  <tr key={idx + 1} className="hover:bg-amber-50/50 transition-colors">
+                    <td className="py-3 px-4 font-extrabold text-slate-600">{idx + 1}</td>
+                    <td className="py-3 px-6 text-left font-bold text-slate-900">{row.slab}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

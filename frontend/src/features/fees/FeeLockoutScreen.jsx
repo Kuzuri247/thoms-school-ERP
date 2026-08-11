@@ -69,7 +69,14 @@ const FeeLockoutScreen = ({ onUnlocked }) => {
     });
   };
 
-  const overdueMonths = monthlyFees.filter((m) => m.status === "OVERDUE" || m.status === "PENDING");
+  const todayStr = new Date().toISOString().split('T')[0];
+  const overdueMonths = monthlyFees.filter((m) => {
+    if (m.status === "OVERDUE") return true;
+    if (m.status === "PENDING" || m.status === "PARTIAL") {
+      return m.due_date && m.due_date <= todayStr;
+    }
+    return false;
+  });
   const earliestOverdue = overdueMonths[0];
 
   return (
@@ -92,6 +99,13 @@ const FeeLockoutScreen = ({ onUnlocked }) => {
             </p>
           </div>
         </div>
+
+        {payError && (
+          <div className="p-3 bg-rose-950/60 border border-rose-800 text-rose-300 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            {payError}
+          </div>
+        )}
 
         {/* Instructions */}
         <div className="text-sm text-slate-300 space-y-2">

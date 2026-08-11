@@ -22,9 +22,16 @@ function numberToWordsINR(num) {
     return inWords(Math.floor(n / 10000000)) + ' CRORE' + (n % 10000000 !== 0 ? ' ' + inWords(n % 10000000) : '');
   }
 
-  const val = Math.floor(Math.abs(num));
-  if (val === 0) return 'ZERO';
-  return inWords(val);
+  const rounded = Math.round(Number(num || 0) * 100) / 100;
+  const rupees = Math.floor(Math.abs(rounded));
+  const paise = Math.round((Math.abs(rounded) - rupees) * 100);
+
+  let rupeeStr = rupees === 0 ? 'ZERO' : inWords(rupees);
+  let result = `${rupeeStr} RUPEES`;
+  if (paise > 0) {
+    result += ` AND ${inWords(paise)} PAISE`;
+  }
+  return result + ' ONLY';
 }
 
 const generateReceiptPDF = async (receiptNo, razorpayPaymentId) => {
@@ -59,7 +66,8 @@ const generateReceiptPDF = async (receiptNo, razorpayPaymentId) => {
 
   const filePath = path.join(uploadDir, `${receiptNo}.pdf`);
   const doc = new PDFDocument({ margin: 30, size: 'A4' });
-  doc.pipe(fs.createWriteStream(filePath));
+  const writeStream = fs.createWriteStream(filePath);
+  doc.pipe(writeStream);
 
   const amountRupees = receipt.amount_paise ? receipt.amount_paise / 100 : 0;
   const amountWords = numberToWordsINR(amountRupees);
@@ -76,11 +84,11 @@ const generateReceiptPDF = async (receiptNo, razorpayPaymentId) => {
   const gatewayTxnId = receipt.razorpay_payment_id || razorpayPaymentId || 'N/A';
   const bankRefNo = receipt.bank_ref_no || `251${Math.floor(1000000000 + Math.random() * 9000000000)}`;
 
-  let txnType = 'ONLINE TUTION FEE';
+  let txnType = 'ONLINE TUITION FEE';
   if (receipt.receipt_type === 'BUS_FEE') {
     txnType = 'ONLINE BUS FEE';
   } else if (receipt.receipt_type === 'COMBINED') {
-    txnType = 'ONLINE COMBINED FEE (TUTION + BUS)';
+    txnType = 'ONLINE COMBINED FEE (TUITION + BUS)';
   } else if (receipt.transaction_type) {
     txnType = receipt.transaction_type;
   }
@@ -157,7 +165,11 @@ const generateReceiptPDF = async (receiptNo, razorpayPaymentId) => {
   doc.text('•  This is computer generated receipt hence no signature is required.');
   doc.text('•  This receipt is valid subject to realisation of funds in the school\'s bank account.');
 
-  doc.end();
+  await new Promise((resolve, reject) => {
+    writeStream.on('finish', resolve);
+    writeStream.on('error', reject);
+    doc.end();
+  });
 
   await pool.query('UPDATE receipts SET pdf_path = ? WHERE receipt_no = ?', [filePath, receiptNo]);
   return filePath;

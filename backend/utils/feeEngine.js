@@ -65,16 +65,16 @@ async function generateMonthlyFeesForStudent(dbClient, studentId, options = {}) 
         tuition_fee, bus_fee, total_due, due_date, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
       ON DUPLICATE KEY UPDATE
-        tuition_fee = VALUES(tuition_fee),
-        bus_fee = VALUES(bus_fee),
-        total_due = VALUES(total_due),
-        due_date = VALUES(due_date)`,
+        tuition_fee = IF(status != 'PAID', VALUES(tuition_fee), tuition_fee),
+        bus_fee = IF(status != 'PAID', VALUES(bus_fee), bus_fee),
+        total_due = IF(status != 'PAID', VALUES(total_due), total_due),
+        due_date = IF(status != 'PAID', VALUES(due_date), due_date)`,
       [studentId, academicYear, m.code, m.order, tuitionFee, busFee, totalDue, dueDate]
     );
   }
 
   // Also update student transport fields if provided
-  if (optsBusService !== undefined) {
+  if (options.optsBusService !== undefined || options.busDistanceSlab !== undefined) {
     await client.query(
       `UPDATE students
        SET opts_bus_service = ?,
@@ -113,7 +113,7 @@ async function recalculateStudentFeeLockout(dbClient, studentId) {
     `SELECT COUNT(*) AS pending_count
      FROM student_monthly_fees
      WHERE student_id = ?
-       AND status IN ('PENDING', 'OVERDUE')
+       AND status IN ('PENDING', 'OVERDUE', 'PARTIAL')
        AND due_date <= CURRENT_DATE()`,
     [studentId]
   );

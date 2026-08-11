@@ -35,12 +35,13 @@ const createOrder = async (params, createdByUserId) => {
     studentId = mFee.student_id;
     monthCode = mFee.month_code;
 
+    const paidAmt = parseFloat(mFee.amount_paid || 0);
     if (noteFeeType === "BUS_FEE") {
-      dueAmount = parseFloat(mFee.bus_fee);
+      dueAmount = Math.max(0, parseFloat(mFee.bus_fee) - paidAmt);
     } else if (noteFeeType === "TUITION_FEE") {
-      dueAmount = parseFloat(mFee.tuition_fee);
+      dueAmount = Math.max(0, parseFloat(mFee.tuition_fee) - paidAmt);
     } else {
-      dueAmount = parseFloat(mFee.total_due) - parseFloat(mFee.amount_paid);
+      dueAmount = Math.max(0, parseFloat(mFee.total_due) - paidAmt);
     }
 
     if (dueAmount <= 0) {
@@ -434,10 +435,19 @@ const collectCashMonthlyFee = async (
     }
 
     if (!mFee) {
-      const [[sObj]] = await conn.query(
-        `SELECT id FROM students WHERE id = ? OR admission_no = ? OR user_id = ? LIMIT 1`,
-        [studentId, studentId, studentId]
-      );
+      let sObj = null;
+      if (typeof studentId === 'number' || (typeof studentId === 'string' && /^\d+$/.test(studentId))) {
+        const [[found]] = await conn.query(`SELECT id FROM students WHERE id = ? LIMIT 1`, [studentId]);
+        sObj = found;
+      }
+      if (!sObj) {
+        const [[found]] = await conn.query(`SELECT id FROM students WHERE admission_no = ? LIMIT 1`, [studentId]);
+        sObj = found;
+      }
+      if (!sObj) {
+        const [[found]] = await conn.query(`SELECT id FROM students WHERE user_id = ? LIMIT 1`, [studentId]);
+        sObj = found;
+      }
 
       if (!sObj) {
         throw Object.assign(new Error(`Student '${studentId}' not found`), { status: 404 });
@@ -530,16 +540,48 @@ const collectCashMonthlyFee = async (
 /**
  * Admin override to restrict or unrestrict student portal access manually
  */
-const overrideStudentRestriction = async (studentId, isAccessRestricted) => {
-  await pool.query(
-    `UPDATE students SET is_access_restricted = ? WHERE id = ? OR user_id = ?`,
-    [Boolean(isAccessRestricted), studentId, studentId]
+const overrideStudentRestriction = async (studentId, isAccessRestricted, idType = 'id') => {
+  const column = (idType === 'user_id' || idType === 'userId') ? 'user_id' : 'id';
+  const [res] = await pool.query(
+    `UPDATE students SET is_access_restricted = ? WHERE ${column} = ?`,
+    [Boolean(isAccessRestricted), studentId]
   );
+  if (res.affectedRows !== 1) {
+    throw Object.assign(new Error(`Failed to override restriction: expected 1 row to change, but ${res.affectedRows} rows were updated.`), { status: 400 });
+  }
   return { success: true, is_access_restricted: Boolean(isAccessRestricted) };
 };
 
-const getPendingDues = async (classId = null, feeCategory = null) => {
-  let query = `
+const getPendingDues = async (classId = null, feeCategory = null, limit = 100, offset = 0) => {
+  const parsedLimit = Math.max(1, parseInt(limit, 10) || 100);
+  const parsedOffset = Math.max(0, parseInt(offset, 10) || 0);
+
+  let baseQuery = `
+    FROM student_monthly_fees smf
+    JOIN students s ON smf.student_id = s.id
+    LEFT JOIN sections sec ON s.section_id = sec.id
+    LEFT JOIN classes c ON sec.class_id = c.id
+    WHERE (smf.status = 'OVERDUE' OR smf.status = 'PARTIAL' OR (smf.status = 'PENDING' AND smf.due_date <= CURRENT_DATE()))
+  `;
+  const params = [];
+
+  if (classId && classId !== 'All') {
+    baseQuery += ` AND c.id = ?`;
+    params.push(classId);
+  }
+
+  if (feeCategory && feeCategory !== 'All') {
+    if (feeCategory === 'Tuition Fee') {
+      baseQuery += ` AND smf.tuition_fee > 0`;
+    } else if (feeCategory === 'Bus Fee') {
+      baseQuery += ` AND smf.bus_fee > 0`;
+    }
+  }
+
+  const countQuery = `SELECT COUNT(*) AS total_count ${baseQuery}`;
+  const [[{ total_count }]] = await pool.query(countQuery, params);
+
+  const dataQuery = `
     SELECT smf.*, 
            smf.total_due AS total_amount,
            (smf.total_due - smf.amount_paid) AS pending_amount,
@@ -551,31 +593,13 @@ const getPendingDues = async (classId = null, feeCategory = null) => {
            CONCAT(s.first_name, ' ', s.last_name) AS student_name,
            s.admission_no, s.roll_no, s.user_id,
            c.id AS class_id, c.name AS class_name, sec.name AS section_name
-    FROM student_monthly_fees smf
-    JOIN students s ON smf.student_id = s.id
-    LEFT JOIN sections sec ON s.section_id = sec.id
-    LEFT JOIN classes c ON sec.class_id = c.id
-    WHERE (smf.status = 'OVERDUE' OR smf.status = 'PARTIAL' OR (smf.status = 'PENDING' AND smf.due_date <= CURRENT_DATE()))
+    ${baseQuery}
+    ORDER BY smf.due_date ASC, s.first_name ASC
+    LIMIT ? OFFSET ?
   `;
-  const params = [];
 
-  if (classId && classId !== 'All') {
-    query += ` AND c.id = ?`;
-    params.push(classId);
-  }
-
-  if (feeCategory && feeCategory !== 'All') {
-    if (feeCategory === 'Tuition Fee') {
-      query += ` AND smf.tuition_fee > 0`;
-    } else if (feeCategory === 'Bus Fee') {
-      query += ` AND smf.bus_fee > 0`;
-    }
-  }
-
-  query += ` ORDER BY smf.due_date ASC, s.first_name ASC LIMIT 100`;
-
-  const [rows] = await pool.query(query, params);
-  return rows;
+  const [rows] = await pool.query(dataQuery, [...params, parsedLimit, parsedOffset]);
+  return { data: rows, totalCount: total_count, rows };
 };
 
 const getStudentFeeRecords = async (userId, targetStudentId = null) => {
@@ -583,10 +607,14 @@ const getStudentFeeRecords = async (userId, targetStudentId = null) => {
 };
 
 const getTotalCollection = async () => {
-  const [[row]] = await pool.query(
-    `SELECT COALESCE(SUM(amount_paid), 0) AS total_collection FROM student_monthly_fees`
+  const [[mRow]] = await pool.query(
+    `SELECT COALESCE(SUM(amount_paid), 0) AS monthly_paid FROM student_monthly_fees`
   );
-  return { total_collection: parseFloat(row?.total_collection || 0) };
+  const [[fRow]] = await pool.query(
+    `SELECT COALESCE(SUM(paid_amount), 0) AS legacy_paid FROM fee_records WHERE status IN ('PAID', 'PARTIAL')`
+  );
+  const total = parseFloat(mRow?.monthly_paid || 0) + parseFloat(fRow?.legacy_paid || 0);
+  return { total_collection: total };
 };
 
 module.exports = {
