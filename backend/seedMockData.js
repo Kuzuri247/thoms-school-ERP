@@ -2,6 +2,7 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { generateMonthlyFeesForStudent, recalculateStudentFeeLockout, getBusFeeForSlab } = require('./utils/feeEngine');
 
 const rawHost = process.env.DB_HOST || 'localhost';
 const cleanHost = rawHost.replace(/^(mysql:\/\/|https?:\/\/)/, '').split('/')[0].split(':')[0];
@@ -352,7 +353,7 @@ async function seed() {
         const secId = sectionIds[st.cls]['Section A'];
         const sId = await createStudent(uId, st.admn, st.fname, st.lname, st.roll, secId);
         if (sId) {
-          studentDbIds.push({ id: sId, userId: uId, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
+          studentDbIds.push({ id: sId, userId: uId, email: st.email, name: `${st.fname} ${st.lname}`, sectionId: secId, cls: st.cls });
         }
       }
     }
@@ -500,31 +501,80 @@ async function seed() {
       }
     }
 
-    // 11. Fee Structure & Records
-    await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Tuition Fee', 'Quarterly Tuition Fee')");
+    // 11. Fee Structure & CBSE Monthly Fees (April-July Paid for most, Overdue for 2 test defaulters)
+    await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Tuition Fee', 'Monthly CBSE Tuition Fee')");
     await connection.query("INSERT IGNORE INTO fee_categories (name, description) VALUES ('Exam Fee', 'Term Examination Fee')");
 
-    let [[fcRow]] = await connection.query("SELECT id FROM fee_categories WHERE name='Tuition Fee'");
-    if (fcRow) {
-      for (const cId of Object.values(classIds)) {
-        await connection.query(`
-          INSERT INTO fee_structures (session_id, class_id, category_id, amount, due_date) 
-          VALUES (?, ?, ?, 7500.00, ?)
-          ON DUPLICATE KEY UPDATE amount=7500.00
-        `, [sessionId, cId, fcRow.id, todayStr]);
+    const defaulterEmails = ['student@thomson.edu', 'aarav.lkg@thomson.edu'];
+
+    console.log('Seeding 12-month CBSE fee records for all students...');
+
+    for (const st of studentDbIds) {
+      const isDefaulter = defaulterEmails.includes(st.email);
+
+      // Opt-in transport for some students
+      const optsBus = st.id % 2 === 0;
+      const busSlab = optsBus ? (st.id % 3 === 0 ? '2-4 KM' : '0-2 KM') : null;
+      const busFeeVal = optsBus ? getBusFeeForSlab(busSlab) : 0;
+
+      // Update student table transport options
+      await connection.query(
+        `UPDATE students SET opts_bus_service = ?, bus_distance_slab = ?, bus_quarterly_fee = ? WHERE id = ?`,
+        [optsBus, busSlab, busFeeVal, st.id]
+      );
+
+      // Generate 12 CBSE monthly fees
+      await generateMonthlyFeesForStudent(connection, st.id, {
+        academicYear: '2026-2027',
+        tuitionFee: 3500,
+        optsBusService: optsBus,
+        busDistanceSlab: busSlab,
+        busQuarterlyFee: busFeeVal,
+      });
+
+      if (!isDefaulter) {
+        // Mark April, May, June, July (month_order 1, 2, 3, 4) as PAID
+        const [months] = await connection.query(
+          `SELECT id, month_code, total_due, bus_fee FROM student_monthly_fees WHERE student_id = ? AND month_order IN (1, 2, 3, 4)`,
+          [st.id]
+        );
+
+        for (const m of months) {
+          await connection.query(
+            `UPDATE student_monthly_fees SET status = 'PAID', amount_paid = total_due, paid_at = NOW() WHERE id = ?`,
+            [m.id]
+          );
+
+          // Create order, payment, and receipt record for financial audit integration
+          const nonce = `${m.id}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+          const orderId = `ord_seed_${nonce}`;
+          const payId = `pay_seed_${nonce}`;
+          const rcptNo = `RCP-2026-${String(m.id).padStart(5, '0')}`;
+          const amountPaise = Math.round(parseFloat(m.total_due) * 100);
+
+          await connection.query(
+            `INSERT IGNORE INTO razorpay_orders (razorpay_order_id, monthly_fee_id, student_id, amount_paise, currency, receipt, status, created_by)
+             VALUES (?, ?, ?, ?, 'INR', ?, 'paid', 1)`,
+            [orderId, m.id, st.id, amountPaise, rcptNo]
+          );
+
+          await connection.query(
+            `INSERT IGNORE INTO razorpay_payments (razorpay_payment_id, razorpay_order_id, amount_paise, currency, method, status, captured_at)
+             VALUES (?, ?, ?, 'INR', 'UPI', 'captured', NOW())`,
+            [payId, orderId, amountPaise]
+          );
+
+          const receiptType = parseFloat(m.bus_fee) > 0 ? 'COMBINED' : 'TUITION_FEE';
+
+          await connection.query(
+            `INSERT IGNORE INTO receipts (receipt_no, razorpay_payment_id, monthly_fee_id, student_id, receipt_type, month_code, razorpay_order_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [rcptNo, payId, m.id, st.id, receiptType, m.month_code, orderId]
+          );
+        }
       }
 
-      for (const st of studentDbIds) {
-        const isPaid = st.id % 2 === 1;
-        const paidAmount = isPaid ? 7500.00 : (st.id % 3 === 0 ? 3750.00 : 0.00);
-        const status = paidAmount === 7500.00 ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'PENDING');
-
-        await connection.query(`
-          INSERT INTO fee_records (student_id, session_id, category_id, total_amount, paid_amount, due_date, status) 
-          VALUES (?, ?, ?, 7500.00, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE paid_amount=VALUES(paid_amount), status=VALUES(status)
-        `, [st.id, sessionId, fcRow.id, paidAmount, todayStr, status]);
-      }
+      await recalculateStudentFeeLockout(connection, st.id);
     }
 
     // 12. Exams & Marks

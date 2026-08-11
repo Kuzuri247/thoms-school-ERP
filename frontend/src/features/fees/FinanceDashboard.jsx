@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import api from '../../api/axios';
 import useAuthStore from '../../store/authStore';
 import { isSuperAdmin as checkIsSuperAdmin } from '../../utils/roleUtils';
+import PaymentReceiptModal from '../../components/PaymentReceiptModal';
 import {
   useCollectCashFee,
   useGetPendingDues,
@@ -43,52 +45,30 @@ const FinanceDashboard = () => {
 
   // Bus Transport Fee Desk State
   const [busSearchQuery, setBusSearchQuery] = useState('');
-  const [selectedRouteFilter, setSelectedRouteFilter] = useState('All');
 
-  const mockBusAllocations = [
-    {
-      id: 'BUS-ALLOC-101',
-      studentId: '1001',
-      studentName: 'Aarav Sharma',
-      class: 'Class 10-A',
-      busNo: 'BUS-01 (PB-10-AB-1234)',
-      routeName: 'Route #1: Civil Lines - Model Town',
-      pickupStop: 'Clock Tower',
-      monthlyFare: 1400,
-      status: 'Paid',
-      dueDate: '2026-02-05'
-    },
-    {
-      id: 'BUS-ALLOC-102',
-      studentId: '1002',
-      studentName: 'Ananya Verma',
-      class: 'Class 10-A',
-      busNo: 'BUS-02 (PB-10-CD-5678)',
-      routeName: 'Route #2: Urban Estate - Cantt',
-      pickupStop: 'Urban Estate Phase 1 Gate',
-      monthlyFare: 1600,
-      status: 'Pending Due',
-      dueDate: '2026-02-10'
-    },
-    {
-      id: 'BUS-ALLOC-103',
-      studentId: '9001',
-      studentName: 'Rohan Gupta',
-      class: 'Class 9-B',
-      busNo: 'BUS-01 (PB-10-AB-1234)',
-      routeName: 'Route #1: Civil Lines - Model Town',
-      pickupStop: 'Model Town Main Market',
-      monthlyFare: 1200,
-      status: 'Pending Due',
-      dueDate: '2026-02-10'
-    }
-  ];
+  // Pending Dues Filters State
+  const [selectedClassFilter, setSelectedClassFilter] = useState('All');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
+  const [classList, setClassList] = useState([]);
+
+  useEffect(() => {
+    api.get('/admin/classes')
+      .then((res) => {
+        if (res.data?.data) {
+          setClassList(res.data.data);
+        }
+      })
+      .catch((err) => console.error('Failed to fetch classes list:', err));
+  }, []);
 
   // Queries
-  const { data: pendingDuesData, isLoading: duesLoading } = useGetPendingDues();
+  const { data: pendingDuesData, isLoading: duesLoading } = useGetPendingDues(selectedClassFilter, selectedCategoryFilter);
   const { data: totalCollectionData } = useGetTotalCollection();
   const { data: financialData } = useGetFinancialReport();
   const { data: overviewData } = useGetGlobalOverview();
+
+  const rawDues = pendingDuesData?.data || pendingDuesData;
+  const pendingDues = Array.isArray(rawDues) ? rawDues : Array.isArray(rawDues?.rows) ? rawDues.rows : [];
 
   const collectCashMutation = useCollectCashFee();
 
@@ -125,16 +105,15 @@ const FinanceDashboard = () => {
     }
   };
 
-  const pendingDues = pendingDuesData?.data || [];
+  const busTransportRecords = pendingDues.filter(due => parseFloat(due.bus_fee || 0) > 0);
 
-  const filteredBusAllocations = mockBusAllocations.filter(alloc => {
-    const matchesSearch =
-      alloc.studentName.toLowerCase().includes(busSearchQuery.toLowerCase()) ||
-      alloc.studentId.includes(busSearchQuery) ||
-      alloc.pickupStop.toLowerCase().includes(busSearchQuery.toLowerCase());
-
-    const matchesRoute = selectedRouteFilter === 'All' || alloc.routeName === selectedRouteFilter;
-    return matchesSearch && matchesRoute;
+  const filteredBusAllocations = busTransportRecords.filter(alloc => {
+    const term = busSearchQuery.toLowerCase();
+    return (
+      !term ||
+      (alloc.student_name || '').toLowerCase().includes(term) ||
+      String(alloc.admission_no || '').toLowerCase().includes(term)
+    );
   });
 
   return (
@@ -326,9 +305,46 @@ const FinanceDashboard = () => {
       {/* --- Pending Dues Queue Tab --- */}
       {activeTab === 'dues' && (
         <div className="space-y-4 animate-in fade-in duration-300">
-          <div className="flex justify-between items-center">
-            <h3 className="text-base font-extrabold text-slate-900">Pending Student Fee Dues Queue</h3>
-            <span className="text-xs font-bold text-slate-500">{pendingDues.length} Pending Records</span>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+            <div>
+              <h3 className="text-base font-extrabold text-slate-900">Pending Student Fee Dues Queue</h3>
+              <p className="text-xs text-slate-500 font-medium">Filter pending monthly fee records across classes and categories</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                <span>Class:</span>
+                <select
+                  value={selectedClassFilter}
+                  onChange={(e) => setSelectedClassFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none text-xs cursor-pointer"
+                >
+                  <option value="All">All Classes</option>
+                  {classList.map((c) => (
+                    <option key={c.class_id} value={c.class_id}>
+                      {c.class_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                <span>Category:</span>
+                <select
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none text-xs cursor-pointer"
+                >
+                  <option value="All">All Categories</option>
+                  <option value="Tuition Fee">Tuition Fee Only</option>
+                  <option value="Bus Fee">Bus / Transport Fee Only</option>
+                </select>
+              </div>
+
+              <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl">
+                {pendingDues.length} Records
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-200">
@@ -338,6 +354,7 @@ const FinanceDashboard = () => {
                   <th className="px-4 py-3">Student Name</th>
                   <th className="px-4 py-3">Admission No</th>
                   <th className="px-4 py-3">Class / Section</th>
+                  <th className="px-4 py-3">Month</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Total Fee (₹)</th>
@@ -345,40 +362,49 @@ const FinanceDashboard = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {pendingDues.map((due) => (
-                  <tr key={due.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3.5 font-bold text-slate-900">{due.student_name}</td>
-                    <td className="px-4 py-3.5 font-mono text-xs font-semibold text-slate-600">{due.admission_no}</td>
-                    <td className="px-4 py-3.5 text-slate-700 font-semibold">{due.class_name || 'N/A'} {due.section_name || ''}</td>
-                    <td className="px-4 py-3.5 text-slate-600">{due.category_name || due.notes || 'Tuition Fee'}</td>
-                    <td className="px-4 py-3.5">
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-50 text-amber-700 border border-amber-200">
-                        {due.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-extrabold text-slate-900">
-                      ₹{parseFloat(due.total_amount).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3.5 text-right">
-                      <button
-                        onClick={() => {
-                          setStudentId(due.admission_no || String(due.student_id));
-                          setStudentName(due.student_name);
-                          setAmount(String(due.total_amount - due.paid_amount));
-                          setActiveTab('collection');
-                        }}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
-                      >
-                        Collect
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {pendingDues.map((due) => {
+                  const feeAmt = Number(due.total_amount || due.total_due || 0);
+                  const paidAmt = Number(due.amount_paid || due.paid_amount || 0);
+                  const remAmt = Math.max(0, feeAmt - paidAmt);
+
+                  return (
+                    <tr key={due.id} className="hover:bg-slate-50/80 font-semibold text-slate-800">
+                      <td className="px-4 py-3.5 font-extrabold text-slate-900">{due.student_name}</td>
+                      <td className="px-4 py-3.5 font-mono text-xs text-slate-600">{due.admission_no}</td>
+                      <td className="px-4 py-3.5 text-slate-700">{due.class_name || 'N/A'} {due.section_name || ''}</td>
+                      <td className="px-4 py-3.5 font-bold text-indigo-700">{due.month_code || 'MONTH'}</td>
+                      <td className="px-4 py-3.5 text-slate-600">{due.category_name || 'Tuition Fee'}</td>
+                      <td className="px-4 py-3.5">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                          due.status === 'OVERDUE' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {due.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-black text-slate-900">
+                        ₹{feeAmt.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          onClick={() => {
+                            setStudentId(due.admission_no || String(due.student_id));
+                            setStudentName(due.student_name);
+                            setAmount(String(remAmt > 0 ? remAmt : feeAmt));
+                            setActiveTab('collection');
+                          }}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                        >
+                          Collect
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
 
                 {pendingDues.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400 text-sm font-semibold">
-                      No pending fee dues in queue.
+                    <td colSpan={8} className="py-8 text-center text-slate-400 text-sm font-semibold">
+                      No pending fee dues match the selected class or category filter.
                     </td>
                   </tr>
                 )}
@@ -423,19 +449,6 @@ const FinanceDashboard = () => {
                   className="w-full pl-10 pr-4 py-2 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs transition-all"
                 />
               </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-slate-500">Route:</span>
-                <select
-                  value={selectedRouteFilter}
-                  onChange={(e) => setSelectedRouteFilter(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 outline-none"
-                >
-                  <option value="All">All Bus Routes</option>
-                  <option value="Route #1: Civil Lines - Model Town">Route #1: Civil Lines - Model Town</option>
-                  <option value="Route #2: Urban Estate - Cantt">Route #2: Urban Estate - Cantt</option>
-                </select>
-              </div>
             </div>
 
             <span className="text-xs font-black text-slate-500">
@@ -449,61 +462,60 @@ const FinanceDashboard = () => {
               <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4">Student Name</th>
+                  <th className="py-3 px-4">Admission No</th>
                   <th className="py-3 px-4">Class / Sec</th>
-                  <th className="py-3 px-4">Assigned Bus</th>
-                  <th className="py-3 px-4">Route & Pickup Stop</th>
-                  <th className="py-3 px-4">Monthly Fare</th>
+                  <th className="py-3 px-4">Month</th>
+                  <th className="py-3 px-4">Distance Slab</th>
+                  <th className="py-3 px-4">Bus Fee (₹)</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Collect Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
-                {filteredBusAllocations.map((alloc) => (
-                  <tr key={alloc.id} className="hover:bg-slate-50/80">
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      {alloc.studentName}
-                      <span className="block text-[10px] text-slate-400 font-mono">ID: {alloc.studentId}</span>
-                    </td>
-                    <td className="py-3 px-4">{alloc.class}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black border border-indigo-100">
-                        {alloc.busNo}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="font-bold text-slate-900 block">{alloc.pickupStop}</span>
-                      <span className="text-[10px] text-slate-500">{alloc.routeName}</span>
-                    </td>
-                    <td className="py-3 px-4 font-black text-indigo-700">₹ {alloc.monthlyFare.toLocaleString()} / mo</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                        alloc.status === 'Paid' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
-                      }`}>
-                        {alloc.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      {alloc.status === 'Paid' ? (
-                        <span className="text-xs text-emerald-600 font-bold flex items-center justify-end gap-1">
-                          <CheckCircle className="w-3.5 h-3.5" /> Cleared
+                {filteredBusAllocations.map((alloc) => {
+                  const bFee = Number(alloc.bus_fee || 0);
+                  return (
+                    <tr key={alloc.id} className="hover:bg-slate-50/80">
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {alloc.student_name}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500">{alloc.admission_no}</td>
+                      <td className="py-3 px-4">{alloc.class_name || 'N/A'} {alloc.section_name || ''}</td>
+                      <td className="py-3 px-4 font-bold text-indigo-700">{alloc.month_code || 'MONTH'}</td>
+                      <td className="py-3 px-4 font-bold text-slate-700">{alloc.bus_distance_slab || '0-2 KM'}</td>
+                      <td className="py-3 px-4 font-black text-indigo-700">₹{bFee.toLocaleString()}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                          alloc.status === 'PAID' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}>
+                          {alloc.status}
                         </span>
-                      ) : (
+                      </td>
+                      <td className="py-3 px-4 text-right">
                         <button
                           onClick={() => {
-                            setStudentId(alloc.studentId);
-                            setStudentName(alloc.studentName);
+                            setStudentId(alloc.admission_no || String(alloc.student_id));
+                            setStudentName(alloc.student_name);
                             setFeeType('Transport Fee');
-                            setAmount(String(alloc.monthlyFare));
+                            setAmount(String(bFee));
                             setActiveTab('collection');
                           }}
-                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-end gap-1.5 ml-auto cursor-pointer"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1.5 cursor-pointer"
                         >
                           <DollarSign className="w-3.5 h-3.5" /> Collect Transport Fee
                         </button>
-                      )}
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filteredBusAllocations.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400 text-sm font-semibold">
+                      No active transport fee dues match your search query.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -512,63 +524,10 @@ const FinanceDashboard = () => {
 
       {/* Printable Instant Receipt Modal */}
       {showReceiptModal && receiptData && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="text-center border-b border-slate-200 pb-4 space-y-1">
-              <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-md shadow-indigo-200">
-                <GraduationCap className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">THOMSON PUBLIC SCHOOL</h3>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">Official Fee Intake Voucher</p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-xs space-y-2.5 font-mono">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Voucher No:</span>
-                <span className="font-extrabold text-slate-900">{receiptData.receiptNo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Date & Time:</span>
-                <span>{receiptData.date} {receiptData.time}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Student ID / Ref:</span>
-                <span>{receiptData.studentId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Student Name:</span>
-                <span className="font-bold">{receiptData.studentName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Fee Category:</span>
-                <span>{receiptData.feeType}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Payment Mode:</span>
-                <span className="font-bold text-slate-800">{receiptData.paymentMode}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-200/80 pt-2.5 text-sm font-sans font-black text-slate-900">
-                <span>Total Received:</span>
-                <span className="text-indigo-600">₹{receiptData.amount}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition"
-              >
-                <Printer className="w-4 h-4" /> Print Voucher
-              </button>
-              <button
-                onClick={() => setShowReceiptModal(false)}
-                className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+        <PaymentReceiptModal
+          receiptData={receiptData}
+          onClose={() => setShowReceiptModal(false)}
+        />
       )}
     </div>
   );

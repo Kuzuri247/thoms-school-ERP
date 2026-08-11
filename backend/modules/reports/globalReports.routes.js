@@ -62,4 +62,63 @@ router.get('/all-fees-pending', verifyToken, authorize(ROLES.SUPER_ADMIN), async
   res.json({ success: true, data: rows });
 });
 
+// GET /api/reports/financial - Dynamic financial audit metrics (Super Admin, Admin & Cashier)
+router.get('/financial', verifyToken, authorize(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.CASHIER), async (req, res) => {
+  try {
+    const [[revRow]] = await pool.query(
+      `SELECT 
+         COALESCE(SUM(amount_paid), 0) AS total_revenue,
+         COALESCE(SUM(CASE WHEN status = 'PAID' THEN tuition_fee ELSE 0 END), 0) AS tuition_inflow,
+         COALESCE(SUM(CASE WHEN status = 'PAID' THEN bus_fee ELSE 0 END), 0) AS bus_inflow
+       FROM student_monthly_fees`
+    );
+
+    const [[dueRow]] = await pool.query(
+      `SELECT 
+         COALESCE(SUM(total_due - amount_paid), 0) AS pending_dues
+       FROM student_monthly_fees
+       WHERE status IN ('PENDING', 'OVERDUE', 'PARTIAL')`
+    );
+
+    const [[defRow]] = await pool.query(
+      `SELECT COUNT(*) AS defaulters_count FROM students WHERE is_access_restricted = 1`
+    );
+
+    const [classRows] = await pool.query(
+      `SELECT c.name AS class_name,
+              COUNT(DISTINCT s.id) AS total_students,
+              COUNT(DISTINCT CASE WHEN s.is_access_restricted = 1 THEN s.id END) AS defaulters,
+              COALESCE(SUM(smf.total_due - smf.amount_paid), 0) AS pending_amount
+       FROM classes c
+       JOIN sections sec ON sec.class_id = c.id
+       JOIN students s ON s.section_id = sec.id
+       LEFT JOIN student_monthly_fees smf ON smf.student_id = s.id AND smf.status IN ('PENDING', 'OVERDUE', 'PARTIAL')
+       GROUP BY c.id, c.name
+       ORDER BY c.numeric_value`
+    );
+
+    res.json({
+      success: true,
+      data: {
+        financialSummary: {
+          totalRevenue: parseFloat(revRow?.total_revenue || 0),
+          tuitionFeeInflow: parseFloat(revRow?.tuition_inflow || 0),
+          transportFeeInflow: parseFloat(revRow?.bus_inflow || 0),
+          pendingDues: parseFloat(dueRow?.pending_dues || 0),
+          defaultersCount: parseInt(defRow?.defaulters_count || 0, 10),
+        },
+        classDuesAudit: classRows.map(r => ({
+          className: r.class_name,
+          totalStudents: parseInt(r.total_students || 0, 10),
+          defaulters: parseInt(r.defaulters || 0, 10),
+          pendingAmount: parseFloat(r.pending_amount || 0),
+        })),
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching financial report:', err);
+    res.status(500).json({ success: false, message: 'Failed to generate financial report' });
+  }
+});
+
 module.exports = router;

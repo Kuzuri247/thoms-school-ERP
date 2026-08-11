@@ -19,6 +19,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
+import { TRANSPORT_FEE_SLABS } from '../../constants/academicConstants';
 
 // Initial Mock Bus Fleet
 const INITIAL_BUSES = [
@@ -228,6 +229,16 @@ const TransportManagementView = () => {
           >
             <Users className="w-3.5 h-3.5" /> Student Allocations ({allocatedStudents.length})
           </button>
+          <button
+            onClick={() => setActiveTab('slabs')}
+            className={`px-4 py-2 text-xs font-extrabold rounded-xl transition flex items-center gap-2 cursor-pointer ${
+              activeTab === 'slabs'
+                ? 'bg-white text-amber-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <DollarSign className="w-3.5 h-3.5" /> Transport Fee Slabs (2026–27)
+          </button>
         </div>
       </div>
 
@@ -412,6 +423,63 @@ const TransportManagementView = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Official Transport Fee Slabs (2026-27) */}
+      {activeTab === 'slabs' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-6 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Bus className="w-5 h-5 text-amber-600" /> Transport Fee Structure (2026–27)
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">Official STIS Varanasi quarterly distance slab fee rates</p>
+            </div>
+            <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-bold">
+              Academic Session 2026-2027
+            </span>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-amber-900 text-white uppercase text-xs font-bold tracking-wider">
+                <tr>
+                  <th className="py-3.5 px-4 text-center">S.No</th>
+                  <th className="py-3.5 px-6">Distance (KM)</th>
+                  <th className="py-3.5 px-6 text-center" colSpan="4">Quarterly Fee (₹)</th>
+                </tr>
+                <tr className="bg-amber-950 text-amber-200 text-[11px] font-bold text-center border-t border-amber-800">
+                  <th></th>
+                  <th></th>
+                  <th className="py-2 px-4">Apr-Jun</th>
+                  <th className="py-2 px-4">Jul-Sep</th>
+                  <th className="py-2 px-4">Oct-Dec</th>
+                  <th className="py-2 px-4">Jan-Mar</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-semibold text-slate-800 text-center">
+                {TRANSPORT_FEE_SLABS.map((row, idx) => (
+                  <tr key={idx + 1} className="hover:bg-amber-50/50 transition-colors">
+                    <td className="py-3 px-4 font-extrabold text-slate-600">{idx + 1}</td>
+                    <td className="py-3 px-6 text-left font-bold text-slate-900">{row.slab}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-slate-900">₹{row.quarterlyFee.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-1">
+            <p className="font-bold text-slate-800 mb-1.5">Official Transport Terms & Conditions:</p>
+            <p>• Transport fee is charged quarterly (April, July, October, January).</p>
+            <p>• Routes & distance slabs decided by school transport authority.</p>
+            <p>• Transport facility subject to availability.</p>
+            <p>• Once opted, transport is compulsory for full academic session.</p>
           </div>
         </div>
       )}

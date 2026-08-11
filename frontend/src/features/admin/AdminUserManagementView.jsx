@@ -30,6 +30,7 @@ import {
 import api from "../../api/axios";
 import useAuthStore from "../../store/authStore";
 import { CBSE_SUBJECTS_LIST } from "../../constants/academicConstants";
+import StudentFeeProfileView from "./StudentFeeProfileView";
 
 const AdminUserManagementView = ({ initialTab = "all" }) => {
   const { user: currentUser } = useAuthStore();
@@ -42,6 +43,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   }, [initialTab]);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedStudentFeeId, setSelectedStudentFeeId] = useState(null);
   const [selectedRole, setSelectedRole] = useState(null); // null = Step 1 (Role selector), 'admin' | 'teacher' | 'cashier' | 'staff' = Step 2 (Form)
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -311,8 +313,6 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       : [];
 
   const filteredUsers = displayUsers.filter((u) => {
-    if (u.role === "student") return false;
-
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       (u.full_name || "").toLowerCase().includes(term) ||
@@ -327,6 +327,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     if (activeTab === "teachers") return u.role === "teacher";
     if (activeTab === "cashiers") return u.role === "cashier";
     if (activeTab === "admins") return ["admin", "super_admin"].includes(u.role);
+    if (activeTab === "students") return u.role === "student";
     return true;
   });
 
@@ -335,16 +336,21 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   };
 
   const tabs = [
-    { id: "all", label: "All Staff" },
+    { id: "all", label: "All Directory" },
     { id: "teachers", label: "Teachers" },
     { id: "cashiers", label: "Fee Cashiers" },
     { id: "admins", label: "School Admins" },
+    { id: "students", label: "Students" },
   ];
 
   const totalStaff = displayUsers.filter((u) => u.role !== "student").length;
   const teacherCount = displayUsers.filter((u) => u.role === "teacher").length;
   const adminCount = displayUsers.filter((u) => ["admin", "super_admin"].includes(u.role)).length;
   const cashierCount = displayUsers.filter((u) => u.role === "cashier").length;
+
+  if (selectedStudentFeeId) {
+    return <StudentFeeProfileView studentId={selectedStudentFeeId} onBack={() => setSelectedStudentFeeId(null)} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -355,19 +361,21 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100 shadow-xs">
               <Users className="w-6 h-6" />
             </div>
-            Staff Directory & Role Assignments
+            Staff & Student Directory
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Provision user accounts for Teachers, Admins, Accounts & Operations Desk with complete profile details.
+            Provision user accounts, track CBSE 12-month fees, transport opt-ins & access restriction status.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenModal}
-          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-indigo-500/20 transition active:scale-[0.99] cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" /> Provision New Staff Member
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenModal}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-indigo-500/20 transition active:scale-[0.99] cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" /> Provision New Staff Member
+          </button>
+        </div>
       </div>
 
       {successMsg && (
@@ -469,12 +477,12 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
             <tr>
-              <th className="px-4 py-3.5">Staff Member & Code</th>
-              <th className="px-4 py-3.5">Primary Contact</th>
-              <th className="px-4 py-3.5">Assigned Role & Dept</th>
-              <th className="px-4 py-3.5">Classes Taught / Teaching Scope</th>
-              <th className="px-4 py-3.5">Status</th>
-              <th className="px-4 py-3.5 text-right">Actions</th>
+              <th className="px-4 py-3.5 text-left align-middle">Staff Member & Code</th>
+              <th className="px-4 py-3.5 text-left align-middle">Primary Contact</th>
+              <th className="px-4 py-3.5 text-left align-middle">Assigned Role</th>
+              <th className="px-4 py-3.5 text-left align-middle">Responsibility</th>
+              <th className="px-4 py-3.5 text-left align-middle">Status</th>
+              <th className="px-4 py-3.5 text-right align-middle">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
@@ -580,6 +588,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                             </span>
                           )}
                         </div>
+                      ) : u.role === "student" ? (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 inline-block">
+                          Student ({u.class_name ? `${u.class_name} - ${u.section_name || ''}` : "Enrolled"})
+                        </span>
                       ) : (
                         <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 inline-block">
                           Non-Teaching Staff
@@ -629,17 +641,30 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
 
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-1.5 items-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/profile/${u.id}`);
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition cursor-pointer"
-                          title="View Profile"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                        {String(u.id) !== String(currentUser?.id) && (
+                        {u.role === "student" ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStudentFeeId(u.student_id || u.id);
+                            }}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-xl flex items-center gap-1 transition cursor-pointer"
+                            title="View Student Fee Profile & Lockout Status"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" /> Fee Profile
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/profile/${u.id}`);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition cursor-pointer"
+                            title="View Profile"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        )}
+                        {String(u.id) !== String(currentUser?.id) && u.role !== "student" && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
