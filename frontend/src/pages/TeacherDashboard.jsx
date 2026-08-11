@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { PREDEFINED_TAGS, NEGATIVE_TAGS } from "../constants/remarksConstants";
+import { MONTH_NAMES, PREDEFINED_TAGS, NEGATIVE_TAGS } from "../constants/remarksConstants";
 import { extractYouTubeId } from "../utils/youtube";
 import useAuthStore from "../store/authStore";
 import api from "../api/axios";
@@ -45,20 +45,7 @@ const STANDARD_PERIOD_TIMES = {
   6: { start_time: "12:45", end_time: "13:30" },
   7: { start_time: "13:30", end_time: "14:15" },
 };
-const monthNames = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+
 
 function useModalFocus(isOpen, onClose) {
   const modalRef = React.useRef(null);
@@ -217,14 +204,15 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
   const now = new Date();
   const remarkMonth = now.getMonth() + 1;
   const remarkYear = now.getFullYear();
-  const currentMonthName = monthNames[now.getMonth()];
+  const currentMonthName = MONTH_NAMES[now.getMonth()];
 
   const [localRemarks, setLocalRemarks] = useState({});
   const [localTags, setLocalTags] = useState({});
   const {
     fetchSectionRemarks,
     saveBatchRemarks,
-    loading: loadingRemarks,
+    loadingSection: loadingRemarks,
+    saving: savingRemarks,
     successMessage: remarkSuccessMsg,
     error: remarkErrMsg,
     clearStatus: clearRemarkStatus,
@@ -234,17 +222,21 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     let isActive = true;
     const reqSectionId = selectedClass?.section_id;
 
-    if (
-      reqSectionId &&
-      (activeTab === "remarks" || selectedClass?.is_class_teacher)
-    ) {
+    if (reqSectionId && activeTab === "remarks") {
+      setLocalRemarks({});
+      setLocalTags({});
       fetchSectionRemarks(
         reqSectionId,
         remarkMonth,
         remarkYear,
       ).then((res) => {
         if (!isActive || selectedClass?.section_id !== reqSectionId) return;
-        const roster = res?.success ? res.data : (Array.isArray(res) ? res : []);
+        if (!res?.success || !Array.isArray(res.data) || res.data.length === 0) {
+          setLocalRemarks({});
+          setLocalTags({});
+          return;
+        }
+        const roster = res.data;
         const initRem = {};
         const initTags = {};
         roster.forEach((item) => {
@@ -253,6 +245,10 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
         });
         setLocalRemarks(initRem);
         setLocalTags(initTags);
+      }).catch(() => {
+        if (!isActive || selectedClass?.section_id !== reqSectionId) return;
+        setLocalRemarks({});
+        setLocalTags({});
       });
     }
 
@@ -604,17 +600,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
     }
   }, [selectedClass]);
 
-  useEffect(() => {
-    if (activeTab === "attendance" && classes.length > 0) {
-      const homeroomClasses = classes.filter((c) => c.is_class_teacher);
-      if (
-        homeroomClasses.length > 0 &&
-        (!selectedClass || !selectedClass.is_class_teacher)
-      ) {
-        setSelectedClass(homeroomClasses[0]);
-      }
-    }
-  }, [activeTab, classes]);
+
 
   const fetchTeacherClasses = async () => {
     try {
@@ -1428,7 +1414,7 @@ const TeacherDashboard = ({ activeTab: initialActiveTab = "overview" }) => {
                               <ChevronLeft className="w-4 h-4" />
                             </button>
                             <span className="text-xs font-black text-slate-800 min-w-[110px] text-center">
-                              {monthNames[calMonth - 1]} {calYear}
+                              {MONTH_NAMES[calMonth - 1]} {calYear}
                             </span>
                             <button
                               type="button"

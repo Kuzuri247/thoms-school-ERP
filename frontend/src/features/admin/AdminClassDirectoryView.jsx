@@ -113,8 +113,13 @@ const AdminClassDirectoryView = () => {
       setModalLocalError("");
       setShowPasswordAuthModal(false);
       setShowPromotionModal(true);
+
+      searchParams.delete("openPromotion");
+      const newSearch = searchParams.toString();
+      const newUrl = location.pathname + (newSearch ? `?${newSearch}` : "") + location.hash;
+      window.history.replaceState(null, "", newUrl);
     }
-  }, [location.search]);
+  }, [location]);
 
   useEffect(() => {
     fetchClasses();
@@ -144,10 +149,14 @@ const AdminClassDirectoryView = () => {
 
       setClassesData(list);
       const savedClassId = sessionStorage.getItem("selectedClassId");
-      const foundSaved = savedClassId
-        ? list.find((c) => String(c.class_id) === String(savedClassId))
-        : null;
-      setSelectedClass(foundSaved || list[0]);
+      if (savedClassId === GRADUATED_SENTINEL_ID) {
+        setSelectedClass(GRADUATED_PSEUDO_CLASS);
+      } else {
+        const foundSaved = savedClassId
+          ? list.find((c) => String(c.class_id) === String(savedClassId))
+          : null;
+        setSelectedClass(foundSaved || list[0]);
+      }
     } catch (err) {
       console.error("Failed to fetch classes:", err);
       setClassesData(DEMO_CLASSES);
@@ -265,6 +274,23 @@ const AdminClassDirectoryView = () => {
   });
 
 
+
+  const handleExecutePromotion = async () => {
+    if (!adminPassword.trim()) {
+      setModalLocalError("Administrator password is required to authorize annual grade advancement.");
+      return;
+    }
+    setModalLocalError("");
+    const res = await executeAnnualPromotion(adminPassword);
+    if (res?.success) {
+      setShowPromotionModal(false);
+      setShowPasswordAuthModal(false);
+      setAdminPassword("");
+      fetchClasses();
+    } else if (!res?.skipped) {
+      setModalLocalError(res?.error || "Authorization failed.");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1074,7 +1100,12 @@ const AdminClassDirectoryView = () => {
       {/* Detailed Annual Promotion Info Modal (Step 1) */}
       {showPromotionModal && !showPasswordAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-0">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="annual-promotion-title"
+            className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-0"
+          >
             {/* Modal Header */}
             <div className="p-6 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-950 text-white relative">
               <button
@@ -1088,7 +1119,10 @@ const AdminClassDirectoryView = () => {
                   <Sparkles className="w-6 h-6 text-indigo-300" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black tracking-tight text-white">
+                  <h2
+                    id="annual-promotion-title"
+                    className="text-lg font-black tracking-tight text-white"
+                  >
                     Annual Grade Advancement (Promotion)
                   </h2>
                   <p className="text-xs font-semibold text-indigo-200 mt-0.5">
@@ -1173,7 +1207,12 @@ const AdminClassDirectoryView = () => {
       {/* Password Authorization Prompt Modal (Step 2) */}
       {showPromotionModal && showPasswordAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-0">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="password-auth-title"
+            className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-0"
+          >
             {/* Modal Header */}
             <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white relative">
               <button
@@ -1191,7 +1230,10 @@ const AdminClassDirectoryView = () => {
                   <Lock className="w-6 h-6 text-indigo-300" />
                 </div>
                 <div>
-                  <h2 className="text-base font-black tracking-tight text-white">
+                  <h2
+                    id="password-auth-title"
+                    className="text-base font-black tracking-tight text-white"
+                  >
                     Administrator Authorization
                   </h2>
                   <p className="text-xs font-semibold text-indigo-200 mt-0.5">
@@ -1223,19 +1265,10 @@ const AdminClassDirectoryView = () => {
                       setAdminPassword(e.target.value);
                       setModalLocalError("");
                     }}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Enter" && adminPassword.trim() && !promoting) {
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !promoting) {
                         e.preventDefault();
-                        setModalLocalError("");
-                        const res = await executeAnnualPromotion(adminPassword);
-                        if (res?.success) {
-                          setShowPromotionModal(false);
-                          setShowPasswordAuthModal(false);
-                          setAdminPassword("");
-                          fetchClasses();
-                        } else {
-                          setModalLocalError(res?.error || "Authorization failed.");
-                        }
+                        handleExecutePromotion();
                       }
                     }}
                     className="w-full px-4 py-2.5 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-xs transition-all"
@@ -1265,22 +1298,7 @@ const AdminClassDirectoryView = () => {
                 Back to Review
               </button>
               <button
-                onClick={async () => {
-                  if (!adminPassword.trim()) {
-                    setModalLocalError("Administrator password is required to authorize annual grade advancement.");
-                    return;
-                  }
-                  setModalLocalError("");
-                  const res = await executeAnnualPromotion(adminPassword);
-                  if (res?.success) {
-                    setShowPromotionModal(false);
-                    setShowPasswordAuthModal(false);
-                    setAdminPassword("");
-                    fetchClasses();
-                  } else {
-                    setModalLocalError(res?.error || "Authorization failed.");
-                  }
-                }}
+                onClick={handleExecutePromotion}
                 disabled={!adminPassword.trim() || promoting}
                 className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-extrabold rounded-xl shadow-md hover:shadow-indigo-500/20 transition cursor-pointer"
               >

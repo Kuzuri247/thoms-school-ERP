@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGetAttendanceByDate, useSaveAttendance } from './useAttendance';
 import { useGetUsers } from '../admin/useAdmin';
 import { CalendarCheck, Save, CheckCircle, XCircle, Clock, Search, CheckCheck, UserX } from 'lucide-react';
+import { isSundayDate } from '../../utils/dateUtils';
 
 const AttendanceView = () => {
   const [selectedDate, setSelectedDate] = useState(
@@ -15,15 +16,6 @@ const AttendanceView = () => {
   const saveAttendanceMutation = useSaveAttendance();
   const { data: usersData } = useGetUsers();
 
-  const isSundayDate = (dStr) => {
-    if (!dStr) return false;
-    const parts = String(dStr).split('T')[0].split('-');
-    if (parts.length === 3) {
-      const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      return dt.getDay() === 0;
-    }
-    return new Date(dStr).getDay() === 0;
-  };
   const isSelectedDateSunday = isSundayDate(selectedDate);
 
   const mockStudents = (usersData || [])

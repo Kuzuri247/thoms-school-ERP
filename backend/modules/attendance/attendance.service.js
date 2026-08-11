@@ -13,7 +13,11 @@ const isSundayDate = (dStr) => {
 
 const markBulk = async (sectionId, date, records, markedBy) => {
   if (!records?.length) throw Object.assign(new Error('No records provided'), { status: 400 });
-  if (isSundayDate(date)) {
+  if (!date || typeof date !== 'string' || isNaN(Date.parse(date))) {
+    throw Object.assign(new Error('Invalid date provided.'), { status: 400 });
+  }
+  const cleanDate = date.split('T')[0];
+  if (isSundayDate(cleanDate)) {
     throw Object.assign(new Error('Attendance cannot be marked on Sundays.'), { status: 400 });
   }
   const conn = await pool.getConnection();

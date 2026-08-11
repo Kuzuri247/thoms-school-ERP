@@ -6,6 +6,11 @@ const { authorize } = require('../../middleware/rbac');
 const { attachTeacherContext } = require('../../middleware/teacherContext');
 const { ROLES } = require('../../config/constants');
 
+const formatTeacherRole = (isClassTeacher, subjectName = '') => {
+  if (isClassTeacher) return 'Class Teacher (Homeroom)';
+  return subjectName ? `Subject Teacher (${subjectName})` : 'Subject Teacher';
+};
+
 router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherContext, async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -33,13 +38,13 @@ router.get('/classes', verifyToken, authorize(ROLES.TEACHER), attachTeacherConte
           subject_id: r.subject_id,
           subject: subjName,
           subjects: subjObj ? [subjObj] : [],
-          role: r.is_class_teacher ? 'Class Teacher (Homeroom)' : (subjName ? `Subject Teacher (${subjName})` : 'Subject Teacher'),
+          role: formatTeacherRole(Boolean(r.is_class_teacher), subjName),
           is_class_teacher: Boolean(r.is_class_teacher)
         });
       } else {
         if (r.is_class_teacher) {
           existing.is_class_teacher = true;
-          existing.role = 'Class Teacher (Homeroom)';
+          existing.role = formatTeacherRole(true, subjName);
         }
         if (r.subject_name) {
           if (subjObj && !existing.subjects.some(s => s.id === r.subject_id)) {
@@ -65,7 +70,7 @@ router.get('/classes/:classId/students', verifyToken, authorize(ROLES.TEACHER, R
   try {
     const { classId } = req.params;
     const [rows] = await pool.query(`
-      SELECT s.id, COALESCE(s.roll_no, s.admission_no) AS roll, s.roll_no, s.first_name, s.last_name, CONCAT(s.first_name, ' ', s.last_name) AS name, s.section_id
+      SELECT s.id, COALESCE(s.roll_no, s.admission_no) AS roll, s.roll_no, s.first_name, s.last_name, CONCAT_WS(' ', s.first_name, s.last_name) AS name, s.section_id
       FROM students s
       JOIN sections sec ON s.section_id = sec.id
       WHERE (sec.class_id = ? OR sec.id = ?) AND (s.status IS NULL OR s.status = 'active')

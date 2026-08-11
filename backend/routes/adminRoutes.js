@@ -365,16 +365,24 @@ router.get('/graduates', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         `;
         const params = [];
 
+        let countSql = `
+            SELECT COUNT(*) AS total
+            FROM students s
+            JOIN users u ON s.user_id = u.id
+            WHERE (s.status = 'graduated' OR u.status = 'graduated')
+        `;
+        const countParams = [];
         if (session_id) {
-            sql += ` AND s.session_id = ?`;
-            params.push(session_id);
+            countSql += ` AND s.session_id = ?`;
+            countParams.push(session_id);
         }
+        const [[{ total }]] = await pool.query(countSql, countParams);
 
         sql += ` ORDER BY s.last_name ASC, s.first_name ASC LIMIT ? OFFSET ?`;
         params.push(limitNum, offset);
 
         const [rows] = await pool.query(sql, params);
-        res.json({ success: true, data: rows, page: pageNum, limit: limitNum });
+        res.json({ success: true, data: rows, total, page: pageNum, limit: limitNum });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -420,7 +428,7 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         // 1. Insert into users table
         const [userResult] = await conn.query(
             'INSERT INTO users (email, password, role, full_name, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [finalEmail, hashedPassword, ROLES.STUDENT, fullName, phone || null, gender || 'Male', 'Active']
+            [finalEmail, hashedPassword, ROLES.STUDENT, fullName, phone || null, gender || 'Male', 'active']
         );
         const userId = userResult.insertId;
 
@@ -446,7 +454,7 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         const [stuResult] = await conn.query(
             `INSERT INTO students (user_id, section_id, admission_no, roll_no, first_name, last_name, gender, date_of_birth, address, status)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, targetSectionId, finalAdmissionNo, finalRollNo, first_name.trim(), last_name ? last_name.trim() : null, gender || 'Male', dob || null, address || null, 'Active']
+            [userId, targetSectionId, finalAdmissionNo, finalRollNo, first_name.trim(), last_name ? last_name.trim() : null, gender || 'Male', dob || null, address || null, 'active']
         );
         const studentId = stuResult.insertId;
 

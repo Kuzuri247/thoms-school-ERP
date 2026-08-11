@@ -111,9 +111,29 @@ router.get("/student/:studentId", verifyToken, async (req, res) => {
   }
 });
 
+const resolveMonthYear = (source = {}, isAdmin = false) => {
+  const now = new Date();
+  let month = now.getMonth() + 1;
+  let year = now.getFullYear();
+
+  if (isAdmin && (source.month !== undefined || source.year !== undefined)) {
+    const parsedM = parseInt(source.month, 10);
+    const parsedY = parseInt(source.year, 10);
+    if (
+      (source.month !== undefined && (isNaN(parsedM) || parsedM < 1 || parsedM > 12)) ||
+      (source.year !== undefined && (isNaN(parsedY) || parsedY < 2000 || parsedY > 2100))
+    ) {
+      return { error: "Invalid month (1-12) or year parameter." };
+    }
+    if (!isNaN(parsedM)) month = parsedM;
+    if (!isNaN(parsedY)) year = parsedY;
+  }
+  return { month, year };
+};
+
 /**
  * GET /api/remarks/section/:sectionId
- * Fetch student roster for a section with monthly remarks for CURRENT month & year (or specified)
+ * Fetch monthly remarks roster for all active students in a section
  */
 router.get("/section/:sectionId", verifyToken, async (req, res) => {
   try {
@@ -122,10 +142,11 @@ router.get("/section/:sectionId", verifyToken, async (req, res) => {
     const userRole = req.user.role;
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(userRole);
 
-    // Authorization check for section access
+    // Authorization check for teachers
     if (!isAdmin) {
       const [assignment] = await pool.query(
-        `SELECT id FROM teacher_assignments WHERE teacher_user_id = ? AND section_id = ?`,
+        `SELECT id FROM teacher_assignments
+         WHERE teacher_user_id = ? AND section_id = ?`,
         [userId, sectionId],
       );
 
@@ -137,27 +158,9 @@ router.get("/section/:sectionId", verifyToken, async (req, res) => {
       }
     }
 
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-
-    let month = currentMonth;
-    let year = currentYear;
-
-    if (isAdmin && (req.query.month !== undefined || req.query.year !== undefined)) {
-      const parsedM = parseInt(req.query.month);
-      const parsedY = parseInt(req.query.year);
-      if (
-        (req.query.month !== undefined && (isNaN(parsedM) || parsedM < 1 || parsedM > 12)) ||
-        (req.query.year !== undefined && (isNaN(parsedY) || parsedY < 2000 || parsedY > 2100))
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid month (1-12) or year parameter.",
-        });
-      }
-      if (!isNaN(parsedM)) month = parsedM;
-      if (!isNaN(parsedY)) year = parsedY;
+    const { month, year, error } = resolveMonthYear(req.query, isAdmin);
+    if (error) {
+      return res.status(400).json({ success: false, message: error });
     }
 
     // Fetch active students in section
@@ -212,31 +215,14 @@ router.post("/batch", verifyToken, async (req, res) => {
   let conn;
   try {
     const { section_id, remarks } = req.body;
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
 
     const userId = req.user.id;
     const userRole = req.user.role;
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(userRole);
 
-    let month = currentMonth;
-    let year = currentYear;
-
-    if (isAdmin && (req.body.month !== undefined || req.body.year !== undefined)) {
-      const parsedM = parseInt(req.body.month);
-      const parsedY = parseInt(req.body.year);
-      if (
-        (req.body.month !== undefined && (isNaN(parsedM) || parsedM < 1 || parsedM > 12)) ||
-        (req.body.year !== undefined && (isNaN(parsedY) || parsedY < 2000 || parsedY > 2100))
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid month (1-12) or year parameter.",
-        });
-      }
-      if (!isNaN(parsedM)) month = parsedM;
-      if (!isNaN(parsedY)) year = parsedY;
+    const { month, year, error } = resolveMonthYear(req.body, isAdmin);
+    if (error) {
+      return res.status(400).json({ success: false, message: error });
     }
 
     if (!section_id || !Array.isArray(remarks)) {
@@ -272,13 +258,19 @@ router.post("/batch", verifyToken, async (req, res) => {
     conn = await pool.getConnection();
     await conn.beginTransaction();
 
+    const [sectionStudents] = await conn.query(
+      "SELECT id FROM students WHERE section_id = ?",
+      [section_id]
+    );
+    const validStudentIds = new Set(sectionStudents.map(s => s.id));
+
     for (const item of remarks) {
       const studentId = item.student_id;
+      if (!studentId || !validStudentIds.has(Number(studentId))) continue;
+
       const remarkText = (item.remark || "").trim();
       const parsedTagsArr = parseTags(item.tags);
       const tagsData = parsedTagsArr.length > 0 ? JSON.stringify(parsedTagsArr) : "";
-
-      if (!studentId) continue;
 
       if (remarkText.length > 0 || parsedTagsArr.length > 0) {
         await conn.query(
@@ -287,6 +279,7 @@ router.post("/batch", verifyToken, async (req, res) => {
            ON DUPLICATE KEY UPDATE
              remark = VALUES(remark),
              tags = VALUES(tags),
+             section_id = VALUES(section_id),
              teacher_user_id = VALUES(teacher_user_id),
              session_id = VALUES(session_id),
              updated_at = CURRENT_TIMESTAMP`,
@@ -304,8 +297,8 @@ router.post("/batch", verifyToken, async (req, res) => {
       } else {
         // If both remark and tags are emptied out, delete entry for that month
         await conn.query(
-          `DELETE FROM student_remarks WHERE student_id = ? AND month = ? AND year = ?`,
-          [studentId, month, year],
+          `DELETE FROM student_remarks WHERE student_id = ? AND section_id = ? AND month = ? AND year = ?`,
+          [studentId, section_id, month, year],
         );
       }
     }

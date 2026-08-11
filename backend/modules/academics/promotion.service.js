@@ -5,7 +5,7 @@ const pool = require("../../config/db");
  * Promotes active students from Class N to Class N+1 on session rollover / April 1st.
  * Class 12 (or highest class) students are updated to 'graduated'.
  */
-const promoteStudentsAnnualCycle = async (options = {}) => {
+const promoteStudentsAnnualCycle = async () => {
   let conn;
   try {
     conn = await pool.getConnection();
@@ -41,12 +41,18 @@ const promoteStudentsAnnualCycle = async (options = {}) => {
       "SELECT id, name, start_date, end_date FROM academic_sessions WHERE is_current = 1 LIMIT 1",
     );
 
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const sessionStartYear = now.getMonth() < 3 ? currentYear - 1 : currentYear;
+    let sessionStartYear;
+    if (currentSession?.name) {
+      const activeStart = parseInt(currentSession.name.split("-")[0], 10);
+      sessionStartYear = isNaN(activeStart) ? new Date().getFullYear() : activeStart + 1;
+    } else {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      sessionStartYear = now.getMonth() < 3 ? currentYear : currentYear + 1;
+    }
     const newSessionName = `${sessionStartYear}-${sessionStartYear + 1}`;
 
-    let targetSessionId = currentSession ? currentSession.id : null;
+    let targetSessionId;
 
     // Check if new session needs to be activated
     const [existingNewSession] = await conn.query(
@@ -72,14 +78,33 @@ const promoteStudentsAnnualCycle = async (options = {}) => {
       targetSessionId = newSessionRes.insertId;
     }
 
-    // 4. Check if any class standard lower than highest numeric class is vacant (has 0 eligible active students)
+    // Fetch active students not yet assigned to the target session (lock selected rows)
+    const [students] = await conn.query(
+      `SELECT s.id AS student_id, s.user_id, s.section_id, s.session_id, s.admission_no,
+              sec.class_id, sec.name AS section_name, c.name AS class_name, c.numeric_value
+       FROM students s
+       JOIN sections sec ON s.section_id = sec.id
+       JOIN classes c ON sec.class_id = c.id
+       WHERE s.status = 'active' AND (s.session_id IS NULL OR s.session_id != ?)
+       FOR UPDATE`,
+      [targetSessionId],
+    );
+
+    if (students.length === 0) {
+      await conn.rollback();
+      return {
+        success: false,
+        message: `Annual Student Grade Advancement for Academic Session ${newSessionName} has already been executed. Promotion can only be run once per academic year cycle.`,
+      };
+    }
+
+    // 4. Check if any class standard lower than highest numeric class is vacant (has 0 active students)
     const [classCounts] = await conn.query(
       `SELECT c.id, c.name, c.numeric_value, COUNT(s.id) AS student_count
        FROM classes c
        LEFT JOIN sections sec ON sec.class_id = c.id
-       LEFT JOIN students s ON s.section_id = sec.id AND s.status = 'active' AND (s.session_id IS NULL OR s.session_id != ?)
+       LEFT JOIN students s ON s.section_id = sec.id AND s.status = 'active'
        GROUP BY c.id, c.name, c.numeric_value`,
-      [targetSessionId],
     );
 
     const vacantClasses = classCounts.filter(
@@ -92,25 +117,6 @@ const promoteStudentsAnnualCycle = async (options = {}) => {
       return {
         success: false,
         message: msg,
-      };
-    }
-
-    // Fetch active students not yet assigned to the target session (guard against duplicate execution)
-    const [students] = await conn.query(
-      `SELECT s.id AS student_id, s.user_id, s.section_id, s.session_id, s.admission_no,
-              sec.class_id, sec.name AS section_name, c.name AS class_name, c.numeric_value
-       FROM students s
-       JOIN sections sec ON s.section_id = sec.id
-       JOIN classes c ON sec.class_id = c.id
-       WHERE s.status = 'active' AND (s.session_id IS NULL OR s.session_id != ?)`,
-      [targetSessionId],
-    );
-
-    if (students.length === 0) {
-      await conn.rollback();
-      return {
-        success: false,
-        message: `Annual Student Grade Advancement for Academic Session ${newSessionName} has already been executed. Promotion can only be run once per academic year cycle.`,
       };
     }
 

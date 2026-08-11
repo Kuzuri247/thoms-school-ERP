@@ -9,14 +9,16 @@ let sectionRequestSeq = 0;
 export const useRemarksStore = create((set, get) => ({
   remarksByStudent: {}, // cacheKey -> Array of remarks
   sectionRemarks: [], // Current loaded section remarks list
-  loading: false,
+  loadingSection: false,
+  loadingStudent: false,
+  saving: false,
   error: null,
   successMessage: null,
 
   // Fetch monthly remarks history for a student (for UserProfileView)
   fetchStudentRemarks: async (studentId, options = {}) => {
     if (!studentId) return [];
-    set({ loading: true, error: null });
+    set({ loadingStudent: true, error: null });
     const cacheKey = options.by === "user_id" ? `user:${studentId}` : `student:${studentId}`;
     try {
       const url = options.by === "user_id" ? `/remarks/student/${studentId}?by=user_id` : `/remarks/student/${studentId}`;
@@ -27,14 +29,14 @@ export const useRemarksStore = create((set, get) => ({
           ...state.remarksByStudent,
           [cacheKey]: list,
         },
-        loading: false,
+        loadingStudent: false,
       }));
       return list;
     } catch (err) {
       console.error("Failed to fetch student remarks:", err);
       set({
         error: err.response?.data?.message || "Failed to load student remarks",
-        loading: false,
+        loadingStudent: false,
       });
       return [];
     }
@@ -44,7 +46,7 @@ export const useRemarksStore = create((set, get) => ({
   fetchSectionRemarks: async (sectionId, month, year) => {
     if (!sectionId) return { success: false, error: "Section ID is required", data: [] };
     const currentSeq = ++sectionRequestSeq;
-    set({ sectionRemarks: [], loading: true, error: null });
+    set({ sectionRemarks: [], loadingSection: true, error: null });
     try {
       const { data } = await api.get(`/remarks/section/${sectionId}`, {
         params: { month, year },
@@ -53,7 +55,7 @@ export const useRemarksStore = create((set, get) => ({
         return { success: false, cancelled: true };
       }
       const roster = data?.data || [];
-      set({ sectionRemarks: roster, loading: false });
+      set({ sectionRemarks: roster, loadingSection: false });
       return { success: true, data: roster };
     } catch (err) {
       console.error("Failed to fetch section remarks:", err);
@@ -61,7 +63,7 @@ export const useRemarksStore = create((set, get) => ({
       if (currentSeq === sectionRequestSeq) {
         set({
           error: msg,
-          loading: false,
+          loadingSection: false,
         });
       }
       return { success: false, error: msg, data: [] };
@@ -70,7 +72,7 @@ export const useRemarksStore = create((set, get) => ({
 
   // Save batch remarks for class students
   saveBatchRemarks: async ({ section_id, month, year, remarks }) => {
-    set({ loading: true, error: null, successMessage: null });
+    set({ saving: true, error: null, successMessage: null });
     try {
       const { data } = await api.post("/remarks/batch", {
         section_id,
@@ -80,21 +82,24 @@ export const useRemarksStore = create((set, get) => ({
       });
       // Refresh section remarks roster
       const refreshRes = await get().fetchSectionRemarks(section_id, month, year);
-      if (refreshRes && refreshRes.success === false && !refreshRes.cancelled) {
+      if (refreshRes && refreshRes.cancelled) {
+        return { success: false, cancelled: true };
+      }
+      if (refreshRes && refreshRes.success === false) {
         const msg = refreshRes.error || "Failed to refresh section remarks.";
-        set({ error: msg, successMessage: null, loading: false });
+        set({ error: msg, successMessage: null, saving: false });
         return { success: false, error: msg };
       }
       const msg = data?.message || "Monthly remarks saved successfully!";
       set({
         successMessage: msg,
-        loading: false,
+        saving: false,
       });
       return { success: true };
     } catch (err) {
       const msg =
         err.response?.data?.message || "Failed to save monthly remarks.";
-      set({ error: msg, successMessage: null, loading: false });
+      set({ error: msg, successMessage: null, saving: false });
       return { success: false, error: msg };
     }
   },

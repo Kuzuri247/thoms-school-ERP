@@ -13,16 +13,19 @@ export const useAcademicsStore = create((set, get) => ({
 
   // Execute Annual April 1st Grade Advancement (Promotion)
   executeAnnualPromotion: async (password) => {
-    if (get().promoting) return;
+    if (get().promoting) return { success: false, skipped: true };
     set({ promoting: true, error: null, promotionResult: null });
     try {
       const { data } = await api.post("/admin/promote-students", { password });
       if (data?.success) {
         set({
-          promotionResult: data?.data || data,
+          promotionResult: {
+            message: data?.message || "",
+            ...(data?.data || {}),
+          },
           promoting: false,
         });
-        return { success: true, message: data?.message };
+        return { success: true, message: data?.message, data: data?.data };
       } else {
         set({ error: data?.message || "Promotion failed", promoting: false });
         return { success: false, error: data?.message };

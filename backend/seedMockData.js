@@ -34,6 +34,16 @@ async function seed() {
     const [[sessRow]] = await connection.query(`SELECT id FROM academic_sessions WHERE name='2026-2027'`);
     const sessionId = sessRow.id;
 
+    const targetDb = process.env.DB_NAME || 'defaultdb';
+    console.log(`Resolved database connection: host=${cleanHost}, database=${targetDb}`);
+
+    const isConfirmed = process.env.SEED_CONFIRM === 'yes' || process.env.NODE_ENV !== 'production';
+    if (!isConfirmed) {
+      console.error('Seed aborted: Destructive seed operation requires SEED_CONFIRM="yes" or NODE_ENV !== "production".');
+      process.exitCode = 1;
+      return;
+    }
+
     // Purge legacy data to avoid duplicates and mixed-up grades
     console.log('Purging legacy data...');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
@@ -413,11 +423,20 @@ async function seed() {
                 // Period 1: Class Teacher & Class Teacher Subject
                 assignment = period1Assignment;
               } else {
-                // Other periods: pick from assigned subject teachers avoiding teacher schedule conflict
-                const isAvailable = candidate => !occupiedTeacherSlots.has(`${day}_${slot.period}_${candidate.teacher_user_id}`);
+                // Other periods: rotate exclusively through non-homeroom subject teachers avoiding schedule conflicts
                 const otherAssigns = assignedRows.filter(a => a.teacher_user_id !== classTeacherInfo.uId);
-                let chosen = otherAssigns.find(isAvailable);
-                if (!chosen) chosen = assignedRows.find(isAvailable);
+                let chosen = null;
+
+                if (otherAssigns.length > 0) {
+                  const startIdx = (pIdx + day) % otherAssigns.length;
+                  for (let i = 0; i < otherAssigns.length; i++) {
+                    const candidate = otherAssigns[(startIdx + i) % otherAssigns.length];
+                    if (!occupiedTeacherSlots.has(`${day}_${slot.period}_${candidate.teacher_user_id}`)) {
+                      chosen = candidate;
+                      break;
+                    }
+                  }
+                }
                 assignment = chosen || null;
               }
 
