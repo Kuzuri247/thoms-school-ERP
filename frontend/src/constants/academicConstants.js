@@ -62,3 +62,22 @@ export const DESIGNATIONS = [
   "System Administrator",
   "Transport Coordinator",
 ];
+
+export const BUS_DISTANCE_SLABS = [
+  { slab: "0-2 KM", quarterlyFee: 3825 },
+  { slab: "2-4 KM", quarterlyFee: 3975 },
+  { slab: "4-6 KM", quarterlyFee: 4125 },
+  { slab: "6-8 KM", quarterlyFee: 4275 },
+  { slab: "8-10 KM", quarterlyFee: 4425 },
+  { slab: "10-12 KM", quarterlyFee: 4575 },
+  { slab: "12-14 KM", quarterlyFee: 4725 },
+  { slab: "14-16 KM", quarterlyFee: 4875 },
+  { slab: "16-18 KM", quarterlyFee: 5025 },
+  { slab: "18-20 KM", quarterlyFee: 5175 },
+];
+
+export function getBusFeeForSlab(slab) {
+  const found = BUS_DISTANCE_SLABS.find((s) => s.slab === slab);
+  return found ? found.quarterlyFee : 3825;
+}
+

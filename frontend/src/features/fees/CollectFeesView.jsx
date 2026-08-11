@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCollectFee } from './useFees';
 import { CreditCard, Printer, CheckCircle, Receipt, DollarSign, Sparkles, GraduationCap, ShieldCheck } from 'lucide-react';
+import PaymentReceiptModal from '../../components/PaymentReceiptModal';
 
 const CollectFeesView = ({ activeTab = 'collect' }) => {
   const [studentId, setStudentId] = useState('');
@@ -246,64 +247,10 @@ const CollectFeesView = ({ activeTab = 'collect' }) => {
 
       {/* Printable Instant Receipt Modal */}
       {showReceiptModal && receiptData && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
-            {/* School Receipt Banner */}
-            <div className="text-center border-b border-slate-200 pb-4 space-y-1">
-              <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-md shadow-indigo-200">
-                <GraduationCap className="w-7 h-7" />
-              </div>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">THOMSON PUBLIC SCHOOL</h3>
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">Official Fee Intake Voucher</p>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 text-xs space-y-2.5 font-mono">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Voucher No:</span>
-                <span className="font-extrabold text-slate-900">{receiptData.receiptNo}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Date & Time:</span>
-                <span>{receiptData.date} {receiptData.time}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Student Roll No:</span>
-                <span>{receiptData.studentId}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Student Name:</span>
-                <span className="font-bold">{receiptData.studentName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Fee Category:</span>
-                <span>{receiptData.feeType}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Payment Mode:</span>
-                <span className="font-bold text-slate-800">{receiptData.paymentMode}</span>
-              </div>
-              <div className="flex justify-between border-t border-slate-200/80 pt-2.5 text-sm font-sans font-black text-slate-900">
-                <span>Total Received:</span>
-                <span className="text-indigo-600">₹{receiptData.amount}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition"
-              >
-                <Printer className="w-4 h-4" /> Print Voucher
-              </button>
-              <button
-                onClick={() => setShowReceiptModal(false)}
-                className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+        <PaymentReceiptModal
+          receiptData={receiptData}
+          onClose={() => setShowReceiptModal(false)}
+        />
       )}
     </div>
   );

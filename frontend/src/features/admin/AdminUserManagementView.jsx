@@ -30,6 +30,7 @@ import {
 import api from "../../api/axios";
 import useAuthStore from "../../store/authStore";
 import { CBSE_SUBJECTS_LIST } from "../../constants/academicConstants";
+import StudentFeeProfileView from "./StudentFeeProfileView";
 
 const AdminUserManagementView = ({ initialTab = "all" }) => {
   const { user: currentUser } = useAuthStore();
@@ -42,6 +43,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   }, [initialTab]);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedStudentFeeId, setSelectedStudentFeeId] = useState(null);
   const [selectedRole, setSelectedRole] = useState(null); // null = Step 1 (Role selector), 'admin' | 'teacher' | 'cashier' | 'staff' = Step 2 (Form)
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -346,6 +348,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const adminCount = displayUsers.filter((u) => ["admin", "super_admin"].includes(u.role)).length;
   const cashierCount = displayUsers.filter((u) => u.role === "cashier").length;
 
+  if (selectedStudentFeeId) {
+    return <StudentFeeProfileView studentId={selectedStudentFeeId} onBack={() => setSelectedStudentFeeId(null)} />;
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner & Header */}
@@ -355,19 +361,21 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100 shadow-xs">
               <Users className="w-6 h-6" />
             </div>
-            Staff Directory & Role Assignments
+            Staff & Student Directory
           </h1>
           <p className="text-xs text-slate-500 font-medium mt-1">
-            Provision user accounts for Teachers, Admins, Accounts & Operations Desk with complete profile details.
+            Provision user accounts, track CBSE 12-month fees, transport opt-ins & access restriction status.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenModal}
-          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-indigo-500/20 transition active:scale-[0.99] cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" /> Provision New Staff Member
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenModal}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl flex items-center gap-2 shadow-md shadow-indigo-500/20 transition active:scale-[0.99] cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" /> Provision New Staff Member
+          </button>
+        </div>
       </div>
 
       {successMsg && (
@@ -468,11 +476,11 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       <div className="overflow-x-auto rounded-2xl border border-slate-200/80 shadow-xs">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50/80 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200/80">
-            <tr>
+            <tr className="*flex *justify-center *items-center">
               <th className="px-4 py-3.5">Staff Member & Code</th>
               <th className="px-4 py-3.5">Primary Contact</th>
-              <th className="px-4 py-3.5">Assigned Role & Dept</th>
-              <th className="px-4 py-3.5">Classes Taught / Teaching Scope</th>
+              <th className="px-4 py-3.5">Assigned Role</th>
+              <th className="px-4 py-3.5">Responsibility</th>
               <th className="px-4 py-3.5">Status</th>
               <th className="px-4 py-3.5 text-right">Actions</th>
             </tr>

@@ -26,11 +26,13 @@ export const useGetStudentFees = (studentId) => {
 };
 
 // Fetch pending fee dues for cashier desk
-export const useGetPendingDues = () => {
+export const useGetPendingDues = (classId = 'All', feeCategory = 'All') => {
   return useQuery({
-    queryKey: ['pendingDues'],
+    queryKey: ['pendingDues', classId, feeCategory],
     queryFn: async () => {
-      const { data } = await api.get('/payments/pending-dues');
+      const { data } = await api.get('/payments/pending-dues', {
+        params: { classId, feeCategory }
+      });
       return data;
     },
   });
