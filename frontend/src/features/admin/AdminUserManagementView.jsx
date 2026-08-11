@@ -29,33 +29,7 @@ import {
 } from "lucide-react";
 import api from "../../api/axios";
 import useAuthStore from "../../store/authStore";
-
-const CBSE_SUBJECTS_LIST = [
-  "Mathematics",
-  "Science",
-  "Social Science",
-  "English Language & Literature",
-  "Hindi Course-A",
-  "Hindi Course-B",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "History",
-  "Geography",
-  "Political Science",
-  "Economics",
-  "Business Studies",
-  "Accountancy",
-  "Computer Science",
-  "Information Technology",
-  "Psychology",
-  "Sociology",
-  "Physical Education",
-  "Fine Arts",
-  "Music",
-  "Sanskrit",
-  "Environmental Studies (EVS)",
-];
+import { CBSE_SUBJECTS_LIST } from "../../constants/academicConstants";
 
 const AdminUserManagementView = ({ initialTab = "all" }) => {
   const { user: currentUser } = useAuthStore();
@@ -93,10 +67,24 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
   const [loadingClasses, setLoadingClasses] = useState(false);
 
   const handleAddAssignmentRow = (initialClassId = "") => {
-    const defaultClassId = initialClassId || (classesWithTeachers.length > 0 ? String(classesWithTeachers[0].class_id) : "");
+    if (classesWithTeachers.length === 0) return;
+
+    const availableClasses =
+      teacherAssignmentType === "class_teacher" && targetClassId
+        ? classesWithTeachers.filter((c) => String(c.class_id) !== String(targetClassId))
+        : classesWithTeachers;
+
+    const defaultClassId =
+      initialClassId || (availableClasses.length > 0 ? String(availableClasses[0].class_id) : "");
+    if (!defaultClassId) return;
+
     setAdditionalAssignments((prev) => [
       ...prev,
-      { id: String(Date.now()) + Math.random().toString(36).substr(2, 4), class_id: defaultClassId, subject_name: "Mathematics" },
+      {
+        id: String(Date.now()) + Math.random().toString(36).slice(2, 6),
+        class_id: defaultClassId,
+        subject_name: "Mathematics",
+      },
     ]);
   };
 
@@ -176,6 +164,7 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
     setPassword("");
     setGender("Male");
     setTeacherAssignmentType("class_teacher");
+    setTargetClassId("");
     setSubjectName("Mathematics");
     setAdditionalAssignments([]);
     setErrorMsg("");
@@ -258,10 +247,12 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
         subject_assignments: selectedRole === "teacher" ? validSubjectAssignments : [],
       };
 
-      await createUserMutation.mutateAsync(payload);
+      const createdRes = await createUserMutation.mutateAsync(payload);
+      const tempPassword = createdRes?.temp_password || createdRes?.data?.temp_password;
+      const pwdNotice = tempPassword ? ` Initial Temporary Password: "${tempPassword}"` : '';
 
       setSuccessMsg(
-        `New ${selectedRole.replace("_", " ")} "${fullName}" provisioned successfully!`,
+        `New ${selectedRole.replace("_", " ")} "${fullName}" provisioned successfully!${pwdNotice}`,
       );
       setShowAddModal(false);
       setSelectedRole(null);
@@ -1038,6 +1029,8 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
 
                           <label
                             className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition ${
+                              loadingClasses ? "opacity-50 cursor-not-allowed" : ""
+                            } ${
                               teacherAssignmentType === "subject_teacher"
                                 ? "bg-white border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs"
                                 : "bg-slate-50 border-slate-200 text-slate-600"
@@ -1047,8 +1040,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                               type="radio"
                               name="teacherAssignmentType"
                               value="subject_teacher"
+                              disabled={loadingClasses}
                               checked={teacherAssignmentType === "subject_teacher"}
                               onChange={() => {
+                                if (loadingClasses) return;
                                 setTeacherAssignmentType("subject_teacher");
                                 if (additionalAssignments.length === 0) {
                                   handleAddAssignmentRow();
@@ -1075,18 +1070,25 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                                 Homeroom Class Standard *
                               </label>
                               <select
+                                disabled={loadingClasses}
                                 value={targetClassId}
                                 onChange={(e) => setTargetClassId(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                {classesWithTeachers.map((c) => (
-                                  <option key={c.class_id} value={c.class_id}>
-                                    {c.class_name} Standard{" "}
-                                    {c.class_teacher_name
-                                      ? `(Current CT: ${c.class_teacher_name})`
-                                      : "(No Class Teacher)"}
-                                  </option>
-                                ))}
+                                {loadingClasses ? (
+                                  <option value="">Loading classes roster...</option>
+                                ) : classesWithTeachers.length === 0 ? (
+                                  <option value="">No classes available</option>
+                                ) : (
+                                  classesWithTeachers.map((c) => (
+                                    <option key={c.class_id} value={c.class_id}>
+                                      {c.class_name} Standard{" "}
+                                      {c.class_teacher_name
+                                        ? `(Current CT: ${c.class_teacher_name})`
+                                        : "(No Class Teacher)"}
+                                    </option>
+                                  ))
+                                )}
                               </select>
                             </div>
 
@@ -1143,8 +1145,13 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                           </div>
                           <button
                             type="button"
+                            disabled={loadingClasses || classesWithTeachers.length === 0}
                             onClick={() => handleAddAssignmentRow()}
-                            className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-extrabold text-[11px] rounded-xl flex items-center gap-1 transition cursor-pointer"
+                            className={`px-3 py-1.5 bg-indigo-100 text-indigo-800 font-extrabold text-[11px] rounded-xl flex items-center gap-1 transition ${
+                              loadingClasses || classesWithTeachers.length === 0
+                                ? "opacity-50 cursor-not-allowed"
+                                : "hover:bg-indigo-200 cursor-pointer"
+                            }`}
                           >
                             <Plus className="w-3.5 h-3.5" /> Add Class & Subject
                           </button>
@@ -1175,7 +1182,10 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                                     onChange={(e) => handleAssignmentRowChange(row.id, "class_id", e.target.value)}
                                     className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
                                   >
-                                    {classesWithTeachers.map((c) => (
+                                    {(teacherAssignmentType === "class_teacher" && targetClassId
+                                      ? classesWithTeachers.filter((c) => String(c.class_id) !== String(targetClassId))
+                                      : classesWithTeachers
+                                    ).map((c) => (
                                       <option key={c.class_id} value={c.class_id}>
                                         {c.class_name} Standard
                                       </option>
@@ -1223,13 +1233,13 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     <input
                       type="password"
                       autoComplete="new-password"
-                      placeholder="Leave blank to auto-generate (Default: Temp1234)"
+                      placeholder="Leave blank for simple default (Default: Temp1234)"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                     />
                     <p className="text-[10px] text-slate-400 mt-1 font-medium">
-                      If left blank, system generates a default password automatically (e.g. Temp1234).
+                      If left blank, system assigns standard default initial password <strong className="text-slate-700 font-bold">Temp1234</strong> for simple profile handover.
                     </p>
                   </div>
 

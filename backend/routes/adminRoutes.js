@@ -8,6 +8,47 @@ const { ROLES } = require('../config/constants');
 const pool = require('../config/db');
 
 const { generateAdmissionNo, generateRollNo } = require('../utils/identifierGenerator');
+const { assignClassTeacher, assignSubjectTeacher } = require('../modules/staff/teacherAssignment.service');
+
+// Shared helper to resolve section_id for a given class_id
+async function resolveSectionId(conn, classId) {
+    if (!classId) return null;
+    const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [classId]);
+    if (secRows.length > 0) {
+        return secRows[0].id;
+    }
+    const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [classId, 'A']);
+    return newSec.insertId;
+}
+
+// Shared helper to resolve subject_id for a given subject_name, handling unique constraints on code & name
+async function resolveSubjectId(conn, subjectName) {
+    const trimmedName = (subjectName || '').trim();
+    if (!trimmedName) return null;
+
+    // 1. Existing subject lookup by name
+    const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [trimmedName]);
+    if (subRows.length > 0) {
+        return subRows[0].id;
+    }
+
+    // 2. Generate a deterministic collision-free code
+    const cleanPrefix = trimmedName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() || 'SUBJ';
+    const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const subjectCode = `${cleanPrefix}-${randomSuffix}`;
+
+    try {
+        const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [trimmedName, subjectCode]);
+        return newSub.insertId;
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+            // Re-select if duplicate code collision or concurrent insert occurred
+            const [reLookup] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [trimmedName]);
+            if (reLookup.length > 0) return reLookup[0].id;
+        }
+        throw err;
+    }
+}
 
 // Create user (Admin and Super Admin)
 router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
@@ -41,6 +82,15 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
             return res.status(400).json({ success: false, message: 'Emergency contact phone number must be exactly 10 digits' });
         }
 
+        if (subject_assignments !== undefined && subject_assignments !== null) {
+            if (!Array.isArray(subject_assignments)) {
+                return res.status(400).json({ success: false, message: 'subject_assignments must be an array' });
+            }
+            if (subject_assignments.length > 20) {
+                return res.status(400).json({ success: false, message: 'Exceeded maximum allowed subject assignments (max 20)' });
+            }
+        }
+
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
@@ -52,7 +102,7 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
         }
 
         const isTempPassword = !password || !password.trim();
-        const rawPassword = isTempPassword ? crypto.randomBytes(6).toString('hex') : password.trim();
+        const rawPassword = isTempPassword ? 'Temp1234' : password.trim();
         const hashedPassword = await bcrypt.hash(rawPassword, 8);
 
         const finalEmail = trimmedEmail;
@@ -99,76 +149,58 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
 
         // If teacher role with class assignments
         if (effectiveRole === 'teacher') {
-            const { assignClassTeacher, assignSubjectTeacher } = require('../modules/staff/teacherAssignment.service');
             const [[activeSession]] = await conn.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
             const sessionId = activeSession?.id || 1;
 
+            let homeroomSectionId = null;
+
             // Handle primary homeroom class assignment if selected
             if (class_id) {
-                // 1. Resolve section_id
-                const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [class_id]);
-                let targetSectionId;
-                if (secRows.length > 0) {
-                    targetSectionId = secRows[0].id;
-                } else {
-                    const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [class_id, 'A']);
-                    targetSectionId = newSec.insertId;
-                }
-
-                // 2. Resolve subject_id if subject_name provided
-                let subjectId = null;
-                if (subject_name && subject_name.trim()) {
-                    const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [subject_name.trim()]);
-                    if (subRows.length > 0) {
-                        subjectId = subRows[0].id;
-                    } else {
-                        const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [subject_name.trim(), subject_name.trim().slice(0, 4).toUpperCase()]);
-                        subjectId = newSub.insertId;
-                    }
-                }
+                homeroomSectionId = await resolveSectionId(conn, class_id);
+                const subjectId = await resolveSubjectId(conn, subject_name);
 
                 if (is_class_teacher) {
                     // Switch any existing class teacher to subject teacher & assign new teacher as Class Teacher
-                    await assignClassTeacher(newUserId, targetSectionId, sessionId, conn);
+                    await assignClassTeacher(newUserId, homeroomSectionId, sessionId, conn);
                     if (subjectId) {
                         await conn.query(
                             'UPDATE teacher_assignments SET subject_id = ? WHERE teacher_user_id = ? AND section_id = ? AND session_id = ? AND is_class_teacher = 1',
-                            [subjectId, newUserId, targetSectionId, sessionId]
+                            [subjectId, newUserId, homeroomSectionId, sessionId]
                         );
                     }
                 } else if (subjectId) {
                     // Assign as Subject Teacher only when subjectId is present
-                    await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
+                    await assignSubjectTeacher(newUserId, homeroomSectionId, subjectId, sessionId, conn);
                 }
             }
 
             // Process multiple additional subject assignments across other classes
             if (Array.isArray(subject_assignments) && subject_assignments.length > 0) {
+                // Deduplicate entries by class_id and normalized subject_name
+                const seenKeyMap = new Set();
+                const uniqueAssignments = [];
+
                 for (const sa of subject_assignments) {
-                    if (!sa.class_id || !sa.subject_name || !String(sa.subject_name).trim()) continue;
+                    if (!sa || !sa.class_id || !sa.subject_name || !String(sa.subject_name).trim()) continue;
+                    const normKey = `${String(sa.class_id).trim()}_${String(sa.subject_name).trim().toLowerCase()}`;
+                    if (!seenKeyMap.has(normKey)) {
+                        seenKeyMap.add(normKey);
+                        uniqueAssignments.push(sa);
+                    }
+                }
 
-                    const saClassId = sa.class_id;
-                    const saSubjName = String(sa.subject_name).trim();
+                for (const sa of uniqueAssignments) {
+                    const targetSectionId = await resolveSectionId(conn, sa.class_id);
 
-                    const [secRows] = await conn.query('SELECT id FROM sections WHERE class_id = ? LIMIT 1', [saClassId]);
-                    let targetSectionId;
-                    if (secRows.length > 0) {
-                        targetSectionId = secRows[0].id;
-                    } else {
-                        const [newSec] = await conn.query('INSERT INTO sections (class_id, name) VALUES (?, ?)', [saClassId, 'A']);
-                        targetSectionId = newSec.insertId;
+                    // Skip additional rows whose resolved targetSectionId matches primary homeroom section ID
+                    if (is_class_teacher && homeroomSectionId && String(targetSectionId) === String(homeroomSectionId)) {
+                        continue;
                     }
 
-                    const [subRows] = await conn.query('SELECT id FROM subjects WHERE name = ? LIMIT 1', [saSubjName]);
-                    let subjectId;
-                    if (subRows.length > 0) {
-                        subjectId = subRows[0].id;
-                    } else {
-                        const [newSub] = await conn.query('INSERT INTO subjects (name, code) VALUES (?, ?)', [saSubjName, saSubjName.slice(0, 4).toUpperCase()]);
-                        subjectId = newSub.insertId;
+                    const subjectId = await resolveSubjectId(conn, sa.subject_name);
+                    if (subjectId) {
+                        await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
                     }
-
-                    await assignSubjectTeacher(newUserId, targetSectionId, subjectId, sessionId, conn);
                 }
             }
         }
@@ -197,9 +229,10 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
     } catch (error) {
         if (conn) await conn.rollback();
         console.error('Error creating user:', error);
+        const isUserDup = error.code === 'ER_DUP_ENTRY' && error.sqlMessage && error.sqlMessage.toLowerCase().includes('users');
         res.status(error.code === 'ER_DUP_ENTRY' ? 409 : 500).json({
             success: false,
-            message: error.code === 'ER_DUP_ENTRY' ? 'User with this email address already exists' : error.message
+            message: isUserDup ? 'User with this email address already exists' : error.message
         });
     } finally {
         if (conn) conn.release();
@@ -636,7 +669,7 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         const fullName = `${first_name.trim()} ${last_name ? last_name.trim() : ''}`.trim();
         const finalEmail = trimmedEmail;
 
-        const tempPassword = crypto.randomBytes(6).toString('hex');
+        const tempPassword = 'Temp1234';
         const hashedPassword = await bcrypt.hash(tempPassword, 8);
 
         // 1. Insert into users table
