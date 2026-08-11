@@ -173,16 +173,19 @@ router.post('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], 
 // GET /api/admin/classes-with-teachers - List all classes with current Class Teacher name
 router.get('/classes-with-teachers', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
+        const [[activeSession]] = await pool.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+        const activeSessionId = activeSession?.id || 1;
+
         const [rows] = await pool.query(`
             SELECT c.id AS class_id, c.name AS class_name, c.numeric_value,
                    sec.id AS section_id, sec.name AS section_name,
                    u.id AS teacher_user_id, u.full_name AS class_teacher_name, u.email AS class_teacher_email
             FROM classes c
             LEFT JOIN sections sec ON sec.class_id = c.id
-            LEFT JOIN teacher_assignments ta ON ta.section_id = sec.id AND ta.is_class_teacher = 1
+            LEFT JOIN teacher_assignments ta ON ta.section_id = sec.id AND ta.is_class_teacher = 1 AND (ta.session_id = ? OR ta.session_id IS NULL)
             LEFT JOIN users u ON ta.teacher_user_id = u.id
             ORDER BY c.numeric_value
-        `);
+        `, [activeSessionId]);
         res.json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -192,6 +195,9 @@ router.get('/classes-with-teachers', [verifyToken, authorize(ROLES.ADMIN, ROLES.
 // Get all users (Admin and Super Admin)
 router.get('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
     try {
+        const [[activeSession]] = await pool.query('SELECT id FROM academic_sessions WHERE is_current = 1 LIMIT 1');
+        const activeSessionId = activeSession?.id || 1;
+
         const [rows] = await pool.query(`
             SELECT u.id, u.email, u.full_name, u.role, u.gender, u.phone, u.status,
                    u.class as class_name, u.section, u.created_at,
@@ -205,26 +211,26 @@ router.get('/users', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], a
                      FROM teacher_assignments ta
                      JOIN sections sec ON ta.section_id = sec.id
                      JOIN classes c ON sec.class_id = c.id
-                     WHERE ta.teacher_user_id = u.id
+                     WHERE ta.teacher_user_id = u.id AND (ta.session_id = ? OR ta.session_id IS NULL)
                    ) AS assigned_classes,
                    (
                      SELECT GROUP_CONCAT(DISTINCT CONCAT(c.name, ' - ', sec.name) ORDER BY c.numeric_value ASC SEPARATOR ', ')
                      FROM teacher_assignments ta
                      JOIN sections sec ON ta.section_id = sec.id
                      JOIN classes c ON sec.class_id = c.id
-                     WHERE ta.teacher_user_id = u.id AND ta.is_class_teacher = 1
+                     WHERE ta.teacher_user_id = u.id AND ta.is_class_teacher = 1 AND (ta.session_id = ? OR ta.session_id IS NULL)
                    ) AS homeroom_class,
                    (
                      SELECT GROUP_CONCAT(DISTINCT CONCAT(c.name, ' - ', sec.name) ORDER BY c.numeric_value ASC SEPARATOR ', ')
                      FROM teacher_assignments ta
                      JOIN sections sec ON ta.section_id = sec.id
                      JOIN classes c ON sec.class_id = c.id
-                     WHERE ta.teacher_user_id = u.id AND (ta.is_class_teacher IS NULL OR ta.is_class_teacher = 0)
+                     WHERE ta.teacher_user_id = u.id AND (ta.is_class_teacher IS NULL OR ta.is_class_teacher = 0) AND (ta.session_id = ? OR ta.session_id IS NULL)
                    ) AS subject_classes
             FROM users u
             LEFT JOIN staff_profiles sp ON sp.user_id = u.id
             ORDER BY u.created_at DESC
-        `);
+        `, [activeSessionId, activeSessionId, activeSessionId]);
         res.status(200).json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -240,12 +246,21 @@ router.delete('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADM
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (req.user.role !== ROLES.SUPER_ADMIN) {
-            if (targetUser.role === ROLES.SUPER_ADMIN) {
-                return res.status(403).json({ success: false, message: 'Only Super Admins can delete Super Admin accounts' });
-            }
-            if (String(req.user.id) === String(targetUserId)) {
-                return res.status(403).json({ success: false, message: 'Admins cannot delete their own account' });
+        // Reject self-deletion for ALL roles (including SUPER_ADMIN)
+        if (String(req.user.id) === String(targetUserId)) {
+            return res.status(403).json({ success: false, message: 'Self-deletion is not permitted. You cannot delete your logged-in account.' });
+        }
+
+        // Admins cannot delete Super Admin accounts
+        if (req.user.role !== ROLES.SUPER_ADMIN && targetUser.role === ROLES.SUPER_ADMIN) {
+            return res.status(403).json({ success: false, message: 'Only Super Admins can delete Super Admin accounts' });
+        }
+
+        // Prevent deletion of the last remaining Super Admin
+        if (targetUser.role === ROLES.SUPER_ADMIN) {
+            const [[{ saCount }]] = await pool.query("SELECT COUNT(*) AS saCount FROM users WHERE role = 'super_admin'");
+            if (saCount <= 1) {
+                return res.status(403).json({ success: false, message: 'Cannot delete the last remaining Super Admin account' });
             }
         }
 
@@ -256,24 +271,60 @@ router.delete('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADM
     }
 });
 
-// Update user (Admin and Super Admin)
+// Update user profile or toggle status (Admin and Super Admin)
 router.put('/users/:id', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)], async (req, res) => {
-    const { password, role, class_name, section, email, full_name, phone, gender, status } = req.body;
+    let conn;
     try {
-        if (req.user.role === ROLES.ADMIN && role === ROLES.SUPER_ADMIN) {
+        const { password, role, class_name, section, email, full_name, phone, gender, status } = req.body;
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+
+        const [[existingUser]] = await conn.query('SELECT role, email, full_name, phone, gender, status FROM users WHERE id = ?', [req.params.id]);
+        if (!existingUser) {
+            conn.release();
+            return res.status(404).json({ success: false, message: 'User account not found' });
+        }
+
+        const newRole = role || existingUser.role;
+        const newStatus = status ? status.toLowerCase() : (existingUser.status || 'active');
+        const newEmail = email ? email.trim() : existingUser.email;
+        const newFullName = full_name ? full_name.trim() : existingUser.full_name;
+        const newPhone = phone !== undefined ? phone : existingUser.phone;
+        const newGender = gender || existingUser.gender;
+
+        if (req.user.role === ROLES.ADMIN && newRole === ROLES.SUPER_ADMIN) {
+            await conn.rollback();
             return res.status(403).json({ success: false, message: 'Admins cannot assign elevated super_admin role' });
         }
-        if (password) {
-            const hashedPassword = await bcrypt.hash(password, 8);
-            await pool.query('UPDATE users SET password = ?, role = ?, class = ?, section = ?, email = ?, full_name = ?, phone = ?, gender = ?, status = ? WHERE id = ?', 
-                [hashedPassword, role, class_name || null, section || null, email, full_name || null, phone || null, gender || 'Male', status || 'Active', req.params.id]);
+
+        if (password && password.trim()) {
+            const hashedPassword = await bcrypt.hash(password.trim(), 8);
+            await conn.query(
+                'UPDATE users SET password = ?, role = ?, class = ?, section = ?, email = ?, full_name = ?, phone = ?, gender = ?, status = ? WHERE id = ?', 
+                [hashedPassword, newRole, class_name || null, section || null, newEmail, newFullName, newPhone, newGender, newStatus, req.params.id]
+            );
         } else {
-            await pool.query('UPDATE users SET role = ?, class = ?, section = ?, email = ?, full_name = ?, phone = ?, gender = ?, status = ? WHERE id = ?', 
-                [role, class_name || null, section || null, email, full_name || null, phone || null, gender || 'Male', status || 'Active', req.params.id]);
+            await conn.query(
+                'UPDATE users SET role = ?, class = ?, section = ?, email = ?, full_name = ?, phone = ?, gender = ?, status = ? WHERE id = ?', 
+                [newRole, class_name || null, section || null, newEmail, newFullName, newPhone, newGender, newStatus, req.params.id]
+            );
         }
-        res.status(200).json({ success: true, message: 'User updated successfully' });
+
+        // Sync status with staff_profiles or students table
+        if (['teacher', 'admin', 'cashier', 'staff'].includes(newRole)) {
+            await conn.query('UPDATE staff_profiles SET status = ? WHERE user_id = ?', [newStatus, req.params.id]);
+        } else if (newRole === 'student') {
+            await conn.query('UPDATE students SET status = ? WHERE user_id = ?', [newStatus, req.params.id]);
+        }
+
+        await conn.commit();
+        res.status(200).json({ success: true, message: `Account status updated to ${newStatus}`, status: newStatus });
     } catch (error) {
+        if (conn) await conn.rollback();
+        console.error('Error updating user status:', error);
         res.status(500).json({ success: false, message: error.message });
+    } finally {
+        if (conn) conn.release();
     }
 });
 
@@ -422,7 +473,7 @@ router.get('/classes/:classId/students', [verifyToken, authorize(ROLES.ADMIN, RO
             LEFT JOIN classes c ON sec.class_id = c.id
             LEFT JOIN guardians g_father ON g_father.student_id = s.id AND g_father.relation = 'father'
             LEFT JOIN guardians g_guard ON g_guard.student_id = s.id AND g_guard.relation = 'guardian'
-            WHERE c.id = ? AND (s.status IS NULL OR s.status = 'active')
+            WHERE c.id = ?
             ORDER BY CAST(s.roll_no AS UNSIGNED) ASC, s.last_name ASC, s.first_name ASC
         `, [classId]);
         res.json({ success: true, data: rows });
@@ -495,17 +546,21 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
             return res.status(400).json({ success: false, message: 'Invalid primary email address format' });
         }
 
-        const trimmedPhone = (phone || '').trim();
-        if (trimmedPhone && !/^\d{10}$/.test(trimmedPhone)) {
+        const normPhone = (phone || '').trim() || null;
+        const normFatherPhone = (father_phone || '').trim() || null;
+        const normMotherPhone = (mother_phone || '').trim() || null;
+        const normGuardianPhone = (guardian_phone || '').trim() || null;
+
+        if (normPhone && !/^\d{10}$/.test(normPhone)) {
             return res.status(400).json({ success: false, message: 'Student phone number must be exactly 10 digits' });
         }
-        if (father_phone && father_phone.trim() && !/^\d{10}$/.test(father_phone.trim())) {
+        if (normFatherPhone && !/^\d{10}$/.test(normFatherPhone)) {
             return res.status(400).json({ success: false, message: 'Father phone number must be exactly 10 digits' });
         }
-        if (mother_phone && mother_phone.trim() && !/^\d{10}$/.test(mother_phone.trim())) {
+        if (normMotherPhone && !/^\d{10}$/.test(normMotherPhone)) {
             return res.status(400).json({ success: false, message: 'Mother phone number must be exactly 10 digits' });
         }
-        if (guardian_phone && guardian_phone.trim() && !/^\d{10}$/.test(guardian_phone.trim())) {
+        if (normGuardianPhone && !/^\d{10}$/.test(normGuardianPhone)) {
             return res.status(400).json({ success: false, message: 'Guardian phone number must be exactly 10 digits' });
         }
 
@@ -521,7 +576,7 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         // 1. Insert into users table
         const [userResult] = await conn.query(
             'INSERT INTO users (email, password, role, full_name, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [finalEmail, hashedPassword, ROLES.STUDENT, fullName, phone || null, gender || 'Male', 'active']
+            [finalEmail, hashedPassword, ROLES.STUDENT, fullName, normPhone, gender || 'Male', 'active']
         );
         const userId = userResult.insertId;
 
@@ -552,23 +607,25 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
         const studentId = stuResult.insertId;
 
         // 4. Insert Guardians if provided
-        if (father_name && father_name.trim()) {
+        const fatherNameVal = father_name && father_name.trim() ? father_name.trim() : null;
+        const fatherOccVal = father_occupation && father_occupation.trim() ? father_occupation.trim() : null;
+        if (fatherNameVal) {
             await conn.query(
                 `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'father', ?, ?, ?)`,
-                [studentId, father_name.trim(), father_phone || null, father_occupation || null]
+                [studentId, fatherNameVal, normFatherPhone, fatherOccVal]
             );
         }
         if (mother_name && mother_name.trim()) {
             await conn.query(
                 `INSERT INTO guardians (student_id, relation, full_name, phone, occupation) VALUES (?, 'mother', ?, ?, ?)`,
-                [studentId, mother_name.trim(), mother_phone || null, mother_occupation || null]
+                [studentId, mother_name.trim(), normMotherPhone, mother_occupation && mother_occupation.trim() ? mother_occupation.trim() : null]
             );
         }
         if (guardian_name && guardian_name.trim()) {
             const rel = guardian_relation || 'guardian';
             await conn.query(
                 `INSERT INTO guardians (student_id, relation, full_name, phone) VALUES (?, ?, ?, ?)`,
-                [studentId, rel, guardian_name.trim(), guardian_phone || null]
+                [studentId, rel, guardian_name.trim(), normGuardianPhone]
             );
         }
 
@@ -587,9 +644,11 @@ router.post('/students', [verifyToken, authorize(ROLES.ADMIN, ROLES.SUPER_ADMIN)
                 last_name: last_name ? last_name.trim() : '',
                 full_name: fullName,
                 email: finalEmail,
-                phone: phone || '',
+                phone: normPhone || '',
+                father_name: fatherNameVal || '',
+                father_occupation: fatherOccVal || '',
                 class_id: class_id || null,
-                status: 'Active',
+                status: 'active',
             }
         });
     } catch (error) {

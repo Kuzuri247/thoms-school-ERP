@@ -27,8 +27,10 @@ import {
   BookOpen,
 } from "lucide-react";
 import api from "../../api/axios";
+import useAuthStore from "../../store/authStore";
 
 const AdminUserManagementView = ({ initialTab = "all" }) => {
+  const { user: currentUser } = useAuthStore();
   const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
@@ -219,6 +221,22 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
       console.error("Failed to delete staff member:", err);
       setErrorMsg(err.response?.data?.message || "Failed to delete staff member.");
       setDeleteConfirmId(null);
+    }
+  };
+
+  const handleToggleStatus = async (user) => {
+    const currentStatus = (user.status || "active").toLowerCase();
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
+
+    try {
+      await api.put(`/admin/users/${user.id}`, { status: nextStatus });
+      setSuccessMsg(`Status for "${user.full_name || user.email}" updated to ${nextStatus.toUpperCase()}.`);
+      refetchUsers?.();
+      setTimeout(() => setSuccessMsg(""), 3500);
+    } catch (err) {
+      console.error("Failed to toggle user status:", err);
+      setErrorMsg(err.response?.data?.message || "Failed to update user status.");
+      setTimeout(() => setErrorMsg(""), 3500);
     }
   };
 
@@ -506,10 +524,42 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                     </td>
 
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        {u.status ? u.status.toLowerCase() : "active"}
-                      </span>
+                      {(() => {
+                        const statusVal = (u.status || "active").toLowerCase();
+                        const isStatusActive = statusVal === "active";
+                        const isStatusSuspended = statusVal === "suspended" || statusVal === "inactive";
+                        const isStatusOnLeave = statusVal === "on_leave";
+
+                        const badgeBgClass = isStatusActive
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200"
+                          : isStatusSuspended
+                          ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+                          : isStatusOnLeave
+                          ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+                          : "bg-slate-100 text-slate-700 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200";
+
+                        const dotClass = isStatusActive
+                          ? "bg-emerald-500 animate-pulse"
+                          : isStatusSuspended
+                          ? "bg-rose-500"
+                          : isStatusOnLeave
+                          ? "bg-amber-500"
+                          : "bg-slate-400";
+
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleStatus(u);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition hover:scale-105 active:scale-95 cursor-pointer ${badgeBgClass}`}
+                            title={`Current status: ${statusVal.toUpperCase()}. Click to switch to ${isStatusActive ? "INACTIVE" : "ACTIVE"}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
+                            {statusVal}
+                          </button>
+                        );
+                      })()}
                     </td>
 
                     <td className="px-4 py-4 text-right">
@@ -524,16 +574,18 @@ const AdminUserManagementView = ({ initialTab = "all" }) => {
                         >
                           <ChevronRight className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirmId({ id: u.id, name: u.full_name || u.email });
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
-                          title="Delete Staff Account"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {String(u.id) !== String(currentUser?.id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirmId({ id: u.id, name: u.full_name || u.email });
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                            title="Delete Staff Account"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

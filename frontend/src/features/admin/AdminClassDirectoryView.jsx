@@ -254,10 +254,9 @@ const AdminClassDirectoryView = () => {
           last_name: studentForm.last_name ? studentForm.last_name.trim() : "",
           full_name: `${studentForm.first_name.trim()} ${studentForm.last_name ? studentForm.last_name.trim() : ""}`.trim(),
           email: studentForm.email.trim(),
-          phone: studentForm.phone || "",
-          father_name: studentForm.father_name || rawData.father_name || "",
-          father_occupation: studentForm.father_occupation || rawData.father_occupation || "",
-          profile_pic: studentForm.profile_pic || rawData.profile_pic || "",
+          phone: rawData.phone || studentForm.phone || "",
+          father_name: rawData.father_name || (studentForm.father_name ? studentForm.father_name.trim() : ""),
+          father_occupation: rawData.father_occupation || (studentForm.father_occupation ? studentForm.father_occupation.trim() : ""),
           status: "active",
         };
 
@@ -282,6 +281,32 @@ const AdminClassDirectoryView = () => {
       setFormError(err.response?.data?.message || "Failed to add student.");
     } finally {
       setIsSubmittingStudent(false);
+    }
+  };
+
+  const handleToggleStudentStatus = async (student) => {
+    const targetUserId = student.user_id || student.id;
+    const currentStatus = (student.status || "active").toLowerCase();
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
+
+    try {
+      await api.put(`/admin/users/${targetUserId}`, { status: nextStatus });
+      setStudents((prev) =>
+        prev.map((s) => {
+          const isMatch =
+            (student.student_id && String(s.student_id) === String(student.student_id)) ||
+            (student.user_id && String(s.user_id) === String(student.user_id)) ||
+            (student.id && String(s.id) === String(student.id));
+
+          return isMatch ? { ...s, status: nextStatus } : s;
+        })
+      );
+      setFormSuccess(`Student status for "${student.first_name} ${student.last_name || ''}" updated to ${nextStatus.toUpperCase()}.`);
+      setTimeout(() => setFormSuccess(""), 3500);
+    } catch (err) {
+      console.error("Failed to toggle student status:", err);
+      setFormError(err.response?.data?.message || "Failed to update student status.");
+      setTimeout(() => setFormError(""), 3500);
     }
   };
 
@@ -559,6 +584,7 @@ const AdminClassDirectoryView = () => {
                   <th className="px-4 py-3">Admission & Roll</th>
                   <th className="px-4 py-3">Parent / Guardian</th>
                   <th className="px-4 py-3">Contact Email & Phone</th>
+                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Profile View</th>
                 </tr>
               </thead>
@@ -566,7 +592,7 @@ const AdminClassDirectoryView = () => {
                 {filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan="7"
                       className="px-4 py-8 text-center text-slate-400 text-xs font-medium"
                     >
                       No students found for this class.
@@ -631,6 +657,28 @@ const AdminClassDirectoryView = () => {
                         <div className="text-[10px] font-mono text-slate-500">
                           {s.phone || "Not provided"}
                         </div>
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleStudentStatus(s);
+                          }}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border transition hover:scale-105 active:scale-95 cursor-pointer ${
+                            s.status === 'graduated'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : (s.status || 'active').toLowerCase() === 'inactive' || s.status === 'left' || s.status === 'transferred'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-emerald-50 hover:text-emerald-700'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-rose-50 hover:text-rose-700'
+                          }`}
+                          title={`Current status: ${(s.status || "active").toUpperCase()}. Click to switch to ${(s.status || "active").toLowerCase() === "active" ? "INACTIVE" : "ACTIVE"}`}
+                        >
+                          {s.status === 'active' || !s.status ? (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          ) : null}
+                          {s.status ? s.status.toLowerCase() : "active"}
+                        </button>
                       </td>
 
                       <td className="px-4 py-3.5 text-right">
