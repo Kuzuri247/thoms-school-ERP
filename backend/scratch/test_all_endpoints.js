@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const jwt = require('jsonwebtoken');
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'thomson_erp_access_secret_key_2026';
 if (!ACCESS_SECRET) {
@@ -38,22 +40,34 @@ async function runAllTests() {
   }
 
   // ----------------------------------------------------------------
-  // 1. DIRECT JWT TOKEN PROVISIONING WITH EXACT SEEDED DB USER IDS
+  // 1. DIRECT JWT TOKEN PROVISIONING WITH SEEDED DB USER IDS
   // ----------------------------------------------------------------
   console.log('\n=== 1. TOKEN PROVISIONING FOR ALL 5 ROLES ===');
 
-  const userProfiles = {
-    super_admin: { id: 1255, email: 'superadmin@thomson.edu', role: 'super_admin', full_name: 'System Super Admin' },
-    admin: { id: 1256, email: 'admin@thomson.edu', role: 'admin', full_name: 'School Principal Admin' },
-    cashier: { id: 1257, email: 'cashier@thomson.edu', role: 'cashier', full_name: 'Senior Fee Cashier' },
-    teacher: { id: 1259, email: 'teacher@thomson.edu', role: 'teacher', full_name: 'Senior Class Teacher' }, // Class Teacher of Section 1
-    student: { id: 1276, email: 'student@thomson.edu', role: 'student', full_name: 'Aarav Bhatia' }, // Student in Section 1 (student_id: 1)
+  const roleEmails = {
+    super_admin: 'superadmin@thomson.edu',
+    admin: 'admin@thomson.edu',
+    cashier: 'cashier@thomson.edu',
+    teacher: 'teacher@thomson.edu',
+    student: 'student@thomson.edu',
   };
 
+  const userProfiles = {};
   const tokens = {};
-  for (const [role, profile] of Object.entries(userProfiles)) {
-    tokens[role] = jwt.sign(profile, ACCESS_SECRET, { expiresIn: '1h' });
-    record('AUTH', `Issue Token ${role}`, 'JWT', '/api/auth', 200, true, `User ID: ${profile.id}`);
+  for (const [role, email] of Object.entries(roleEmails)) {
+    const loginRes = await req('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'Thomson2026!' }),
+    });
+    if (loginRes.ok && loginRes.data?.data?.accessToken) {
+      tokens[role] = loginRes.data.data.accessToken;
+      userProfiles[role] = loginRes.data.data.user;
+      record('AUTH', `Login ${role}`, 'POST', '/api/auth/login', loginRes.status, true, `User ID: ${userProfiles[role].id}`);
+    } else {
+      userProfiles[role] = { id: 1, role, email };
+      tokens[role] = jwt.sign(userProfiles[role], ACCESS_SECRET, { expiresIn: '1h' });
+      record('AUTH', `Issue Token ${role} (Fallback)`, 'JWT', '/api/auth', 200, false, `Login failed: ${loginRes.data?.message || loginRes.error}`);
+    }
   }
 
   const superHeader = { Authorization: `Bearer ${tokens['super_admin']}` };
@@ -307,7 +321,7 @@ async function runAllTests() {
       section_id: teacherSectionId,
       day_of_week: 'Monday',
       periods: [
-        { period_number: 1, subject_id: 15, teacher_user_id: 1259, start_time: '08:00:00', end_time: '08:45:00' },
+        { period_number: 1, subject_id: 15, teacher_user_id: userProfiles['teacher']?.id, start_time: '08:00:00', end_time: '08:45:00' },
       ],
     }),
   });
