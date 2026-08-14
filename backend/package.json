@@ -7,9 +7,10 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "build": "node check-build.js",
+    "setup": "node setupDb.js",
     "migrate": "node migrations/migrate.js",
-    "seed": "node seeds/seed.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "seed": "node seedMockData.js",
+    "test": "node scratch/test_all_endpoints.js"
   },
   "keywords": [],
   "author": "",
